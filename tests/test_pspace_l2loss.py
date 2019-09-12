@@ -1,4 +1,4 @@
-from nngeometry import EmpiricalL2Loss
+from nngeometry.pspace import L2Loss
 from nngeometry.representations import DenseMatrix
 from subsampled_mnist import get_dataset
 import torch
@@ -41,7 +41,7 @@ def get_l_vector(dataloader, loss_closure):
             i += inputs.size(0)
         return l
 
-def test_empiricall2loss():
+def test_pspace_L2Loss():
     train_set = get_dataset('train')
     train_loader = DataLoader(
         dataset=train_set,
@@ -51,7 +51,7 @@ def test_empiricall2loss():
     net.to('cuda')
 
     loss_closure = lambda input, target: tF.nll_loss(net(input), target, reduction='sum')
-    el2 = EmpiricalL2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+    el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
     M = DenseMatrix(el2)
 
 
@@ -70,6 +70,6 @@ def test_empiricall2loss():
         ratios.append(torch.norm(l_upd - l_0)**2 / len(train_loader.sampler) / torch.dot(M.mv(dw), dw))
         assert ratios[-1] < 1.01 and ratios[-1] > .99
 
-    print(M.matrix)
+    print(M.get_matrix())
     print(M.size())
     print(ratios)

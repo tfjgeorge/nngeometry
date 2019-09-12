@@ -1,6 +1,6 @@
 import torch
 
-class EmpiricalL2Loss:
+class L2Loss:
     def __init__(self, model, dataloader, loss_closure):
         self.model = model
         self.dataloader = dataloader
