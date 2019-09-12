@@ -1,15 +1,19 @@
 import torch
 
 class EmpiricalL2Loss:
-    def __init__(self, model, dataloader):
+    def __init__(self, model, dataloader, loss_closure):
         self.model = model
         self.dataloader = dataloader
         self.handles = []
         self.xs = dict()
         self.p_pos = dict() # maps parameters to their position in flattened representation
         self.mods = self._get_individual_modules(model)
+        self.loss_closure = loss_closure
 
-    def get_matrix(self, loss_closure):
+    def release_buffers(self):
+        self.xs = dict()
+
+    def get_matrix(self):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex, self._hook_compute_flat_grad)
 
@@ -23,7 +27,7 @@ class EmpiricalL2Loss:
             self.grads.zero_()
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = loss_closure(inputs, targets)
+            loss = self.loss_closure(inputs, targets)
             torch.autograd.grad(loss, [inputs])
             G += torch.mm(self.grads.t(), self.grads)
         G /= n_examples
@@ -52,7 +56,7 @@ class EmpiricalL2Loss:
                     parameters.append(mod.bias)
                     start += mod.bias.numel()
 
-        #check order of flattening
+        # check order of flattening
         sizes_flat = [p.size() for p in model.parameters() if p.requires_grad]
         assert sizes_mods == sizes_flat
         # check that all parameters were added

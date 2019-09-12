@@ -1,4 +1,5 @@
 from nngeometry import EmpiricalL2Loss
+from nngeometry.representations import DenseMatrix
 from subsampled_mnist import get_dataset
 import torch
 import torch.nn as nn
@@ -49,11 +50,10 @@ def test_empiricall2loss():
     net = Net(in_size=10)
     net.to('cuda')
 
-    el2 = EmpiricalL2Loss(model=net, dataloader=train_loader)
     loss_closure = lambda input, target: tF.nll_loss(net(input), target, reduction='sum')
-    M = el2.get_matrix(loss_closure)
+    el2 = EmpiricalL2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+    M = DenseMatrix(el2)
 
-    print(M)
 
     # compare with || l(w+dw) - l(w) ||_F for randomly sampled dw
     loss_closure = lambda input, target: tF.nll_loss(net(input), target, reduction='none')
@@ -66,9 +66,10 @@ def test_empiricall2loss():
         update_model(net, dw)
         l_upd = get_l_vector(train_loader, loss_closure)
         update_model(net, -dw)
-        
-        ratios.append(torch.norm(l_upd - l_0)**2 / len(train_loader.sampler) / torch.dot(torch.mv(M, dw), dw))
+
+        ratios.append(torch.norm(l_upd - l_0)**2 / len(train_loader.sampler) / torch.dot(M.mv(dw), dw))
         assert ratios[-1] < 1.01 and ratios[-1] > .99
 
+    print(M.matrix)
+    print(M.size())
     print(ratios)
-
