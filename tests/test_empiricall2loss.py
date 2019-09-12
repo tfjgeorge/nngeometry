@@ -59,6 +59,7 @@ def test_empiricall2loss():
     loss_closure = lambda input, target: tF.nll_loss(net(input), target, reduction='none')
     l_0 = get_l_vector(train_loader, loss_closure)
     eps = 1e-3
+    ratios = []
     for i in range(20):
         dw = torch.rand((M.size(0),), device='cuda')
         dw *= eps / torch.norm(dw)
@@ -66,6 +67,8 @@ def test_empiricall2loss():
         l_upd = get_l_vector(train_loader, loss_closure)
         update_model(net, -dw)
         
-        print(torch.norm(l_upd - l_0)**2 / len(train_loader.sampler), torch.dot(torch.mv(M, dw), dw))
+        ratios.append(torch.norm(l_upd - l_0)**2 / len(train_loader.sampler) / torch.dot(torch.mv(M, dw), dw))
+        assert ratios[-1] < 1.01 and ratios[-1] > .99
 
+    print(ratios)
 
