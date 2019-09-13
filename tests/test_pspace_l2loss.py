@@ -1,6 +1,6 @@
 from nngeometry.pspace import L2Loss
 from nngeometry.ispace import L2Loss as ISpace_L2Loss
-from nngeometry.representations import DenseMatrix
+from nngeometry.representations import DenseMatrix, ImplicitMatrix
 from subsampled_mnist import get_dataset
 import torch
 import torch.nn as nn
@@ -58,7 +58,12 @@ def test_pspace_L2Loss():
 
     el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
     M = DenseMatrix(el2)
-    print(GM.trace(), M.trace(), GM.trace() / M.trace())
+
+    n_examples = len(train_loader.sampler)
+    ratios_trace = GM.trace() / M.trace() / n_examples
+    assert ratios_trace < 1.01 and ratios_trace > .99
+
+    M_Implicit = ImplicitMatrix(el2)
 
     # compare with || l(w+dw) - l(w) ||_F for randomly sampled dw
     loss_closure = lambda input, target: tF.nll_loss(net(input), target, reduction='none')
@@ -71,6 +76,11 @@ def test_pspace_L2Loss():
         update_model(net, dw)
         l_upd = get_l_vector(train_loader, loss_closure)
         update_model(net, -dw)
+
+        M_norm_imp = M_Implicit.m_norm(dw)
+        M_norm_den = M.m_norm(dw)
+        ratio_m_norms = M_norm_imp / M_norm_den
+        assert ratio_m_norms < 1.01 and ratio_m_norms > .99
 
         ratios.append(torch.norm(l_upd - l_0)**2 / len(train_loader.sampler) / torch.dot(M.mv(dw), dw))
         assert ratios[-1] < 1.01 and ratios[-1] > .99

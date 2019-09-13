@@ -10,9 +10,6 @@ class L2Loss:
         self.mods = self._get_individual_modules(model)
         self.loss_closure = loss_closure
 
-    def release_buffers(self):
-        self.xs = dict()
-
     def get_matrix(self):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex, self._hook_compute_flat_grad)
@@ -33,10 +30,49 @@ class L2Loss:
         G /= n_examples
 
         # remove hooks
+        del self.grads
+        self.xs = dict()
         for h in self.handles:
             h.remove()
 
         return G
+
+    def implicit_mv(self, v):
+        raise NotImplementedError
+
+    def implicit_m_norm(self, v):
+        # add hooks
+        self.handles += self._add_hooks(self._hook_savex, self._hook_compute_m_norm)
+
+        i = 0
+        self._v = dict()
+        for p in self.model.parameters():
+            self._v[p] = v[i:i+p.numel()].view(*p.size())
+            i += p.numel()
+
+        device = next(self.model.parameters()).device
+        n_examples = len(self.dataloader.sampler)
+        n_parameters = sum([p.numel() for p in self.model.parameters()])
+        bs = self.dataloader.batch_size
+        norm2 = 0
+        for (inputs, targets) in self.dataloader:
+            self._vTg = torch.zeros(inputs.size(0), device=device)
+            inputs, targets = inputs.to(device), targets.to(device)
+            inputs.requires_grad = True
+            loss = self.loss_closure(inputs, targets)
+            torch.autograd.grad(loss, [inputs])
+            norm2 += (self._vTg**2).sum(dim=0)
+        norm = (norm2 / n_examples) ** .5
+
+        # remove hooks
+        self.xs = dict()
+        del self._vTg
+        del self._v
+        for h in self.handles:
+            h.remove()
+
+        return norm
+
 
     def _get_individual_modules(self, model):
         mods = []
@@ -85,5 +121,17 @@ class L2Loss:
             if mod.bias is not None:
                 self.grads[:, start+mod.weight.numel():start+mod.weight.numel()+mod.bias.numel()] \
                     .add_(gy)
+        else:
+            raise NotImplementedError
+
+    def _hook_compute_m_norm(self, mod, grad_input, grad_output):
+        mod_class = mod.__class__.__name__
+        gy = grad_output[0]
+        x = self.xs[mod]
+        bs = x.size(0)
+        if mod_class == 'Linear':
+            self._vTg += (torch.mm(x, self._v[mod.weight].t()) * gy).sum(dim=1)
+            if mod.bias is not None:
+                self._vTg += torch.mv(gy, self._v[mod.bias])
         else:
             raise NotImplementedError
