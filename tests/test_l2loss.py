@@ -53,9 +53,7 @@ def get_fullyconnect_task(bs=1000, subs=None):
     net = Net(in_size=10)
     net.to('cuda')
     loss_closure = lambda input, target: tF.nll_loss(net(input), target, reduction='sum')
-
     return train_loader, net, loss_closure
-
 
 def test_pspace_l2loss():
     train_loader, net, loss_closure = get_fullyconnect_task()
@@ -68,13 +66,22 @@ def test_pspace_l2loss():
     l_0 = get_l_vector(train_loader, loss_closure)
     eps = 1e-3
     dw = torch.rand((M.size(0),), device='cuda')
-    dw *= eps / torch.norm(dw)
-    update_model(net, dw)
+    dw /= torch.norm(dw)
+    update_model(net, eps * dw)
     l_upd = get_l_vector(train_loader, loss_closure)
-    update_model(net, -dw)
-
-    ratios = torch.norm(l_upd - l_0)**2 / len(train_loader.sampler) / torch.dot(M.mv(dw), dw)
+    update_model(net, -eps * dw)
+    ratios = torch.norm(l_upd - l_0)**2 / len(train_loader.sampler) / torch.dot(M.mv(dw), dw) / eps ** 2
     assert ratios < 1.01 and ratios > .99
+
+    # compare project_to_diag to project_from_diag
+    M.compute_eigendecomposition()
+    assert torch.norm(dw - M.project_to_diag(M.project_from_diag(dw))) < 1e-4
+
+    # project M to its diag space and compare to the evals
+    M2 = torch.stack([M.project_to_diag(M.get_matrix()[:, i]) for i in range(M.size(0))])
+    M2 = torch.stack([M.project_to_diag(M2[:, i]) for i in range(M.size(0))])
+    assert torch.norm(M2 - torch.diag(M.evals)) < 1e-4
+
 
 def test_pspace_vs_ispace():
     train_loader, net, loss_closure = get_fullyconnect_task()
@@ -89,7 +96,6 @@ def test_pspace_vs_ispace():
     ratios_trace = GM.trace() / M.trace() / n_examples
     assert ratios_trace < 1.01 and ratios_trace > .99
 
-
 def test_pspace_implicit_vs_dense():
     train_loader, net, loss_closure = get_fullyconnect_task()
 
@@ -98,7 +104,6 @@ def test_pspace_implicit_vs_dense():
     M_implicit = ImplicitMatrix(el2)
 
     eps = 1e-3
-
     dw = torch.rand((M_dense.size(0),), device='cuda')
     dw *= eps / torch.norm(dw)
 
@@ -115,11 +120,8 @@ def test_pspace_lowrank_vs_dense():
     M_lowrank = LowRankMatrix(el2)
 
     assert torch.norm(M_dense.get_matrix() - M_lowrank.get_matrix()) < 1e-3
-    print(M_dense.size(0))
-    print(torch.norm(M_dense.get_matrix() - M_lowrank.get_matrix()))
 
     eps = 1e-3
-
     dw = torch.rand((M_dense.size(0),), device='cuda')
     dw *= eps / torch.norm(dw)
 
