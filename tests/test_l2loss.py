@@ -42,7 +42,7 @@ def get_l_vector(dataloader, loss_closure):
             i += inputs.size(0)
         return l
 
-def test_pspace_L2Loss():
+def get_fullyconnect_task():
     train_set = get_dataset('train')
     train_loader = DataLoader(
         dataset=train_set,
@@ -50,8 +50,32 @@ def test_pspace_L2Loss():
         shuffle=False)
     net = Net(in_size=10)
     net.to('cuda')
-
     loss_closure = lambda input, target: tF.nll_loss(net(input), target, reduction='sum')
+
+    return train_loader, net, loss_closure
+
+
+def test_pspace_l2loss():
+    train_loader, net, loss_closure = get_fullyconnect_task()
+
+    el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+    M = DenseMatrix(el2)
+
+    # compare with || l(w+dw) - l(w) ||_F for randomly sampled dw
+    loss_closure = lambda input, target: tF.nll_loss(net(input), target, reduction='none')
+    l_0 = get_l_vector(train_loader, loss_closure)
+    eps = 1e-3
+    dw = torch.rand((M.size(0),), device='cuda')
+    dw *= eps / torch.norm(dw)
+    update_model(net, dw)
+    l_upd = get_l_vector(train_loader, loss_closure)
+    update_model(net, -dw)
+
+    ratios = torch.norm(l_upd - l_0)**2 / len(train_loader.sampler) / torch.dot(M.mv(dw), dw)
+    assert ratios < 1.01 and ratios > .99
+
+def test_pspace_vs_ispace():
+    train_loader, net, loss_closure = get_fullyconnect_task()
 
     ispace_el2 = ISpace_L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
     GM = DenseMatrix(ispace_el2)
@@ -63,28 +87,20 @@ def test_pspace_L2Loss():
     ratios_trace = GM.trace() / M.trace() / n_examples
     assert ratios_trace < 1.01 and ratios_trace > .99
 
-    M_Implicit = ImplicitMatrix(el2)
 
-    # compare with || l(w+dw) - l(w) ||_F for randomly sampled dw
-    loss_closure = lambda input, target: tF.nll_loss(net(input), target, reduction='none')
-    l_0 = get_l_vector(train_loader, loss_closure)
+def test_pspace_implicit_vs_dense():
+    train_loader, net, loss_closure = get_fullyconnect_task()
+
+    el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+    M_dense = DenseMatrix(el2)
+    M_implicit = ImplicitMatrix(el2)
+
     eps = 1e-3
-    ratios = []
-    for i in range(20):
-        dw = torch.rand((M.size(0),), device='cuda')
-        dw *= eps / torch.norm(dw)
-        update_model(net, dw)
-        l_upd = get_l_vector(train_loader, loss_closure)
-        update_model(net, -dw)
 
-        M_norm_imp = M_Implicit.m_norm(dw)
-        M_norm_den = M.m_norm(dw)
-        ratio_m_norms = M_norm_imp / M_norm_den
-        assert ratio_m_norms < 1.01 and ratio_m_norms > .99
+    dw = torch.rand((M.size(0),), device='cuda')
+    dw *= eps / torch.norm(dw)
 
-        ratios.append(torch.norm(l_upd - l_0)**2 / len(train_loader.sampler) / torch.dot(M.mv(dw), dw))
-        assert ratios[-1] < 1.01 and ratios[-1] > .99
-
-    print(M.get_matrix())
-    print(M.size())
-    print(ratios)
+    M_norm_imp = M_implicit.m_norm(dw)
+    M_norm_den = M_dense.m_norm(dw)
+    ratio_m_norms = M_norm_imp / M_norm_den
+    assert ratio_m_norms < 1.01 and ratio_m_norms > .99
