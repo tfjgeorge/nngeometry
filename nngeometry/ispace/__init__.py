@@ -1,0 +1,1 @@
+from .l2loss import L2Loss

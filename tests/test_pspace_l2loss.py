@@ -1,4 +1,5 @@
 from nngeometry.pspace import L2Loss
+from nngeometry.ispace import L2Loss as ISpace_L2Loss
 from nngeometry.representations import DenseMatrix
 from subsampled_mnist import get_dataset
 import torch
@@ -45,15 +46,19 @@ def test_pspace_L2Loss():
     train_set = get_dataset('train')
     train_loader = DataLoader(
         dataset=train_set,
-        batch_size=250,
+        batch_size=2000,
         shuffle=False)
     net = Net(in_size=10)
     net.to('cuda')
 
     loss_closure = lambda input, target: tF.nll_loss(net(input), target, reduction='sum')
+
+    ispace_el2 = ISpace_L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+    GM = DenseMatrix(ispace_el2)
+
     el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
     M = DenseMatrix(el2)
-
+    print(GM.trace(), M.trace(), GM.trace() / M.trace())
 
     # compare with || l(w+dw) - l(w) ||_F for randomly sampled dw
     loss_closure = lambda input, target: tF.nll_loss(net(input), target, reduction='none')
