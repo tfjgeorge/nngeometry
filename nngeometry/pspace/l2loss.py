@@ -20,6 +20,7 @@ class L2Loss:
         bs = self.dataloader.batch_size
         G = torch.zeros((n_parameters, n_parameters), device=device)
         self.grads = torch.zeros((bs, n_parameters), device=device)
+        self.start = 0
         for (inputs, targets) in self.dataloader:
             self.grads.zero_()
             inputs, targets = inputs.to(device), targets.to(device)
@@ -36,6 +37,33 @@ class L2Loss:
             h.remove()
 
         return G
+
+    def get_lowrank_matrix(self):
+        # add hooks
+        self.handles += self._add_hooks(self._hook_savex, self._hook_compute_flat_grad)
+
+        device = next(self.model.parameters()).device
+        n_examples = len(self.dataloader.sampler)
+        n_parameters = sum([p.numel() for p in self.model.parameters()])
+        bs = self.dataloader.batch_size
+        G = torch.zeros((n_parameters, n_parameters), device=device)
+        self.grads = torch.zeros((n_examples, n_parameters), device=device)
+        self.start = 0
+        for (inputs, targets) in self.dataloader:
+            inputs, targets = inputs.to(device), targets.to(device)
+            inputs.requires_grad = True
+            loss = self.loss_closure(inputs, targets)
+            torch.autograd.grad(loss, [inputs])
+            self.start += inputs.size(0)
+        half_mat = self.grads / n_examples**.5
+
+        # remove hooks
+        del self.grads
+        self.xs = dict()
+        for h in self.handles:
+            h.remove()
+
+        return half_mat
 
     def implicit_mv(self, v):
         raise NotImplementedError
@@ -117,9 +145,9 @@ class L2Loss:
         bs = x.size(0)
         start = self.p_pos[mod]
         if mod_class == 'Linear':
-            self.grads[:, start:start+mod.weight.numel()].add_(torch.bmm(gy.unsqueeze(2), x.unsqueeze(1)).view(bs, -1))
+            self.grads[self.start:self.start+bs, start:start+mod.weight.numel()].add_(torch.bmm(gy.unsqueeze(2), x.unsqueeze(1)).view(bs, -1))
             if mod.bias is not None:
-                self.grads[:, start+mod.weight.numel():start+mod.weight.numel()+mod.bias.numel()] \
+                self.grads[self.start:self.start+bs, start+mod.weight.numel():start+mod.weight.numel()+mod.bias.numel()] \
                     .add_(gy)
         else:
             raise NotImplementedError

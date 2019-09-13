@@ -1,14 +1,14 @@
 from nngeometry.pspace import L2Loss
 from nngeometry.ispace import L2Loss as ISpace_L2Loss
-from nngeometry.representations import DenseMatrix, ImplicitMatrix
+from nngeometry.representations import DenseMatrix, ImplicitMatrix, LowRankMatrix
 from subsampled_mnist import get_dataset
 import torch
 import torch.nn as nn
 import torch.nn.functional as tF
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
 class Net(nn.Module):
-    def __init__(self, in_size=40, out_size=10, n_hidden=2, hidden_size=10,
+    def __init__(self, in_size=10, out_size=10, n_hidden=2, hidden_size=25,
                  nonlinearity=nn.ReLU):
         super(Net, self).__init__()
         layers = []
@@ -42,11 +42,13 @@ def get_l_vector(dataloader, loss_closure):
             i += inputs.size(0)
         return l
 
-def get_fullyconnect_task():
+def get_fullyconnect_task(bs=1000, subs=None):
     train_set = get_dataset('train')
+    if subs is not None:
+        train_set = Subset(train_set, range(subs))
     train_loader = DataLoader(
         dataset=train_set,
-        batch_size=2000,
+        batch_size=bs,
         shuffle=False)
     net = Net(in_size=10)
     net.to('cuda')
@@ -97,10 +99,31 @@ def test_pspace_implicit_vs_dense():
 
     eps = 1e-3
 
-    dw = torch.rand((M.size(0),), device='cuda')
+    dw = torch.rand((M_dense.size(0),), device='cuda')
     dw *= eps / torch.norm(dw)
 
     M_norm_imp = M_implicit.m_norm(dw)
     M_norm_den = M_dense.m_norm(dw)
     ratio_m_norms = M_norm_imp / M_norm_den
+    assert ratio_m_norms < 1.01 and ratio_m_norms > .99
+
+def test_pspace_lowrank_vs_dense():
+    train_loader, net, loss_closure = get_fullyconnect_task(bs=100, subs=500)
+
+    el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+    M_dense = DenseMatrix(el2)
+    M_lowrank = LowRankMatrix(el2)
+
+    assert torch.norm(M_dense.get_matrix() - M_lowrank.get_matrix()) < 1e-3
+    print(M_dense.size(0))
+    print(torch.norm(M_dense.get_matrix() - M_lowrank.get_matrix()))
+
+    eps = 1e-3
+
+    dw = torch.rand((M_dense.size(0),), device='cuda')
+    dw *= eps / torch.norm(dw)
+
+    M_norm_lr = M_lowrank.m_norm(dw)
+    M_norm_den = M_dense.m_norm(dw)
+    ratio_m_norms = M_norm_lr / M_norm_den
     assert ratio_m_norms < 1.01 and ratio_m_norms > .99
