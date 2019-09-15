@@ -7,7 +7,6 @@ class AbstractMatrix(ABC):
     def __init__(self, generator):
         return NotImplemented
 
-
 class DenseMatrix(AbstractMatrix):
     def __init__(self, generator, compute_eigendecomposition=False):
         self.generator = generator
@@ -16,13 +15,16 @@ class DenseMatrix(AbstractMatrix):
             self.compute_eigendecomposition()
 
     def compute_eigendecomposition(self):
-        self.evals, self.evecs = self.get_eigendecomposition()
+        self.evals, self.evecs = torch.symeig(self.data, eigenvectors=True)
 
     def mv(self, v):
         return torch.mv(self.data, v)
 
     def m_norm(self, v):
         return torch.dot(v, torch.mv(self.data, v)) ** .5
+
+    def frobenius_norm(self):
+        return torch.norm(self.data)
 
     def project_to_diag(self, v):
         return torch.mv(self.evecs.t(), v)
@@ -34,7 +36,7 @@ class DenseMatrix(AbstractMatrix):
         return self.data.size(*args)
 
     def get_eigendecomposition(self):
-        return torch.symeig(self.data, eigenvectors=True)
+        return self.evals, self.evecs
 
     def trace(self):
         return self.data.trace()

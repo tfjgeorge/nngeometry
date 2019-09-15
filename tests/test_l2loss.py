@@ -82,6 +82,11 @@ def test_pspace_l2loss():
     M2 = torch.stack([M.project_to_diag(M2[:, i]) for i in range(M.size(0))])
     assert torch.norm(M2 - torch.diag(M.evals)) < 1e-4
 
+    # compare frobenius norm to trace(M^T M)
+    f_norm = M.frobenius_norm()
+    f_norm2 = torch.trace(torch.mm(M.data.t(), M.data))**.5
+    ratio = f_norm / f_norm2
+    assert ratio < 1.01 and ratio > .99
 
 def test_pspace_vs_ispace():
     train_loader, net, loss_closure = get_fullyconnect_task()
