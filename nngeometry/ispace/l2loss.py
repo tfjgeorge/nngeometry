@@ -44,12 +44,15 @@ class L2Loss:
                 self.e_inner += inputs.size(0)
 
             self.e_outer += inputs.size(0)
+        G = self.G
 
         # remove hooks
+        del self.e_inner, self.e_outer
+        del self.G
         for h in self.handles:
             h.remove()
 
-        return self.G
+        return G
 
     def _get_individual_modules(self, model):
         mods = []
