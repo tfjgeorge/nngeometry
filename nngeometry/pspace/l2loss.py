@@ -38,6 +38,32 @@ class L2Loss:
 
         return G
 
+    def get_diag(self):
+        # add hooks
+        self.handles += self._add_hooks(self._hook_savex, self._hook_compute_diag)
+
+        device = next(self.model.parameters()).device
+        n_examples = len(self.dataloader.sampler)
+        n_parameters = sum([p.numel() for p in self.model.parameters()])
+        bs = self.dataloader.batch_size
+        G = torch.zeros((n_parameters, n_parameters), device=device)
+        self.diag_m = torch.zeros((n_parameters,), device=device)
+        self.start = 0
+        for (inputs, targets) in self.dataloader:
+            inputs, targets = inputs.to(device), targets.to(device)
+            inputs.requires_grad = True
+            loss = self.loss_closure(inputs, targets)
+            torch.autograd.grad(loss, [inputs])
+        diag_m = self.diag_m / n_examples
+
+        # remove hooks
+        del self.diag_m
+        self.xs = dict()
+        for h in self.handles:
+            h.remove()
+
+        return diag_m
+
     def get_lowrank_matrix(self):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex, self._hook_compute_flat_grad)
@@ -101,7 +127,6 @@ class L2Loss:
 
         return norm
 
-
     def _get_individual_modules(self, model):
         mods = []
         sizes_mods = []
@@ -143,12 +168,26 @@ class L2Loss:
         gy = grad_output[0]
         x = self.xs[mod]
         bs = x.size(0)
-        start = self.p_pos[mod]
+        start_p = self.p_pos[mod]
         if mod_class == 'Linear':
-            self.grads[self.start:self.start+bs, start:start+mod.weight.numel()].add_(torch.bmm(gy.unsqueeze(2), x.unsqueeze(1)).view(bs, -1))
+            self.grads[self.start:self.start+bs, start_p:start_p+mod.weight.numel()].add_(torch.bmm(gy.unsqueeze(2), x.unsqueeze(1)).view(bs, -1))
             if mod.bias is not None:
-                self.grads[self.start:self.start+bs, start+mod.weight.numel():start+mod.weight.numel()+mod.bias.numel()] \
+                self.grads[self.start:self.start+bs, start_p+mod.weight.numel():start_p+mod.weight.numel()+mod.bias.numel()] \
                     .add_(gy)
+        else:
+            raise NotImplementedError
+
+    def _hook_compute_diag(self, mod, grad_input, grad_output):
+        mod_class = mod.__class__.__name__
+        gy = grad_output[0]
+        x = self.xs[mod]
+        bs = x.size(0)
+        start_p = self.p_pos[mod]
+        if mod_class == 'Linear':
+            self.diag_m[start_p:start_p+mod.weight.numel()].add_(torch.mm(gy.t()**2, x**2).view(-1))
+            if mod.bias is not None:
+                self.diag_m[start_p+mod.weight.numel():start_p+mod.weight.numel()+mod.bias.numel()] \
+                    .add_((gy**2).sum(dim=0))
         else:
             raise NotImplementedError
 

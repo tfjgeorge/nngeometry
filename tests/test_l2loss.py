@@ -1,6 +1,6 @@
 from nngeometry.pspace import L2Loss
 from nngeometry.ispace import L2Loss as ISpace_L2Loss
-from nngeometry.representations import DenseMatrix, ImplicitMatrix, LowRankMatrix
+from nngeometry.representations import DenseMatrix, ImplicitMatrix, LowRankMatrix, DiagMatrix
 from subsampled_mnist import get_dataset
 import torch
 import torch.nn as nn
@@ -134,3 +134,22 @@ def test_pspace_lowrank_vs_dense():
     M_norm_den = M_dense.m_norm(dw)
     ratio_m_norms = M_norm_lr / M_norm_den
     assert ratio_m_norms < 1.01 and ratio_m_norms > .99
+
+def test_pspace_diag_vs_dense():
+    train_loader, net, loss_closure = get_fullyconnect_task(bs=100, subs=500)
+
+    el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+    M_dense = DenseMatrix(el2)
+    M_diag = DiagMatrix(el2)
+
+    assert torch.norm(torch.diag(M_dense.get_matrix() - M_diag.get_matrix())) < 1e-3
+
+    trace_diag = M_diag.trace()
+    trace_den = M_dense.trace()
+    ratio_trace = trace_diag / trace_den
+    assert ratio_trace < 1.01 and ratio_trace > .99
+
+    eps = 1e-3
+    dw = torch.rand((M_dense.size(0),), device='cuda')
+    assert torch.norm(M_diag.mv(dw) - 
+                      torch.mv(torch.diag(torch.diag(M_dense.get_matrix())), dw)) < 1e-3
