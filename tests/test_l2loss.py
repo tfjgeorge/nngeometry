@@ -73,20 +73,21 @@ def test_pspace_l2loss():
     ratios = torch.norm(l_upd - l_0)**2 / len(train_loader.sampler) / torch.dot(M.mv(dw), dw) / eps ** 2
     assert ratios < 1.01 and ratios > .99
 
-    # compare project_to_diag to project_from_diag
-    M.compute_eigendecomposition()
-    assert torch.norm(dw - M.project_to_diag(M.project_from_diag(dw))) < 1e-4
+    for impl in ['symeig', 'svd']:
+        # compare project_to_diag to project_from_diag
+        M.compute_eigendecomposition(impl)
+        assert torch.norm(dw - M.project_to_diag(M.project_from_diag(dw))) < 1e-4
 
-    # project M to its diag space and compare to the evals
-    M2 = torch.stack([M.project_to_diag(M.get_matrix()[:, i]) for i in range(M.size(0))])
-    M2 = torch.stack([M.project_to_diag(M2[:, i]) for i in range(M.size(0))])
-    assert torch.norm(M2 - torch.diag(M.evals)) < 1e-4
+        # project M to its diag space and compare to the evals
+        M2 = torch.stack([M.project_to_diag(M.get_matrix()[:, i]) for i in range(M.size(0))])
+        M2 = torch.stack([M.project_to_diag(M2[:, i]) for i in range(M.size(0))])
+        assert torch.norm(M2 - torch.diag(M.evals)) < 1e-4
 
-    # compare frobenius norm to trace(M^T M)
-    f_norm = M.frobenius_norm()
-    f_norm2 = torch.trace(torch.mm(M.data.t(), M.data))**.5
-    ratio = f_norm / f_norm2
-    assert ratio < 1.01 and ratio > .99
+        # compare frobenius norm to trace(M^T M)
+        f_norm = M.frobenius_norm()
+        f_norm2 = torch.trace(torch.mm(M.data.t(), M.data))**.5
+        ratio = f_norm / f_norm2
+        assert ratio < 1.01 and ratio > .99
 
 def test_pspace_vs_ispace():
     train_loader, net, loss_closure = get_fullyconnect_task()

@@ -14,8 +14,11 @@ class DenseMatrix(AbstractMatrix):
         if compute_eigendecomposition:
             self.compute_eigendecomposition()
 
-    def compute_eigendecomposition(self):
-        self.evals, self.evecs = torch.symeig(self.data, eigenvectors=True)
+    def compute_eigendecomposition(self, impl='symeig'):
+        if impl == 'symeig':
+            self.evals, self.evecs = torch.symeig(self.data, eigenvectors=True)
+        elif impl == 'svd':
+            _, self.evals, self.evecs = torch.svd(self.data, some=False)
 
     def mv(self, v):
         return torch.mv(self.data, v)
