@@ -7,6 +7,7 @@ class L2Loss:
         self.handles = []
         self.x_outer = dict()
         self.x_inner = dict()
+        self.xs = dict()
         self.gy_outer = dict()
         self.p_pos = dict() # maps parameters to their position in flattened representation
         self.mods = self._get_individual_modules(model)
@@ -15,11 +16,12 @@ class L2Loss:
     def release_buffers(self):
         self.x_outer = dict()
         self.x_inner = dict()
+        self.xs = dict()
         self.gy_outer = dict()
 
     def get_matrix(self):
         # add hooks
-        self.handles += self._add_hooks(self._hook_savex, self._hook_compute_flat_grad)
+        self.handles += self._add_hooks(self._hook_savex_io, self._hook_compute_flat_grad)
 
         device = next(self.model.parameters()).device
         n_examples = len(self.dataloader.sampler)
@@ -49,10 +51,40 @@ class L2Loss:
         # remove hooks
         del self.e_inner, self.e_outer
         del self.G
+        self.x_inner = dict()
+        self.x_outer = dict()
         for h in self.handles:
             h.remove()
 
         return G
+
+    def implicit_m_norm(self, v):
+        # add hooks
+        self.handles += self._add_hooks(self._hook_savex, self._hook_compute_m_norm)
+
+        device = next(self.model.parameters()).device
+        n_examples = len(self.dataloader.sampler)
+        n_parameters = sum([p.numel() for p in self.model.parameters()])
+        bs = self.dataloader.batch_size
+
+        self._cTv = torch.zeros((n_parameters,), device=device)
+        i = 0
+        for i_outer, (inputs, targets) in enumerate(self.dataloader):
+            self._c = v[i:i+bs]
+            i += bs
+            inputs, targets = inputs.to(device), targets.to(device)
+            inputs.requires_grad = True
+            loss = self.loss_closure(inputs, targets)
+            torch.autograd.grad(loss, [inputs])
+        m_norm = (self._cTv**2).sum()**.5
+
+        # remove hooks
+        del self._cTv
+        self.xs = dict()
+        for h in self.handles:
+            h.remove()
+
+        return m_norm
 
     def _get_individual_modules(self, model):
         mods = []
@@ -87,11 +119,14 @@ class L2Loss:
             handles.append(m.register_backward_hook(hook_gy))
         return handles
 
-    def _hook_savex(self, mod, i):
+    def _hook_savex_io(self, mod, i):
         if self.outerloop_switch:
             self.x_outer[mod] = i[0]
         else:
             self.x_inner[mod] = i[0]
+
+    def _hook_savex(self, mod, i):
+        self.xs[mod] = i[0]
 
     def _hook_compute_flat_grad(self, mod, grad_input, grad_output):
         if self.outerloop_switch:
@@ -106,9 +141,6 @@ class L2Loss:
             bs_outer = x_outer.size(0)
             start = self.p_pos[mod]
             if mod_class == 'Linear':
-                #print(torch.norm(x_outer - x_inner), torch.norm(gy_outer - gy_inner))
-                #print(x_inner.size(), x_outer.size(), gy_inner.size(), gy_outer.size())
-                #print(bs_outer, bs_inner, self.e_outer, self.e_inner)
                 self.G[self.e_inner:self.e_inner+bs_inner, self.e_outer:self.e_outer+bs_outer] += \
                         torch.mm(x_inner, x_outer.t()) * torch.mm(gy_inner, gy_outer.t())
                 if mod.bias is not None:
@@ -116,3 +148,16 @@ class L2Loss:
                             torch.mm(gy_inner, gy_outer.t())
             else:
                 raise NotImplementedError
+
+    def _hook_compute_m_norm(self, mod, grad_input, grad_output):
+        mod_class = mod.__class__.__name__
+        gy = grad_output[0]
+        xs = self.xs[mod]
+        start = self.p_pos[mod]
+        if mod_class == 'Linear':
+            self._cTv[start:start+mod.weight.numel()] += torch.mm(gy.t(), self._c.view(-1, 1) * xs).view(-1)
+            if mod.bias is not None:
+                self._cTv[start+mod.weight.numel():start+mod.weight.numel()+mod.bias.numel()] += \
+                    torch.mv(gy.t(), self._c)
+        else:
+            raise NotImplementedError

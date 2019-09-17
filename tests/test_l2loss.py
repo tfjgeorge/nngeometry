@@ -159,3 +159,19 @@ def test_pspace_diag_vs_dense():
     dw = torch.rand((M_dense.size(0),), device='cuda')
     assert torch.norm(M_diag.mv(dw) - 
                       torch.mv(torch.diag(torch.diag(M_dense.get_matrix())), dw)) < 1e-3
+
+def test_ispace_dense_vs_implicit():
+    train_loader, net, loss_closure = get_fullyconnect_task()
+
+    ispace_el2 = ISpace_L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+    M_dense = DenseMatrix(ispace_el2)
+    M_implicit = ImplicitMatrix(ispace_el2)
+
+    n_examples = len(train_loader.sampler)
+    v = torch.rand((n_examples,), device='cuda')
+
+    m_norm_dense = M_dense.m_norm(v)
+    m_norm_implicit = M_implicit.m_norm(v)
+
+    ratios_norms = m_norm_dense / m_norm_implicit
+    assert ratios_norms < 1.01 and ratios_norms > .99
