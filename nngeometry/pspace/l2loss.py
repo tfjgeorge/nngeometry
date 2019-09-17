@@ -127,6 +127,30 @@ class L2Loss:
 
         return norm
 
+    def implicit_trace(self):
+        # add hooks
+        self.handles += self._add_hooks(self._hook_savex, self._hook_compute_trace)
+
+        device = next(self.model.parameters()).device
+        n_examples = len(self.dataloader.sampler)
+        n_parameters = sum([p.numel() for p in self.model.parameters()])
+
+        self._trace = 0
+        for (inputs, targets) in self.dataloader:
+            inputs, targets = inputs.to(device), targets.to(device)
+            inputs.requires_grad = True
+            loss = self.loss_closure(inputs, targets)
+            torch.autograd.grad(loss, [inputs])
+        trace = self._trace / n_examples
+
+        # remove hooks
+        self.xs = dict()
+        del self._trace
+        for h in self.handles:
+            h.remove()
+
+        return trace
+
     def _get_individual_modules(self, model):
         mods = []
         sizes_mods = []
@@ -200,5 +224,17 @@ class L2Loss:
             self._vTg += (torch.mm(x, self._v[mod.weight].t()) * gy).sum(dim=1)
             if mod.bias is not None:
                 self._vTg += torch.mv(gy, self._v[mod.bias])
+        else:
+            raise NotImplementedError
+
+    def _hook_compute_trace(self, mod, grad_input, grad_output):
+        mod_class = mod.__class__.__name__
+        gy = grad_output[0]
+        x = self.xs[mod]
+        bs = x.size(0)
+        if mod_class == 'Linear':
+            self._trace += torch.mm(gy.t()**2, x**2).sum()
+            if mod.bias is not None:
+                self._trace += (gy**2).sum()
         else:
             raise NotImplementedError

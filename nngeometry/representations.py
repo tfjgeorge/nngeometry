@@ -71,6 +71,9 @@ class ImplicitMatrix(AbstractMatrix):
     def m_norm(self, v):
         return self.generator.implicit_m_norm(v)
 
+    def trace(self):
+        return self.generator.implicit_trace()
+
 class LowRankMatrix(AbstractMatrix):
     def __init__(self, generator):
         self.generator = generator
