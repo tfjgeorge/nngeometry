@@ -74,6 +74,16 @@ class ImplicitMatrix(AbstractMatrix):
     def trace(self):
         return self.generator.implicit_trace()
 
+    def size(self, dim=None):
+        s = self.generator.get_n_parameters()
+        if dim == 0 or dim == 1:
+            return s
+        elif dim is None:
+            return (s, s)
+        else:
+            raise IndexError
+
+
 class LowRankMatrix(AbstractMatrix):
     def __init__(self, generator):
         self.generator = generator

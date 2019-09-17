@@ -10,6 +10,9 @@ class L2Loss:
         self.mods = self._get_individual_modules(model)
         self.loss_closure = loss_closure
 
+    def get_n_parameters(self):
+        return sum([p.numel() for p in self.model.parameters()])
+
     def get_matrix(self):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex, self._hook_compute_flat_grad)
