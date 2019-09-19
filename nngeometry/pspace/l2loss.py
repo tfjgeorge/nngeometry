@@ -235,8 +235,8 @@ class L2Loss:
             if mod.bias is not None:
                 self._vTg += torch.mv(gy, self._v[mod.bias])
         elif mod_class == 'Conv2d':
-            indiv_gw = self._per_example_grad_conv(mod, x, gy)
-            self._vTg += torch.mv(indiv_gw.view(bs, -1), self._v[mod.weight].view(-1))
+            gy2 = torchF.conv2d(x, self._v[mod.weight], stride=mod.stride, padding=mod.padding, dilation=mod.dilation)
+            self._vTg += (gy * gy2).view(bs, -1).sum(dim=1)
             if mod.bias is not None:
                 self._vTg += torch.mv(gy.sum(dim=(2, 3)), self._v[mod.bias])
         else:

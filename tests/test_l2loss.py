@@ -149,7 +149,7 @@ def test_pspace_implicit_vs_dense():
         eps = 1e-3
         dw = torch.rand((M_dense.size(0),), device='cuda')
         dw *= eps / torch.norm(dw)
-
+        
         M_norm_imp = M_implicit.m_norm(dw)
         M_norm_den = M_dense.m_norm(dw)
         ratio_m_norms = M_norm_imp / M_norm_den
