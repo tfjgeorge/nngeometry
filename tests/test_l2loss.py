@@ -1,11 +1,12 @@
 from nngeometry.pspace import L2Loss
 from nngeometry.ispace import L2Loss as ISpace_L2Loss
 from nngeometry.representations import DenseMatrix, ImplicitMatrix, LowRankMatrix, DiagMatrix
-from subsampled_mnist import get_dataset
+from subsampled_mnist import get_dataset, default_datapath
 import torch
 import torch.nn as nn
 import torch.nn.functional as tF
 from torch.utils.data import DataLoader, Subset
+from torchvision import datasets, transforms
 
 class Net(nn.Module):
     def __init__(self, in_size=10, out_size=10, n_hidden=2, hidden_size=25,
@@ -23,6 +24,25 @@ class Net(nn.Module):
         x = x.view(x.size(0), -1)
         out = self.net(x)
         return tF.log_softmax(out, dim=1)
+
+class ConvNet(nn.Module):
+    def __init__(self):
+        super(ConvNet, self).__init__()
+        self.conv1 = nn.Conv2d(1, 20, 3, 1)
+        self.conv2 = nn.Conv2d(20, 22, 3, 1)
+        self.conv3 = nn.Conv2d(22, 15, 3, 1)
+        self.fc1 = nn.Linear(1*1*15, 10)
+
+    def forward(self, x):
+        x = tF.relu(self.conv1(x))
+        x = tF.max_pool2d(x, 2, 2)
+        x = tF.relu(self.conv2(x))
+        x = tF.max_pool2d(x, 2, 2)
+        x = tF.relu(self.conv3(x))
+        x = tF.max_pool2d(x, 2, 2)
+        x = x.view(-1, 1*1*15)
+        x = self.fc1(x)
+        return tF.log_softmax(x, dim=1)
 
 def update_model(net, dw):
     # new_net = net.clone()
@@ -55,39 +75,54 @@ def get_fullyconnect_task(bs=1000, subs=None):
     loss_closure = lambda input, target: tF.nll_loss(net(input), target, reduction='sum')
     return train_loader, net, loss_closure
 
+def get_convnet_task(bs=1000, subs=None):
+    train_set = datasets.MNIST(default_datapath, train=True, download=True,
+                               transform=transforms.ToTensor())
+    if subs is not None:
+        train_set = Subset(train_set, range(subs))
+    train_loader = DataLoader(
+        dataset=train_set,
+        batch_size=bs,
+        shuffle=False)
+    net = ConvNet()
+    net.to('cuda')
+    loss_closure = lambda input, target: tF.nll_loss(net(input), target, reduction='sum')
+    return train_loader, net, loss_closure
+
 def test_pspace_l2loss():
-    train_loader, net, loss_closure = get_fullyconnect_task()
+    for get_task in [get_fullyconnect_task, get_convnet_task]:
+        train_loader, net, loss_closure = get_task()
 
-    el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
-    M = DenseMatrix(el2)
+        el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+        M = DenseMatrix(el2)
 
-    # compare with || l(w+dw) - l(w) ||_F for randomly sampled dw
-    loss_closure = lambda input, target: tF.nll_loss(net(input), target, reduction='none')
-    l_0 = get_l_vector(train_loader, loss_closure)
-    eps = 1e-3
-    dw = torch.rand((M.size(0),), device='cuda')
-    dw /= torch.norm(dw)
-    update_model(net, eps * dw)
-    l_upd = get_l_vector(train_loader, loss_closure)
-    update_model(net, -eps * dw)
-    ratios = torch.norm(l_upd - l_0)**2 / len(train_loader.sampler) / torch.dot(M.mv(dw), dw) / eps ** 2
-    assert ratios < 1.01 and ratios > .99
+        # compare with || l(w+dw) - l(w) ||_F for randomly sampled dw
+        loss_closure = lambda input, target: tF.nll_loss(net(input), target, reduction='none')
+        l_0 = get_l_vector(train_loader, loss_closure)
+        eps = 1e-3
+        dw = torch.rand((M.size(0),), device='cuda')
+        dw /= torch.norm(dw)
+        update_model(net, eps * dw)
+        l_upd = get_l_vector(train_loader, loss_closure)
+        update_model(net, -eps * dw)
+        ratios = torch.norm(l_upd - l_0)**2 / len(train_loader.sampler) / torch.dot(M.mv(dw), dw) / eps ** 2
+        assert ratios < 1.01 and ratios > .99
 
-    for impl in ['symeig', 'svd']:
-        # compare project_to_diag to project_from_diag
-        M.compute_eigendecomposition(impl)
-        assert torch.norm(dw - M.project_to_diag(M.project_from_diag(dw))) < 1e-4
+        for impl in ['symeig', 'svd']:
+            # compare project_to_diag to project_from_diag
+            M.compute_eigendecomposition(impl)
+            assert torch.norm(dw - M.project_to_diag(M.project_from_diag(dw))) < 1e-4
 
-        # project M to its diag space and compare to the evals
-        M2 = torch.stack([M.project_to_diag(M.get_matrix()[:, i]) for i in range(M.size(0))])
-        M2 = torch.stack([M.project_to_diag(M2[:, i]) for i in range(M.size(0))])
-        assert torch.norm(M2 - torch.diag(M.evals)) < 1e-4
+            # project M to its diag space and compare to the evals
+            M2 = torch.stack([M.project_to_diag(M.get_matrix()[:, i]) for i in range(M.size(0))])
+            M2 = torch.stack([M.project_to_diag(M2[:, i]) for i in range(M.size(0))])
+            assert torch.norm(M2 - torch.diag(M.evals)) < 1e-4
 
-        # compare frobenius norm to trace(M^T M)
-        f_norm = M.frobenius_norm()
-        f_norm2 = torch.trace(torch.mm(M.data.t(), M.data))**.5
-        ratio = f_norm / f_norm2
-        assert ratio < 1.01 and ratio > .99
+            # compare frobenius norm to trace(M^T M)
+            f_norm = M.frobenius_norm()
+            f_norm2 = torch.trace(torch.mm(M.data.t(), M.data))**.5
+            ratio = f_norm / f_norm2
+            assert ratio < 1.01 and ratio > .99
 
 def test_pspace_vs_ispace():
     train_loader, net, loss_closure = get_fullyconnect_task()
