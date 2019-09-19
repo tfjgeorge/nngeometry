@@ -203,11 +203,7 @@ class L2Loss:
                 self.grads[self.start:self.start+bs, start_p+mod.weight.numel():start_p+mod.weight.numel()+mod.bias.numel()] \
                     .add_(gy)
         elif mod_class == 'Conv2d':
-            ks = (mod.weight.size(2), mod.weight.size(3))
-            gy_s = gy.size()
-            x_unfold = torchF.unfold(x, kernel_size=ks, stride=mod.stride, padding=mod.padding, dilation=mod.dilation)
-            x_unfold_s = x_unfold.size()
-            indiv_gw = torch.bmm(gy.view(bs, gy_s[1], -1), x_unfold.view(bs, x_unfold_s[1], -1).permute(0, 2, 1))
+            indiv_gw = self._per_example_grad_conv(mod, x, gy)
             self.grads[self.start:self.start+bs, start_p:start_p+mod.weight.numel()].add_(indiv_gw.view(bs, -1))
             if mod.bias is not None:
                 self.grads[self.start:self.start+bs, start_p+mod.weight.numel():start_p+mod.weight.numel()+mod.bias.numel()] \
