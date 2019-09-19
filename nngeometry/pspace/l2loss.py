@@ -206,8 +206,8 @@ class L2Loss:
             ks = (mod.weight.size(2), mod.weight.size(3))
             gy_s = gy.size()
             x_unfold = torchF.unfold(x, kernel_size=ks, stride=mod.stride, padding=mod.padding, dilation=mod.dilation)
-            x_unfolds = x_unfold.size()
-            indiv_gw = torch.bmm(gy.view(bs, gy_s[1], -1), x_unfold.view(bs, x_unfolds[1], -1).permute(0, 2, 1))
+            x_unfold_s = x_unfold.size()
+            indiv_gw = torch.bmm(gy.view(bs, gy_s[1], -1), x_unfold.view(bs, x_unfold_s[1], -1).permute(0, 2, 1))
             self.grads[self.start:self.start+bs, start_p:start_p+mod.weight.numel()].add_(indiv_gw.view(bs, -1))
             if mod.bias is not None:
                 self.grads[self.start:self.start+bs, start_p+mod.weight.numel():start_p+mod.weight.numel()+mod.bias.numel()] \
@@ -238,6 +238,11 @@ class L2Loss:
             self._vTg += (torch.mm(x, self._v[mod.weight].t()) * gy).sum(dim=1)
             if mod.bias is not None:
                 self._vTg += torch.mv(gy, self._v[mod.bias])
+        elif mod_class == 'Conv2d':
+            indiv_gw = self._per_example_grad_conv(mod, x, gy)
+            self._vTg += torch.mv(indiv_gw.view(bs, -1), self._v[mod.weight].view(-1))
+            if mod.bias is not None:
+                self._vTg += torch.mv(gy.sum(dim=(2, 3)), self._v[mod.bias])
         else:
             raise NotImplementedError
 
@@ -250,5 +255,19 @@ class L2Loss:
             self._trace += torch.mm(gy.t()**2, x**2).sum()
             if mod.bias is not None:
                 self._trace += (gy**2).sum()
+        elif mod_class == 'Conv2d':
+            indiv_gw = self._per_example_grad_conv(mod, x, gy)
+            self._trace += (indiv_gw**2).sum()
+            if mod.bias is not None:
+                self._trace += (gy.sum(dim=(2,3))**2).sum()
         else:
             raise NotImplementedError
+
+
+    def _per_example_grad_conv(self, mod, x, gy):
+            ks = (mod.weight.size(2), mod.weight.size(3))
+            gy_s = gy.size()
+            bs = gy_s[0]
+            x_unfold = torchF.unfold(x, kernel_size=ks, stride=mod.stride, padding=mod.padding, dilation=mod.dilation)
+            x_unfold_s = x_unfold.size()
+            return torch.bmm(gy.view(bs, gy_s[1], -1), x_unfold.view(bs, x_unfold_s[1], -1).permute(0, 2, 1))

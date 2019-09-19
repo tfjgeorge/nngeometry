@@ -28,10 +28,10 @@ class Net(nn.Module):
 class ConvNet(nn.Module):
     def __init__(self):
         super(ConvNet, self).__init__()
-        self.conv1 = nn.Conv2d(1, 20, 3, 1)
-        self.conv2 = nn.Conv2d(20, 22, 3, 1)
-        self.conv3 = nn.Conv2d(22, 15, 3, 1)
-        self.fc1 = nn.Linear(1*1*15, 10)
+        self.conv1 = nn.Conv2d(1, 5, 3, 1)
+        self.conv2 = nn.Conv2d(5, 6, 4, 1)
+        self.conv3 = nn.Conv2d(6, 7, 3, 1)
+        self.fc1 = nn.Linear(1*1*7, 10)
 
     def forward(self, x):
         x = tF.relu(self.conv1(x))
@@ -40,7 +40,7 @@ class ConvNet(nn.Module):
         x = tF.max_pool2d(x, 2, 2)
         x = tF.relu(self.conv3(x))
         x = tF.max_pool2d(x, 2, 2)
-        x = x.view(-1, 1*1*15)
+        x = x.view(-1, 1*1*7)
         x = self.fc1(x)
         return tF.log_softmax(x, dim=1)
 
@@ -90,11 +90,12 @@ def get_convnet_task(bs=1000, subs=None):
     return train_loader, net, loss_closure
 
 def test_pspace_l2loss():
-    for get_task in [get_fullyconnect_task, get_convnet_task]:
+    for get_task in [get_convnet_task, get_fullyconnect_task]:
         train_loader, net, loss_closure = get_task()
 
         el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
         M = DenseMatrix(el2)
+        print(M.size())
 
         # compare with || l(w+dw) - l(w) ||_F for randomly sampled dw
         loss_closure = lambda input, target: tF.nll_loss(net(input), target, reduction='none')
@@ -118,11 +119,11 @@ def test_pspace_l2loss():
             M2 = torch.stack([M.project_to_diag(M2[:, i]) for i in range(M.size(0))])
             assert torch.norm(M2 - torch.diag(M.evals)) < 1e-4
 
-            # compare frobenius norm to trace(M^T M)
-            f_norm = M.frobenius_norm()
-            f_norm2 = torch.trace(torch.mm(M.data.t(), M.data))**.5
-            ratio = f_norm / f_norm2
-            assert ratio < 1.01 and ratio > .99
+        # compare frobenius norm to trace(M^T M)
+        f_norm = M.frobenius_norm()
+        f_norm2 = torch.trace(torch.mm(M.data.t(), M.data))**.5
+        ratio = f_norm / f_norm2
+        assert ratio < 1.01 and ratio > .99
 
 def test_pspace_vs_ispace():
     train_loader, net, loss_closure = get_fullyconnect_task()
@@ -138,25 +139,26 @@ def test_pspace_vs_ispace():
     assert ratios_trace < 1.01 and ratios_trace > .99
 
 def test_pspace_implicit_vs_dense():
-    train_loader, net, loss_closure = get_fullyconnect_task()
+    for get_task in [get_convnet_task, get_fullyconnect_task]:
+        train_loader, net, loss_closure = get_task()
 
-    el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
-    M_dense = DenseMatrix(el2)
-    M_implicit = ImplicitMatrix(el2)
+        el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+        M_dense = DenseMatrix(el2)
+        M_implicit = ImplicitMatrix(el2)
 
-    eps = 1e-3
-    dw = torch.rand((M_dense.size(0),), device='cuda')
-    dw *= eps / torch.norm(dw)
+        eps = 1e-3
+        dw = torch.rand((M_dense.size(0),), device='cuda')
+        dw *= eps / torch.norm(dw)
 
-    M_norm_imp = M_implicit.m_norm(dw)
-    M_norm_den = M_dense.m_norm(dw)
-    ratio_m_norms = M_norm_imp / M_norm_den
-    assert ratio_m_norms < 1.01 and ratio_m_norms > .99
+        M_norm_imp = M_implicit.m_norm(dw)
+        M_norm_den = M_dense.m_norm(dw)
+        ratio_m_norms = M_norm_imp / M_norm_den
+        assert ratio_m_norms < 1.01 and ratio_m_norms > .99
 
-    trace_imp = M_implicit.trace()
-    trace_den = M_dense.trace()
-    ratio_trace = trace_imp / trace_den
-    assert ratio_trace < 1.01 and ratio_trace > .99
+        trace_imp = M_implicit.trace()
+        trace_den = M_dense.trace()
+        ratio_trace = trace_imp / trace_den
+        assert ratio_trace < 1.01 and ratio_trace > .99
 
 def test_pspace_lowrank_vs_dense():
     train_loader, net, loss_closure = get_fullyconnect_task(bs=100, subs=500)
