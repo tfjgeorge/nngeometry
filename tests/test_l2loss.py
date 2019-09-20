@@ -95,7 +95,6 @@ def test_pspace_l2loss():
 
         el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
         M = DenseMatrix(el2)
-        print(M.size())
 
         # compare with || l(w+dw) - l(w) ||_F for randomly sampled dw
         loss_closure = lambda input, target: tF.nll_loss(net(input), target, reduction='none')
@@ -119,9 +118,15 @@ def test_pspace_l2loss():
             M2 = torch.stack([M.project_to_diag(M2[:, i]) for i in range(M.size(0))])
             assert torch.norm(M2 - torch.diag(M.evals)) < 1e-4
 
+            # same but directly with the matrix:
+            assert torch.norm(M.project_to_diag(M.get_matrix()) - torch.diag(M.evals)) < 1e-4
+
+            evals, evecs =  M.get_eigendecomposition()
+            assert torch.norm(torch.mm(torch.mm(evecs, torch.diag(evals)), evecs.t()) - M.get_matrix()) < 1e-3
+
         # compare frobenius norm to trace(M^T M)
         f_norm = M.frobenius_norm()
-        f_norm2 = torch.trace(torch.mm(M.data.t(), M.data))**.5
+        f_norm2 = torch.trace(torch.mm(M.get_matrix().t(), M.get_matrix()))**.5
         ratio = f_norm / f_norm2
         assert ratio < 1.01 and ratio > .99
 
@@ -177,6 +182,10 @@ def test_pspace_lowrank_vs_dense():
     M_norm_den = M_dense.m_norm(dw)
     ratio_m_norms = M_norm_lr / M_norm_den
     assert ratio_m_norms < 1.01 and ratio_m_norms > .99
+
+    assert torch.norm(M_dense.mv(dw) - M_lowrank.mv(dw)) < 1e-3
+
+
 
 def test_pspace_diag_vs_dense():
     train_loader, net, loss_closure = get_fullyconnect_task(bs=100, subs=500)

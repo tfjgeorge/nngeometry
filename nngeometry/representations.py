@@ -5,7 +5,7 @@ class AbstractMatrix(ABC):
 
     @abstractmethod
     def __init__(self, generator):
-        return NotImplemented
+        return NotImplementedError
 
 class DenseMatrix(AbstractMatrix):
     def __init__(self, generator, compute_eigendecomposition=False):
@@ -30,7 +30,12 @@ class DenseMatrix(AbstractMatrix):
         return torch.norm(self.data)
 
     def project_to_diag(self, v):
-        return torch.mv(self.evecs.t(), v)
+        if v.dim() == 1:
+            return torch.mv(self.evecs.t(), v)
+        elif v.dim() == 2:
+            return torch.mm(torch.mm(self.evecs.t(), v), self.evecs)
+        else:
+            raise NotImplementedError
 
     def project_from_diag(self, v):
         return torch.mv(self.evecs, v)
@@ -98,6 +103,9 @@ class LowRankMatrix(AbstractMatrix):
         # of your matrix but instead compute the potentially
         # much larger dense matrix
         return torch.mm(self.data.t(), self.data)
+
+    def mv(self, v):
+        return torch.mv(self.data.t(), torch.mv(self.data, v))
 
 class KrylovLowRankMatrix(AbstractMatrix):
     def __init__(self, generator):
