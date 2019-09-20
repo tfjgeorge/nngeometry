@@ -121,7 +121,7 @@ def test_pspace_l2loss():
             # same but directly with the matrix:
             assert torch.norm(M.project_to_diag(M.get_matrix()) - torch.diag(M.evals)) < 1e-4
 
-            evals, evecs =  M.get_eigendecomposition()
+            evals, evecs = M.get_eigendecomposition()
             assert torch.norm(torch.mm(torch.mm(evecs, torch.diag(evals)), evecs.t()) - M.get_matrix()) < 1e-3
 
         # compare frobenius norm to trace(M^T M)
@@ -185,7 +185,27 @@ def test_pspace_lowrank_vs_dense():
 
     assert torch.norm(M_dense.mv(dw) - M_lowrank.mv(dw)) < 1e-3
 
+def test_pspace_lowrank():
+    for get_task in [get_convnet_task, get_fullyconnect_task]:
+        train_loader, net, loss_closure = get_fullyconnect_task(bs=100, subs=500)
+        el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+        M = LowRankMatrix(el2)
 
+        M.compute_eigendecomposition()
+
+        evals, evecs = M.get_eigendecomposition()
+        assert torch.norm(torch.mm(torch.mm(evecs, torch.diag(evals)), evecs.t()) - M.get_matrix()) < 1e-3
+
+        assert torch.norm(M.project_to_diag(M.get_matrix()) - torch.diag(M.evals)) < 1e-3
+
+        # check evecs:
+        for i in range(evecs.size(1)):
+            v = evecs[:, i]
+            norm_v = torch.norm(v)
+            if not (norm_v > 0.999 and norm_v < 1.001):
+                # TODO improve this
+                print(i, norm_v)
+            assert torch.norm(M.mv(v) - v * evals[i]) < 1e-3
 
 def test_pspace_diag_vs_dense():
     train_loader, net, loss_closure = get_fullyconnect_task(bs=100, subs=500)

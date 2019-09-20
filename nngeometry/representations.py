@@ -40,11 +40,11 @@ class DenseMatrix(AbstractMatrix):
     def project_from_diag(self, v):
         return torch.mv(self.evecs, v)
 
-    def size(self, *args):
-        return self.data.size(*args)
-
     def get_eigendecomposition(self):
         return self.evals, self.evecs
+
+    def size(self, *args):
+        return self.data.size(*args)
 
     def trace(self):
         return self.data.trace()
@@ -88,7 +88,6 @@ class ImplicitMatrix(AbstractMatrix):
         else:
             raise IndexError
 
-
 class LowRankMatrix(AbstractMatrix):
     def __init__(self, generator):
         self.generator = generator
@@ -106,6 +105,22 @@ class LowRankMatrix(AbstractMatrix):
 
     def mv(self, v):
         return torch.mv(self.data.t(), torch.mv(self.data, v))
+
+    def compute_eigendecomposition(self, impl='symeig'):
+        if impl == 'symeig':
+            self.evals, V = torch.symeig(torch.mm(self.data, self.data.t()), eigenvectors=True)
+            self.evecs = torch.mm(self.data.t(), V) / (self.evals**.5).unsqueeze(0)
+        else:
+            raise NotImplementedError
+
+    def project_to_diag(self, v):
+        if v.dim() == 1:
+            return torch.mv(self.evecs.t(), v)
+        elif v.dim() == 2:
+            return torch.mm(torch.mm(self.evecs.t(), v), self.evecs)
+
+    def get_eigendecomposition(self):
+        return self.evals, self.evecs
 
 class KrylovLowRankMatrix(AbstractMatrix):
     def __init__(self, generator):
