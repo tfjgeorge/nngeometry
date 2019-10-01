@@ -76,6 +76,9 @@ class ImplicitMatrix(AbstractMatrix):
     def m_norm(self, v):
         return self.generator.implicit_m_norm(v)
 
+    def frobenius_norm(self):
+        return self.generator.implicit_frobenius()
+
     def trace(self):
         return self.generator.implicit_trace()
 

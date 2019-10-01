@@ -93,6 +93,46 @@ class L2Loss:
 
         return m_norm
 
+    def implicit_frobenius(self):
+        # add hooks
+        self.handles += self._add_hooks(self._hook_savex_io, self._hook_compute_frobenius)
+
+        device = next(self.model.parameters()).device
+        n_examples = len(self.dataloader.sampler)
+        n_parameters = sum([p.numel() for p in self.model.parameters()])
+        bs = self.dataloader.batch_size
+        norm2 = 0
+        for i_outer, (inputs, targets) in enumerate(self.dataloader):
+            self.outerloop_switch = True # used in hooks to switch between store/compute
+            inputs, targets = inputs.to(device), targets.to(device)
+            bs_outer = targets.size(0)
+            inputs.requires_grad = True
+            loss = self.loss_closure(inputs, targets)
+            torch.autograd.grad(loss, [inputs])
+            self.outerloop_switch = False 
+
+            for i_inner, (inputs, targets) in enumerate(self.dataloader):
+                if i_inner > i_outer:
+                    break
+                self.mb_block = torch.zeros((bs, bs), device=device)
+                inputs, targets = inputs.to(device), targets.to(device)
+                inputs.requires_grad = True
+                loss = self.loss_closure(inputs, targets)
+                torch.autograd.grad(loss, [inputs])
+                this_mb_norm2 = (self.mb_block**2).sum()
+                if i_inner < i_outer:
+                    this_mb_norm2 *= 2
+                norm2 += this_mb_norm2
+
+        # remove hooks
+        del self.mb_block
+        self.x_inner = dict()
+        self.x_outer = dict()
+        for h in self.handles:
+            h.remove()
+
+        return norm2**.5
+
     def _get_individual_modules(self, model):
         mods = []
         sizes_mods = []
@@ -146,13 +186,31 @@ class L2Loss:
             x_inner = self.x_inner[mod]
             bs_inner = x_inner.size(0)
             bs_outer = x_outer.size(0)
-            start = self.p_pos[mod]
             if mod_class == 'Linear':
                 self.G[self.e_inner:self.e_inner+bs_inner, self.e_outer:self.e_outer+bs_outer] += \
                         torch.mm(x_inner, x_outer.t()) * torch.mm(gy_inner, gy_outer.t())
                 if mod.bias is not None:
                     self.G[self.e_inner:self.e_inner+bs_inner, self.e_outer:self.e_outer+bs_outer] += \
                             torch.mm(gy_inner, gy_outer.t())
+            else:
+                raise NotImplementedError
+
+    def _hook_compute_frobenius(self, mod, grad_input, grad_output):
+        if self.outerloop_switch:
+            self.gy_outer[mod] = grad_output[0]
+        else:
+            mod_class = mod.__class__.__name__
+            gy_inner = grad_output[0]
+            gy_outer = self.gy_outer[mod]
+            x_outer = self.x_outer[mod]
+            x_inner = self.x_inner[mod]
+            bs_inner = x_inner.size(0)
+            bs_outer = x_outer.size(0)
+            if mod_class == 'Linear':
+                self.mb_block[:bs_inner, :bs_outer] += \
+                        torch.mm(x_inner, x_outer.t()) * torch.mm(gy_inner, gy_outer.t())
+                if mod.bias is not None:
+                    self.mb_block[:bs_inner, :bs_outer] += torch.mm(gy_inner, gy_outer.t())
             else:
                 raise NotImplementedError
 

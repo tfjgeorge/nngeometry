@@ -249,4 +249,5 @@ def test_ispace_dense_vs_implicit():
 
     frob_norm_dense = M_dense.frobenius_norm()
     frob_norm_implicit = M_implicit.frobenius_norm()
-    print(frob_norm_dense, frob_norm_implicit)
+    ratios_frob = frob_norm_dense / frob_norm_implicit
+    assert ratios_frob < 1.01 and ratios_frob > .99
