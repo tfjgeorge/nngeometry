@@ -32,6 +32,7 @@ class L2Loss:
         for i_outer, (inputs, targets) in enumerate(self.dataloader):
             self.outerloop_switch = True # used in hooks to switch between store/compute
             inputs, targets = inputs.to(device), targets.to(device)
+            bs_outer = targets.size(0)
             inputs.requires_grad = True
             loss = self.loss_closure(inputs, targets)
             torch.autograd.grad(loss, [inputs])
@@ -39,10 +40,16 @@ class L2Loss:
 
             self.e_inner = 0
             for i_inner, (inputs, targets) in enumerate(self.dataloader):
+                if i_inner > i_outer:
+                    break
                 inputs, targets = inputs.to(device), targets.to(device)
                 inputs.requires_grad = True
                 loss = self.loss_closure(inputs, targets)
                 torch.autograd.grad(loss, [inputs])
+                if i_inner < i_outer: # exclude diagonal
+                    bs_inner = targets.size(0)
+                    self.G[self.e_outer:self.e_outer+bs_outer, self.e_inner:self.e_inner+bs_inner] += \
+                        self.G[self.e_inner:self.e_inner+bs_inner, self.e_outer:self.e_outer+bs_outer].t()
                 self.e_inner += inputs.size(0)
 
             self.e_outer += inputs.size(0)

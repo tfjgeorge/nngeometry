@@ -134,14 +134,19 @@ def test_pspace_vs_ispace():
     train_loader, net, loss_closure = get_fullyconnect_task()
 
     ispace_el2 = ISpace_L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
-    GM = DenseMatrix(ispace_el2)
+    MIspace = DenseMatrix(ispace_el2)
 
     el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
     M = DenseMatrix(el2)
 
     n_examples = len(train_loader.sampler)
-    ratios_trace = GM.trace() / M.trace() / n_examples
+    ratios_trace = MIspace.trace() / M.trace() / n_examples
     assert ratios_trace < 1.01 and ratios_trace > .99
+
+    MIspace_frob = MIspace.frobenius_norm()
+    M_frob = M.frobenius_norm()
+    ratios_frob = MIspace_frob / M_frob / n_examples
+    assert ratios_frob < 1.01 and ratios_frob > .99
 
 def test_pspace_implicit_vs_dense():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
@@ -241,3 +246,7 @@ def test_ispace_dense_vs_implicit():
 
     ratios_norms = m_norm_dense / m_norm_implicit
     assert ratios_norms < 1.01 and ratios_norms > .99
+
+    frob_norm_dense = M_dense.frobenius_norm()
+    frob_norm_implicit = M_implicit.frobenius_norm()
+    print(frob_norm_dense, frob_norm_implicit)
