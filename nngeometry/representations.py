@@ -66,6 +66,32 @@ class DiagMatrix(AbstractMatrix):
     def get_matrix(self):
         return torch.diag(self.data)
 
+    def size(self, dim=None):
+        s = self.data.size(0)
+        if dim == 0 or dim == 1:
+            return s
+        elif dim is None:
+            return (s, s)
+        else:
+            raise IndexError
+
+class BlockDiagMatrix(AbstractMatrix):
+    def __init__(self, generator):
+        self.generator = generator
+        self.data = generator.get_layer_blocks()
+
+    def trace(self):
+        return sum([torch.trace(b) for b in self.data])
+
+    def get_matrix(self):
+        s = self.generator.get_n_parameters()
+        M = torch.zeros((s, s), device=self.generator.get_device())
+        start = 0
+        for b in self.data:
+            M[start:start+b.size(0), start:start+b.size(0)].add_(b)
+            start += b.size(0)
+        return M
+
 class ImplicitMatrix(AbstractMatrix):
     def __init__(self, generator):
         self.generator = generator

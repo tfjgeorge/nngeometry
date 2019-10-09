@@ -14,6 +14,9 @@ class L2Loss:
     def get_n_parameters(self):
         return sum([p.numel() for p in self.model.parameters()])
 
+    def get_device(self):
+        return next(self.model.parameters()).device
+
     def get_matrix(self):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex, self._hook_compute_flat_grad)
@@ -41,6 +44,34 @@ class L2Loss:
             h.remove()
 
         return G
+
+    def get_layer_blocks(self):
+        # add hooks
+        self.handles += self._add_hooks(self._hook_savex, self._hook_compute_layer_blocks)
+
+        device = next(self.model.parameters()).device
+        n_examples = len(self.dataloader.sampler)
+        self._blocks = dict()
+        for m in self.mods:
+            s = m.weight.numel()
+            if m.bias is not None:
+                s += m.bias.numel()
+            self._blocks[m] = torch.zeros((s, s), device=device)
+
+        for (inputs, targets) in self.dataloader:
+            inputs, targets = inputs.to(device), targets.to(device)
+            inputs.requires_grad = True
+            loss = self.loss_closure(inputs, targets)
+            torch.autograd.grad(loss, [inputs])
+        blocks = [self._blocks[m] / n_examples for m in self.mods]
+
+        # remove hooks
+        del self._blocks
+        self.xs = dict()
+        for h in self.handles:
+            h.remove()
+
+        return blocks
 
     def get_diag(self):
         # add hooks
@@ -211,6 +242,26 @@ class L2Loss:
         else:
             raise NotImplementedError
 
+    def _hook_compute_layer_blocks(self, mod, grad_input, grad_output):
+        mod_class = mod.__class__.__name__
+        gy = grad_output[0]
+        x = self.xs[mod]
+        bs = x.size(0)
+        block = self._blocks[mod]
+        if mod_class == 'Linear':
+            gw = torch.bmm(gy.unsqueeze(2), x.unsqueeze(1)).view(bs, -1)
+            if mod.bias is not None:
+                gw = torch.cat([gw.view(bs, -1), gy.view(bs, -1)], dim=1)
+            block.add_(torch.mm(gw.t(), gw))
+        elif mod_class == 'Conv2d':
+            gw = self._per_example_grad_conv(mod, x, gy)
+            spatial_positions = gy.size(2) * gy.size(3)
+            if mod.bias is not None:
+                gw = torch.cat([gw.view(bs, -1), gy.sum(dim=(2, 3)).view(bs, -1)], dim=1)
+            block.add_(torch.mm(gw.t(), gw))
+        else:
+            raise NotImplementedError
+
     def _hook_compute_diag(self, mod, grad_input, grad_output):
         mod_class = mod.__class__.__name__
         gy = grad_output[0]
@@ -259,11 +310,10 @@ class L2Loss:
         else:
             raise NotImplementedError
 
-
     def _per_example_grad_conv(self, mod, x, gy):
-            ks = (mod.weight.size(2), mod.weight.size(3))
-            gy_s = gy.size()
-            bs = gy_s[0]
-            x_unfold = torchF.unfold(x, kernel_size=ks, stride=mod.stride, padding=mod.padding, dilation=mod.dilation)
-            x_unfold_s = x_unfold.size()
-            return torch.bmm(gy.view(bs, gy_s[1], -1), x_unfold.view(bs, x_unfold_s[1], -1).permute(0, 2, 1))
+        ks = (mod.weight.size(2), mod.weight.size(3))
+        gy_s = gy.size()
+        bs = gy_s[0]
+        x_unfold = torchF.unfold(x, kernel_size=ks, stride=mod.stride, padding=mod.padding, dilation=mod.dilation)
+        x_unfold_s = x_unfold.size()
+        return torch.bmm(gy.view(bs, gy_s[1], -1), x_unfold.view(bs, x_unfold_s[1], -1).permute(0, 2, 1))

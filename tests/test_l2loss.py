@@ -1,6 +1,6 @@
 from nngeometry.pspace import L2Loss
 from nngeometry.ispace import L2Loss as ISpace_L2Loss
-from nngeometry.representations import DenseMatrix, ImplicitMatrix, LowRankMatrix, DiagMatrix
+from nngeometry.representations import DenseMatrix, ImplicitMatrix, LowRankMatrix, DiagMatrix, BlockDiagMatrix
 from subsampled_mnist import get_dataset, default_datapath
 import torch
 import torch.nn as nn
@@ -201,6 +201,7 @@ def test_pspace_lowrank():
         evals, evecs = M.get_eigendecomposition()
         assert torch.norm(torch.mm(torch.mm(evecs, torch.diag(evals)), evecs.t()) - M.get_matrix()) < 1e-3
 
+        # TODO improve this
         assert torch.norm(M.project_to_diag(M.get_matrix()) - torch.diag(M.evals)) < 1e-3
 
         # check evecs:
@@ -251,3 +252,28 @@ def test_ispace_dense_vs_implicit():
     frob_norm_implicit = M_implicit.frobenius_norm()
     ratios_frob = frob_norm_dense / frob_norm_implicit
     assert ratios_frob < 1.01 and ratios_frob > .99
+
+def test_pspace_blockdiag_vs_dense():
+    for get_task in [get_convnet_task, get_fullyconnect_task]:
+        train_loader, net, loss_closure = get_task()
+
+        el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+        M_dense = DenseMatrix(el2)
+        M_blockdiag = BlockDiagMatrix(el2)
+
+        eps = 1e-3
+        start = 0
+        G_dense = M_dense.get_matrix()
+        G_blockdiag = M_blockdiag.get_matrix()
+        for mod in net.modules():
+            mod_class = mod.__class__.__name__
+            if mod_class in ['Linear', 'Conv2d']:
+                numel = mod.weight.numel() + mod.bias.numel()
+                assert torch.norm(G_dense[start:start+numel, start:start+numel] -
+                                  G_blockdiag[start:start+numel, start:start+numel]) < eps
+                start += numel
+
+        trace_bd = M_blockdiag.trace()
+        trace_den = M_dense.trace()
+        ratio_trace = trace_bd / trace_den
+        assert ratio_trace < 1.01 and ratio_trace > .99
