@@ -269,8 +269,12 @@ def test_pspace_blockdiag_vs_dense():
             mod_class = mod.__class__.__name__
             if mod_class in ['Linear', 'Conv2d']:
                 numel = mod.weight.numel() + mod.bias.numel()
+                # check that the blocks are equal
                 assert torch.norm(G_dense[start:start+numel, start:start+numel] -
                                   G_blockdiag[start:start+numel, start:start+numel]) < eps
+                # check that the rest is 0
+                assert torch.norm(G_blockdiag[start+numel:, start:start+numel]) < eps
+                assert torch.norm(G_blockdiag[start:start+numel, start+numel:]) < eps
                 start += numel
 
         trace_bd = M_blockdiag.trace()
