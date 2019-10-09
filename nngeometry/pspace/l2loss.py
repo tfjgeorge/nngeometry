@@ -73,6 +73,37 @@ class L2Loss:
 
         return blocks
 
+    def get_kfac_blocks(self):
+        # add hooks
+        self.handles += self._add_hooks(self._hook_savex, self._hook_compute_kfac_blocks)
+
+        device = next(self.model.parameters()).device
+        n_examples = len(self.dataloader.sampler)
+        self._blocks = dict()
+        for m in self.mods:
+            sG = m.weight.size(0)
+            sA = m.weight.size(1)
+            if m.bias is not None:
+                sA += 1
+            self._blocks[m] = (torch.zeros((sA, sA), device=device),
+                               torch.zeros((sG, sG), device=device))
+
+        for (inputs, targets) in self.dataloader:
+            inputs, targets = inputs.to(device), targets.to(device)
+            inputs.requires_grad = True
+            loss = self.loss_closure(inputs, targets)
+            torch.autograd.grad(loss, [inputs])
+        blocks = [(self._blocks[m][0] / n_examples, self._blocks[m][1] / n_examples)
+                  for m in self.mods]
+
+        # remove hooks
+        del self._blocks
+        self.xs = dict()
+        for h in self.handles:
+            h.remove()
+
+        return blocks
+
     def get_diag(self):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex, self._hook_compute_diag)
@@ -259,6 +290,20 @@ class L2Loss:
             if mod.bias is not None:
                 gw = torch.cat([gw.view(bs, -1), gy.sum(dim=(2, 3)).view(bs, -1)], dim=1)
             block.add_(torch.mm(gw.t(), gw))
+        else:
+            raise NotImplementedError
+
+    def _hook_compute_kfac_blocks(self, mod, grad_input, grad_output):
+        mod_class = mod.__class__.__name__
+        gy = grad_output[0]
+        x = self.xs[mod]
+        bs = x.size(0)
+        block = self._blocks[mod]
+        if mod_class == 'Linear':
+            block[1].add_(torch.mm(gy.t(), gy))
+            if mod.bias is not None:
+                x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
+            block[0].add_(torch.mm(x.t(), x))
         else:
             raise NotImplementedError
 

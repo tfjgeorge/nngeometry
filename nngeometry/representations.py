@@ -1,5 +1,6 @@
 import torch
 from abc import ABC, abstractmethod
+from .utils import kronecker
 
 class AbstractMatrix(ABC):
 
@@ -91,6 +92,41 @@ class BlockDiagMatrix(AbstractMatrix):
             M[start:start+b.size(0), start:start+b.size(0)].add_(b)
             start += b.size(0)
         return M
+
+    def mv(self, vs):
+        return [torch.mv(b, v) for b, v in zip(self.data, vs)]
+
+class KFACMatrix(AbstractMatrix):
+    def __init__(self, generator):
+        self.generator = generator
+        self.data = generator.get_kfac_blocks()
+
+    def trace(self):
+        return sum([torch.trace(a) * torch.trace(g) for a, g in self.data])
+
+    def get_matrix(self, split_weight_bias=False):
+        """
+        - split_weight_bias (bool): if True then the parameters are ordered in
+        the same way as in the dense or blockdiag representation, but it
+        involves more operations. Otherwise the coefficients corresponding
+        to the bias are mixed between coefficients of the weight matrix
+        """
+        s = self.generator.get_n_parameters()
+        M = torch.zeros((s, s), device=self.generator.get_device())
+        start = 0
+        for a, g in self.data:
+            sAG = a.size(0) * g.size(0)
+            if split_weight_bias:
+                reconstruct = torch.cat([torch.cat([kronecker(g, a[:-1,:-1]), kronecker(g, a[:-1,-1:])], dim=1),
+                                         torch.cat([kronecker(g, a[-1:,:-1]), kronecker(g, a[-1:,-1:])], dim=1)], dim=0)
+                M[start:start+sAG, start:start+sAG].add_(reconstruct)
+            else:
+                M[start:start+sAG, start:start+sAG].add_(kronecker(g, a))
+            start += sAG
+        return M
+
+    # def mv(self, vs):
+    #     return [torch.mv(b, v) for b, v in zip(self.data, vs)]
 
 class ImplicitMatrix(AbstractMatrix):
     def __init__(self, generator):
