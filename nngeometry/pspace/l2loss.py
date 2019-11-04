@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as torchF
+from ..utils import get_individual_modules
 
 class L2Loss:
     def __init__(self, model, dataloader, loss_closure):
@@ -7,8 +8,8 @@ class L2Loss:
         self.dataloader = dataloader
         self.handles = []
         self.xs = dict()
-        self.p_pos = dict() # maps parameters to their position in flattened representation
-        self.mods = self._get_individual_modules(model)
+        # self.p_pos maps parameters to their position in flattened representation
+        self.mods, self.p_pos = get_individual_modules(model)
         self.loss_closure = loss_closure
 
     def get_n_parameters(self):
@@ -216,32 +217,6 @@ class L2Loss:
             h.remove()
 
         return trace
-
-    def _get_individual_modules(self, model):
-        mods = []
-        sizes_mods = []
-        parameters = []
-        start = 0
-        for mod in model.modules():
-            mod_class = mod.__class__.__name__
-            if mod_class in ['Linear', 'Conv2d']:
-                mods.append(mod)
-                self.p_pos[mod] = start
-                sizes_mods.append(mod.weight.size())
-                parameters.append(mod.weight)
-                start += mod.weight.numel()
-                if mod.bias is not None:
-                    sizes_mods.append(mod.bias.size())
-                    parameters.append(mod.bias)
-                    start += mod.bias.numel()
-
-        # check order of flattening
-        sizes_flat = [p.size() for p in model.parameters() if p.requires_grad]
-        assert sizes_mods == sizes_flat
-        # check that all parameters were added
-        # will fail if using exotic layers such as BatchNorm
-        assert len(set(parameters) - set(model.parameters())) == 0
-        return mods
 
     def _add_hooks(self, hook_x, hook_gy):
         handles = []

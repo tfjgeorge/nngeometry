@@ -1,6 +1,6 @@
 import torch
 from abc import ABC, abstractmethod
-from .utils import kronecker
+from .maths import kronecker
 
 class AbstractMatrix(ABC):
 

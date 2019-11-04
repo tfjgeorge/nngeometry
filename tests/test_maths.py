@@ -1,5 +1,5 @@
 import torch
-from nngeometry.utils import kronecker
+from nngeometry.maths import kronecker
 
 def test_kronecker():
     eps = 1e-5
