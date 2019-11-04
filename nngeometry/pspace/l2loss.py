@@ -64,7 +64,7 @@ class L2Loss:
             inputs.requires_grad = True
             loss = self.loss_closure(inputs, targets)
             torch.autograd.grad(loss, [inputs])
-        blocks = [self._blocks[m] / n_examples for m in self.mods]
+        blocks = {m: self._blocks[m] / n_examples for m in self.mods}
 
         # remove hooks
         del self._blocks
@@ -94,8 +94,8 @@ class L2Loss:
             inputs.requires_grad = True
             loss = self.loss_closure(inputs, targets)
             torch.autograd.grad(loss, [inputs])
-        blocks = [(self._blocks[m][0] / n_examples, self._blocks[m][1] / n_examples)
-                  for m in self.mods]
+        blocks = {m: (self._blocks[m][0] / n_examples, self._blocks[m][1] / n_examples)
+                  for m in self.mods}
 
         # remove hooks
         del self._blocks

@@ -1,6 +1,7 @@
 import torch
 from abc import ABC, abstractmethod
 from .maths import kronecker
+from .utils import get_individual_modules
 
 class AbstractMatrix(ABC):
 
@@ -22,10 +23,11 @@ class DenseMatrix(AbstractMatrix):
             _, self.evals, self.evecs = torch.svd(self.data, some=False)
 
     def mv(self, v):
-        return torch.mv(self.data, v)
+        return torch.mv(self.data, v.get_flat_representation())
 
     def m_norm(self, v):
-        return torch.dot(v, torch.mv(self.data, v)) ** .5
+        v_flat = v.get_flat_representation()
+        return torch.dot(v_flat, torch.mv(self.data, v_flat)) ** .5
 
     def frobenius_norm(self):
         return torch.norm(self.data)
@@ -59,7 +61,7 @@ class DiagMatrix(AbstractMatrix):
         self.data = generator.get_diag()
 
     def mv(self, v):
-        return v * self.data
+        return v.get_flat_representation() * self.data
 
     def trace(self):
         return self.data.sum()
@@ -82,19 +84,31 @@ class BlockDiagMatrix(AbstractMatrix):
         self.data = generator.get_layer_blocks()
 
     def trace(self):
-        return sum([torch.trace(b) for b in self.data])
+        return sum([torch.trace(b) for b in self.data.values()])
 
     def get_matrix(self):
         s = self.generator.get_n_parameters()
         M = torch.zeros((s, s), device=self.generator.get_device())
-        start = 0
-        for b in self.data:
+        mods, p_pos = get_individual_modules(self.generator.model)
+        for mod in mods:
+            b = self.data[mod]
+            start = p_pos[mod]
             M[start:start+b.size(0), start:start+b.size(0)].add_(b)
-            start += b.size(0)
         return M
 
     def mv(self, vs):
         return [torch.mv(b, v) for b, v in zip(self.data, vs)]
+
+    def m_norm(self, vector):
+        vector_dict = vector.get_dict_representation()
+        norm2 = 0
+        for mod in vector_dict.keys():
+            v = vector_dict[mod][0].view(-1)
+            if len(vector_dict[mod]) > 1:
+                v = torch.cat([v, vector_dict[mod][1].view(-1)])
+            norm2 += torch.dot(torch.mv(self.data[mod], v), v)
+        return norm2**.5
+
 
 class KFACMatrix(AbstractMatrix):
     def __init__(self, generator):
@@ -102,7 +116,7 @@ class KFACMatrix(AbstractMatrix):
         self.data = generator.get_kfac_blocks()
 
     def trace(self):
-        return sum([torch.trace(a) * torch.trace(g) for a, g in self.data])
+        return sum([torch.trace(a) * torch.trace(g) for a, g in self.data.values()])
 
     def get_matrix(self, split_weight_bias=False):
         """
@@ -113,8 +127,10 @@ class KFACMatrix(AbstractMatrix):
         """
         s = self.generator.get_n_parameters()
         M = torch.zeros((s, s), device=self.generator.get_device())
-        start = 0
-        for a, g in self.data:
+        mods, p_pos = get_individual_modules(self.generator.model)
+        for mod in mods:
+            a, g = self.data[mod]
+            start = p_pos[mod]
             sAG = a.size(0) * g.size(0)
             if split_weight_bias:
                 reconstruct = torch.cat([torch.cat([kronecker(g, a[:-1,:-1]), kronecker(g, a[:-1,-1:])], dim=1),
@@ -122,21 +138,28 @@ class KFACMatrix(AbstractMatrix):
                 M[start:start+sAG, start:start+sAG].add_(reconstruct)
             else:
                 M[start:start+sAG, start:start+sAG].add_(kronecker(g, a))
-            start += sAG
         return M
 
-    # def mv(self, vs):
-    #     return [torch.mv(b, v) for b, v in zip(self.data, vs)]
+    def m_norm(self, vector):
+        vector_dict = vector.get_dict_representation()
+        norm2 = 0
+        for mod in vector_dict.keys():
+            v = vector_dict[mod][0]
+            if len(vector_dict[mod]) > 1:
+                v = torch.cat([v, vector_dict[mod][1].unsqueeze(1)], dim=1)
+            a, g = self.data[mod]
+            norm2 += torch.dot(torch.mm(torch.mm(g, v), a).view(-1), v.view(-1))
+        return norm2**.5
 
 class ImplicitMatrix(AbstractMatrix):
     def __init__(self, generator):
         self.generator = generator
 
     def mv(self, v):
-        return self.generator.implicit_mv(v)
+        return self.generator.implicit_mv(v.get_flat_representation())
 
     def m_norm(self, v):
-        return self.generator.implicit_m_norm(v)
+        return self.generator.implicit_m_norm(v.get_flat_representation())
 
     def frobenius_norm(self):
         return self.generator.implicit_frobenius()
@@ -159,7 +182,7 @@ class LowRankMatrix(AbstractMatrix):
         self.data = generator.get_lowrank_matrix()
 
     def m_norm(self, v):
-        return (torch.mv(self.data, v)**2).sum() ** .5
+        return (torch.mv(self.data, v.get_flat_representation())**2).sum() ** .5
 
     def get_matrix(self):
         # you probably don't want to do that: you are
@@ -169,7 +192,7 @@ class LowRankMatrix(AbstractMatrix):
         return torch.mm(self.data.t(), self.data)
 
     def mv(self, v):
-        return torch.mv(self.data.t(), torch.mv(self.data, v))
+        return torch.mv(self.data.t(), torch.mv(self.data, v.get_flat_representation()))
 
     def compute_eigendecomposition(self, impl='symeig'):
         if impl == 'symeig':

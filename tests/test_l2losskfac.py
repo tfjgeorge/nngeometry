@@ -1,5 +1,7 @@
 from nngeometry.pspace import L2Loss
 from nngeometry.representations import BlockDiagMatrix, KFACMatrix
+from nngeometry.vector import Vector
+from nngeometry.utils import get_individual_modules
 from subsampled_mnist import get_dataset, default_datapath
 import torch
 import torch.nn as nn
@@ -79,3 +81,21 @@ def test_pspace_blockdiag_vs_kfac():
         trace_kfac = M_kfac.trace()
         ratio_trace = trace_bd / trace_kfac
         assert ratio_trace < 1.01 and ratio_trace > .99
+
+        # sample random vector
+        eps = 1e-3
+        random_v = dict()
+        for mod in get_individual_modules(net)[0]:
+            dw = torch.rand(mod.weight.size(), device='cuda')
+            dw *= eps / torch.norm(dw)
+            if mod.bias is not None:
+                db = torch.rand(mod.bias.size(), device='cuda')
+                db *= eps / torch.norm(db)
+                random_v[mod] = (dw, db)
+            else:
+                random_v[mod] = (dw,)
+        random_v = Vector(net, dict_repr=random_v)
+        m_norm_kfac = M_kfac.m_norm(random_v)
+        m_norm_blockdiag = M_blockdiag.m_norm(random_v)
+        ratios_m_norm = m_norm_blockdiag / m_norm_kfac
+        assert ratios_m_norm < 1.01 and ratios_m_norm > .99

@@ -1,6 +1,8 @@
 from nngeometry.pspace import L2Loss
 from nngeometry.ispace import L2Loss as ISpace_L2Loss
 from nngeometry.representations import DenseMatrix, ImplicitMatrix, LowRankMatrix, DiagMatrix, BlockDiagMatrix
+from nngeometry.vector import Vector
+from nngeometry.utils import get_individual_modules
 from subsampled_mnist import get_dataset, default_datapath
 import torch
 import torch.nn as nn
@@ -102,10 +104,11 @@ def test_pspace_l2loss():
         eps = 1e-3
         dw = torch.rand((M.size(0),), device='cuda')
         dw /= torch.norm(dw)
+        dw_vec = Vector(net, vector_repr=dw)
         update_model(net, eps * dw)
         l_upd = get_l_vector(train_loader, loss_closure)
         update_model(net, -eps * dw)
-        ratios = torch.norm(l_upd - l_0)**2 / len(train_loader.sampler) / torch.dot(M.mv(dw), dw) / eps ** 2
+        ratios = torch.norm(l_upd - l_0)**2 / len(train_loader.sampler) / torch.dot(M.mv(dw_vec), dw) / eps ** 2
         assert ratios < 1.01 and ratios > .99
 
         for impl in ['symeig', 'svd']:
@@ -159,6 +162,7 @@ def test_pspace_implicit_vs_dense():
         eps = 1e-3
         dw = torch.rand((M_dense.size(0),), device='cuda')
         dw *= eps / torch.norm(dw)
+        dw = Vector(net, vector_repr=dw)
         
         M_norm_imp = M_implicit.m_norm(dw)
         M_norm_den = M_dense.m_norm(dw)
@@ -182,6 +186,7 @@ def test_pspace_lowrank_vs_dense():
     eps = 1e-3
     dw = torch.rand((M_dense.size(0),), device='cuda')
     dw *= eps / torch.norm(dw)
+    dw = Vector(net, vector_repr=dw)
 
     M_norm_lr = M_lowrank.m_norm(dw)
     M_norm_den = M_dense.m_norm(dw)
@@ -208,10 +213,11 @@ def test_pspace_lowrank():
         for i in range(evecs.size(1)):
             v = evecs[:, i]
             norm_v = torch.norm(v)
+            v = Vector(net, vector_repr=v)
             if not (norm_v > 0.999 and norm_v < 1.001):
                 # TODO improve this
                 print(i, norm_v)
-            assert torch.norm(M.mv(v) - v * evals[i]) < 1e-3
+            assert torch.norm(M.mv(v) - v.get_flat_representation() * evals[i]) < 1e-3
 
 def test_pspace_diag_vs_dense():
     train_loader, net, loss_closure = get_fullyconnect_task(bs=100, subs=500)
@@ -229,8 +235,9 @@ def test_pspace_diag_vs_dense():
 
     eps = 1e-3
     dw = torch.rand((M_dense.size(0),), device='cuda')
+    dw = Vector(net, vector_repr=dw)
     assert torch.norm(M_diag.mv(dw) - 
-                      torch.mv(torch.diag(torch.diag(M_dense.get_matrix())), dw)) < 1e-3
+                      torch.mv(torch.diag(torch.diag(M_dense.get_matrix())), dw.get_flat_representation())) < 1e-3
 
 def test_ispace_dense_vs_implicit():
     train_loader, net, loss_closure = get_fullyconnect_task()
@@ -241,6 +248,7 @@ def test_ispace_dense_vs_implicit():
 
     n_examples = len(train_loader.sampler)
     v = torch.rand((n_examples,), device='cuda')
+    v = Vector(net, vector_repr=v)
 
     m_norm_dense = M_dense.m_norm(v)
     m_norm_implicit = M_implicit.m_norm(v)
@@ -281,3 +289,22 @@ def test_pspace_blockdiag_vs_dense():
         trace_den = M_dense.trace()
         ratio_trace = trace_bd / trace_den
         assert ratio_trace < 1.01 and ratio_trace > .99
+
+        eps = 1e-3
+        random_v = dict()
+        for mod in get_individual_modules(net)[0]:
+            dw = torch.rand(mod.weight.size(), device='cuda')
+            dw *= eps / torch.norm(dw)
+            if mod.bias is not None:
+                db = torch.rand(mod.bias.size(), device='cuda')
+                db *= eps / torch.norm(db)
+                random_v[mod] = (dw, db)
+            else:
+                random_v[mod] = (dw,)
+        random_v = Vector(net, dict_repr=random_v)
+        random_v_flat = random_v.get_flat_representation()
+
+        m_norm_blockdiag = M_blockdiag.m_norm(random_v)
+        m_norm_direct = torch.dot(torch.mv(G_blockdiag, random_v_flat), random_v_flat)**.5
+        ratios_m_norm = m_norm_direct / m_norm_blockdiag
+        assert ratios_m_norm < 1.01 and ratios_m_norm > .99
