@@ -1,5 +1,5 @@
 import torch
-from ..utils import get_individual_modules
+from ..utils import get_individual_modules, per_example_grad_conv
 
 class L2Loss:
     def __init__(self, model, dataloader, loss_closure):
@@ -22,7 +22,7 @@ class L2Loss:
 
     def get_matrix(self):
         # add hooks
-        self.handles += self._add_hooks(self._hook_savex_io, self._hook_compute_flat_grad)
+        self.handles += self._add_hooks(self._hook_savex_io, self._hook_kxy)
 
         device = next(self.model.parameters()).device
         n_examples = len(self.dataloader.sampler)
@@ -61,6 +61,7 @@ class L2Loss:
         del self.G
         self.x_inner = dict()
         self.x_outer = dict()
+        self.gy_outer = dict()
         for h in self.handles:
             h.remove()
 
@@ -150,7 +151,7 @@ class L2Loss:
     def _hook_savex(self, mod, i):
         self.xs[mod] = i[0]
 
-    def _hook_compute_flat_grad(self, mod, grad_input, grad_output):
+    def _hook_kxy(self, mod, grad_input, grad_output):
         if self.outerloop_switch:
             self.gy_outer[mod] = grad_output[0]
         else:
@@ -167,6 +168,14 @@ class L2Loss:
                 if mod.bias is not None:
                     self.G[self.e_inner:self.e_inner+bs_inner, self.e_outer:self.e_outer+bs_outer] += \
                             torch.mm(gy_inner, gy_outer.t())
+            elif mod_class == 'Conv2d':
+                indiv_gw_inner = per_example_grad_conv(mod, x_inner, gy_inner).view(bs_inner, -1)
+                indiv_gw_outer = per_example_grad_conv(mod, x_outer, gy_outer).view(bs_outer, -1)
+                self.G[self.e_inner:self.e_inner+bs_inner, self.e_outer:self.e_outer+bs_outer] += \
+                        torch.mm(indiv_gw_inner, indiv_gw_outer.t())
+                if mod.bias is not None:
+                    self.G[self.e_inner:self.e_inner+bs_inner, self.e_outer:self.e_outer+bs_outer] += \
+                            torch.mm(gy_inner.sum(dim=(2,3)), gy_outer.sum(dim=(2,3)).t())
             else:
                 raise NotImplementedError
 

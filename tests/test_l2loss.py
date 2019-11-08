@@ -78,8 +78,10 @@ def get_fullyconnect_task(bs=1000, subs=None):
     return train_loader, net, loss_closure
 
 def get_convnet_task(bs=1000, subs=None):
-    train_set = datasets.MNIST(default_datapath, train=True, download=True,
-                               transform=transforms.ToTensor())
+    train_set = Subset(datasets.MNIST(root=default_datapath, train=True, download=True,
+                                      transform=transforms.ToTensor()), range(40000))
+    # train_set = datasets.MNIST(default_datapath, train=True, download=True,
+    #                            transform=transforms.ToTensor(), range(40000))
     if subs is not None:
         train_set = Subset(train_set, range(subs))
     train_loader = DataLoader(
@@ -134,22 +136,23 @@ def test_pspace_l2loss():
         assert ratio < 1.01 and ratio > .99
 
 def test_pspace_vs_ispace():
-    train_loader, net, loss_closure = get_fullyconnect_task()
+    for get_task in [get_convnet_task, get_fullyconnect_task]:
+        train_loader, net, loss_closure = get_task(subs=3000)
 
-    ispace_el2 = ISpace_L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
-    MIspace = DenseMatrix(ispace_el2)
+        ispace_el2 = ISpace_L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+        MIspace = DenseMatrix(ispace_el2)
 
-    el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
-    M = DenseMatrix(el2)
+        el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+        M = DenseMatrix(el2)
 
-    n_examples = len(train_loader.sampler)
-    ratios_trace = MIspace.trace() / M.trace() / n_examples
-    assert ratios_trace < 1.01 and ratios_trace > .99
+        n_examples = len(train_loader.sampler)
+        ratios_trace = MIspace.trace() / M.trace() / n_examples
+        assert ratios_trace < 1.01 and ratios_trace > .99
 
-    MIspace_frob = MIspace.frobenius_norm()
-    M_frob = M.frobenius_norm()
-    ratios_frob = MIspace_frob / M_frob / n_examples
-    assert ratios_frob < 1.01 and ratios_frob > .99
+        MIspace_frob = MIspace.frobenius_norm()
+        M_frob = M.frobenius_norm()
+        ratios_frob = MIspace_frob / M_frob / n_examples
+        assert ratios_frob < 1.01 and ratios_frob > .99
 
 def test_pspace_implicit_vs_dense():
     for get_task in [get_convnet_task, get_fullyconnect_task]:

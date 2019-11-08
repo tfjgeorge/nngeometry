@@ -1,6 +1,6 @@
 import torch
-import torch.nn.functional as torchF
-from ..utils import get_individual_modules
+import torch.nn.functional as F
+from ..utils import get_individual_modules, per_example_grad_conv
 
 class L2Loss:
     def __init__(self, model, dataloader, loss_closure):
@@ -240,7 +240,7 @@ class L2Loss:
                 self.grads[self.start:self.start+bs, start_p+mod.weight.numel():start_p+mod.weight.numel()+mod.bias.numel()] \
                     .add_(gy)
         elif mod_class == 'Conv2d':
-            indiv_gw = self._per_example_grad_conv(mod, x, gy)
+            indiv_gw = per_example_grad_conv(mod, x, gy)
             self.grads[self.start:self.start+bs, start_p:start_p+mod.weight.numel()].add_(indiv_gw.view(bs, -1))
             if mod.bias is not None:
                 self.grads[self.start:self.start+bs, start_p+mod.weight.numel():start_p+mod.weight.numel()+mod.bias.numel()] \
@@ -260,7 +260,7 @@ class L2Loss:
                 gw = torch.cat([gw.view(bs, -1), gy.view(bs, -1)], dim=1)
             block.add_(torch.mm(gw.t(), gw))
         elif mod_class == 'Conv2d':
-            gw = self._per_example_grad_conv(mod, x, gy)
+            gw = per_example_grad_conv(mod, x, gy)
             spatial_positions = gy.size(2) * gy.size(3)
             if mod.bias is not None:
                 gw = torch.cat([gw.view(bs, -1), gy.sum(dim=(2, 3)).view(bs, -1)], dim=1)
@@ -306,7 +306,7 @@ class L2Loss:
             if mod.bias is not None:
                 self._vTg += torch.mv(gy, self._v[mod.bias])
         elif mod_class == 'Conv2d':
-            gy2 = torchF.conv2d(x, self._v[mod.weight], stride=mod.stride, padding=mod.padding, dilation=mod.dilation)
+            gy2 = F.conv2d(x, self._v[mod.weight], stride=mod.stride, padding=mod.padding, dilation=mod.dilation)
             self._vTg += (gy * gy2).view(bs, -1).sum(dim=1)
             if mod.bias is not None:
                 self._vTg += torch.mv(gy.sum(dim=(2, 3)), self._v[mod.bias])
@@ -323,17 +323,9 @@ class L2Loss:
             if mod.bias is not None:
                 self._trace += (gy**2).sum()
         elif mod_class == 'Conv2d':
-            indiv_gw = self._per_example_grad_conv(mod, x, gy)
+            indiv_gw = per_example_grad_conv(mod, x, gy)
             self._trace += (indiv_gw**2).sum()
             if mod.bias is not None:
                 self._trace += (gy.sum(dim=(2,3))**2).sum()
         else:
             raise NotImplementedError
-
-    def _per_example_grad_conv(self, mod, x, gy):
-        ks = (mod.weight.size(2), mod.weight.size(3))
-        gy_s = gy.size()
-        bs = gy_s[0]
-        x_unfold = torchF.unfold(x, kernel_size=ks, stride=mod.stride, padding=mod.padding, dilation=mod.dilation)
-        x_unfold_s = x_unfold.size()
-        return torch.bmm(gy.view(bs, gy_s[1], -1), x_unfold.view(bs, x_unfold_s[1], -1).permute(0, 2, 1))
