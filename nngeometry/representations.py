@@ -154,6 +154,11 @@ class KFACMatrix(AbstractMatrix):
             norm2 += torch.dot(torch.mm(torch.mm(g, v), a).view(-1), v.view(-1))
         return norm2**.5
 
+    def frobenius_norm(self):
+        return sum([torch.trace(torch.mm(a, a)) * torch.trace(torch.mm(g, g))
+                    for a, g in self.data.values()])**.5
+
+
 class ImplicitMatrix(AbstractMatrix):
     def __init__(self, generator):
         self.generator = generator

@@ -99,3 +99,8 @@ def test_pspace_blockdiag_vs_kfac():
         m_norm_blockdiag = M_blockdiag.m_norm(random_v)
         ratios_m_norm = m_norm_blockdiag / m_norm_kfac
         assert ratios_m_norm < 1.01 and ratios_m_norm > .99
+
+        frob_bd = M_blockdiag.frobenius_norm()
+        frob_kfac = M_kfac.frobenius_norm()
+        ratios_frob = frob_bd / frob_kfac
+        assert ratios_frob < 1.01 and ratios_frob > .99
