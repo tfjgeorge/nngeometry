@@ -311,3 +311,9 @@ def test_pspace_blockdiag_vs_dense():
         m_norm_direct = torch.dot(torch.mv(G_blockdiag, random_v_flat), random_v_flat)**.5
         ratios_m_norm = m_norm_direct / m_norm_blockdiag
         assert ratios_m_norm < 1.01 and ratios_m_norm > .99
+
+        frob_blockdiag = M_blockdiag.frobenius_norm()
+        frob_frommatrix = torch.norm(G_blockdiag)
+        ratios_frob = frob_blockdiag / frob_frommatrix
+        assert ratios_frob < 1.01 and ratios_frob > .99
+

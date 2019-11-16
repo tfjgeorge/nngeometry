@@ -99,6 +99,9 @@ class BlockDiagMatrix(AbstractMatrix):
     def mv(self, vs):
         return [torch.mv(b, v) for b, v in zip(self.data, vs)]
 
+    def frobenius_norm(self):
+        return sum([torch.norm(b)**2 for b in self.data.values()])**.5
+
     def m_norm(self, vector):
         vector_dict = vector.get_dict_representation()
         norm2 = 0
