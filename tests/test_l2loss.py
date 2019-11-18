@@ -178,35 +178,36 @@ def test_pspace_implicit_vs_dense():
         assert ratio_trace < 1.01 and ratio_trace > .99
 
 def test_pspace_lowrank_vs_dense():
-    train_loader, net, loss_closure = get_fullyconnect_task(bs=100, subs=500)
+    for get_task in [get_convnet_task, get_fullyconnect_task]:
+        train_loader, net, loss_closure = get_task(bs=100, subs=500)
 
-    el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
-    M_dense = DenseMatrix(el2)
-    M_lowrank = LowRankMatrix(el2)
+        el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+        M_dense = DenseMatrix(el2)
+        M_lowrank = LowRankMatrix(el2)
 
-    assert torch.norm(M_dense.get_matrix() - M_lowrank.get_matrix()) < 1e-3
+        assert torch.norm(M_dense.get_matrix() - M_lowrank.get_matrix()) < 1e-3
 
-    eps = 1e-3
-    dw = torch.rand((M_dense.size(0),), device='cuda')
-    dw *= eps / torch.norm(dw)
-    dw = Vector(net, vector_repr=dw)
+        eps = 1e-3
+        dw = torch.rand((M_dense.size(0),), device='cuda')
+        dw *= eps / torch.norm(dw)
+        dw = Vector(net, vector_repr=dw)
 
-    M_norm_lr = M_lowrank.m_norm(dw)
-    M_norm_den = M_dense.m_norm(dw)
-    ratio_m_norms = M_norm_lr / M_norm_den
-    assert ratio_m_norms < 1.01 and ratio_m_norms > .99
+        M_norm_lr = M_lowrank.m_norm(dw)
+        M_norm_den = M_dense.m_norm(dw)
+        ratio_m_norms = M_norm_lr / M_norm_den
+        assert ratio_m_norms < 1.01 and ratio_m_norms > .99
 
-    assert torch.norm(M_dense.mv(dw) - M_lowrank.mv(dw)) < 1e-3
+        assert torch.norm(M_dense.mv(dw) - M_lowrank.mv(dw)) < 1e-3
 
-    trace_lr = M_lowrank.trace()
-    trace_den = M_dense.trace()
-    ratio_trace = trace_lr / trace_den
-    assert ratio_trace < 1.01 and ratio_trace > .99
+        trace_lr = M_lowrank.trace()
+        trace_den = M_dense.trace()
+        ratio_trace = trace_lr / trace_den
+        assert ratio_trace < 1.01 and ratio_trace > .99
 
-    frob_lr = M_lowrank.frobenius_norm()
-    frob_den = M_dense.frobenius_norm()
-    ratio_frob = frob_lr / frob_den
-    assert ratio_frob < 1.01 and ratio_frob > .99
+        frob_lr = M_lowrank.frobenius_norm()
+        frob_den = M_dense.frobenius_norm()
+        ratio_frob = frob_lr / frob_den
+        assert ratio_frob < 1.01 and ratio_frob > .99
 
 def test_pspace_lowrank():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
