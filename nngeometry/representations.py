@@ -66,6 +66,9 @@ class DiagMatrix(AbstractMatrix):
     def trace(self):
         return self.data.sum()
 
+    def frobenius_norm(self):
+        return torch.norm(self.data)
+
     def get_matrix(self):
         return torch.diag(self.data)
 

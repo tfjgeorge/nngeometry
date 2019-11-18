@@ -243,6 +243,11 @@ def test_pspace_diag_vs_dense():
         assert torch.norm(M_diag.mv(dw) - 
                           torch.mv(torch.diag(torch.diag(M_dense.get_matrix())), dw.get_flat_representation())) < 1e-3
 
+        frob_diag = M_diag.frobenius_norm()
+        frob_dense = torch.norm(torch.diag(M_dense.get_matrix()))
+        ratio_frob = frob_diag / frob_dense
+        assert ratio_frob < 1.01 and ratio_frob > .99
+
 def test_ispace_dense_vs_implicit():
     train_loader, net, loss_closure = get_fullyconnect_task()
 
