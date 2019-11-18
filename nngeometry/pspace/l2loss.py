@@ -293,6 +293,12 @@ class L2Loss:
             if mod.bias is not None:
                 self.diag_m[start_p+mod.weight.numel():start_p+mod.weight.numel()+mod.bias.numel()] \
                     .add_((gy**2).sum(dim=0))
+        elif mod_class == 'Conv2d':
+            indiv_gw = per_example_grad_conv(mod, x, gy)
+            self.diag_m[start_p:start_p+mod.weight.numel()].add_((indiv_gw**2).sum(dim=0).view(-1))
+            if mod.bias is not None:
+                self.diag_m[start_p+mod.weight.numel():start_p+mod.weight.numel()+mod.bias.numel()] \
+                    .add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
         else:
             raise NotImplementedError
 
