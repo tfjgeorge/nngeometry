@@ -66,6 +66,10 @@ class DiagMatrix(AbstractMatrix):
     def trace(self):
         return self.data.sum()
 
+    def m_norm(self, v):
+        v_flat = v.get_flat_representation()
+        return torch.dot(v_flat, self.data * v_flat) ** .5
+
     def frobenius_norm(self):
         return torch.norm(self.data)
 

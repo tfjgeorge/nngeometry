@@ -239,14 +239,19 @@ def test_pspace_diag_vs_dense():
 
         eps = 1e-3
         dw = torch.rand((M_dense.size(0),), device='cuda')
-        dw = Vector(net, vector_repr=dw)
-        assert torch.norm(M_diag.mv(dw) - 
-                          torch.mv(torch.diag(torch.diag(M_dense.get_matrix())), dw.get_flat_representation())) < 1e-3
+        dw_vec = Vector(net, vector_repr=dw)
+        assert torch.norm(M_diag.mv(dw_vec) - 
+                          torch.mv(torch.diag(torch.diag(M_dense.get_matrix())), dw)) < 1e-3
 
         frob_diag = M_diag.frobenius_norm()
         frob_dense = torch.norm(torch.diag(M_dense.get_matrix()))
         ratio_frob = frob_diag / frob_dense
         assert ratio_frob < 1.01 and ratio_frob > .99
+
+        m_norm_diag = M_diag.m_norm(dw_vec)
+        m_norm_dense = torch.dot(dw, torch.mv(M_diag.get_matrix(), dw))**.5
+        ratio_m_norm = m_norm_diag / m_norm_dense
+        assert ratio_m_norm < 1.01 and ratio_m_norm > .99
 
 def test_ispace_dense_vs_implicit():
     train_loader, net, loss_closure = get_fullyconnect_task()
