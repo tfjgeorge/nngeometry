@@ -198,6 +198,11 @@ def test_pspace_lowrank_vs_dense():
 
     assert torch.norm(M_dense.mv(dw) - M_lowrank.mv(dw)) < 1e-3
 
+    trace_lr = M_lowrank.trace()
+    trace_den = M_dense.trace()
+    ratio_trace = trace_lr / trace_den
+    assert ratio_trace < 1.01 and ratio_trace > .99
+
 def test_pspace_lowrank():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
         train_loader, net, loss_closure = get_fullyconnect_task(bs=100, subs=500)

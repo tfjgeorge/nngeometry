@@ -225,6 +225,9 @@ class LowRankMatrix(AbstractMatrix):
     def get_eigendecomposition(self):
         return self.evals, self.evecs
 
+    def trace(self):
+        return torch.trace(torch.mm(self.data, self.data.t()))
+
 class KrylovLowRankMatrix(AbstractMatrix):
     def __init__(self, generator):
         raise NotImplementedError()
