@@ -197,7 +197,8 @@ class LowRankMatrix(AbstractMatrix):
         self.data = generator.get_lowrank_matrix()
 
     def m_norm(self, v):
-        return (torch.mv(self.data, v.get_flat_representation())**2).sum() ** .5
+        Av = torch.mv(self.data, v.get_flat_representation())
+        return torch.dot(Av, Av) ** .5
 
     def get_matrix(self):
         # you probably don't want to do that: you are
