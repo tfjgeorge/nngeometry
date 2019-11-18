@@ -203,6 +203,11 @@ def test_pspace_lowrank_vs_dense():
     ratio_trace = trace_lr / trace_den
     assert ratio_trace < 1.01 and ratio_trace > .99
 
+    frob_lr = M_lowrank.frobenius_norm()
+    frob_den = M_dense.frobenius_norm()
+    ratio_frob = frob_lr / frob_den
+    assert ratio_frob < 1.01 and ratio_frob > .99
+
 def test_pspace_lowrank():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
         train_loader, net, loss_closure = get_fullyconnect_task(bs=100, subs=500)

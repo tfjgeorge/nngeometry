@@ -228,6 +228,10 @@ class LowRankMatrix(AbstractMatrix):
     def trace(self):
         return torch.trace(torch.mm(self.data, self.data.t()))
 
+    def frobenius_norm(self):
+        A = torch.mm(self.data, self.data.t())
+        return torch.trace(torch.mm(A, A))**.5
+
 class KrylovLowRankMatrix(AbstractMatrix):
     def __init__(self, generator):
         raise NotImplementedError()
