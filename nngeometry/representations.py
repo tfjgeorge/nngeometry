@@ -162,6 +162,22 @@ class KFACMatrix(AbstractMatrix):
                 M[start:start+sAG, start:start+sAG].add_(kronecker(g, a))
         return M
 
+    def mv(self, vs):
+        vs_dict = vs.get_dict_representation()
+        out_dict = dict()
+        for m in vs_dict.keys():
+            v = vs_dict[m][0]
+            if m.bias is not None:
+                v = torch.cat([v, vs_dict[m][1].unsqueeze(1)], dim=1)
+            a, g = self.data[m]
+            mv = torch.mm(torch.mm(g, v), a)
+            if m.bias is None:
+                mv_tuple = (mv,)
+            else:
+                mv_tuple = (mv[:, :-1].contiguous(), mv[:, -1:].contiguous())
+            out_dict[m] = mv_tuple
+        return Vector(model=vs.model, dict_repr=out_dict)
+
     def m_norm(self, vector):
         vector_dict = vector.get_dict_representation()
         norm2 = 0
@@ -176,7 +192,6 @@ class KFACMatrix(AbstractMatrix):
     def frobenius_norm(self):
         return sum([torch.trace(torch.mm(a, a)) * torch.trace(torch.mm(g, g))
                     for a, g in self.data.values()])**.5
-
 
 class ImplicitMatrix(AbstractMatrix):
     def __init__(self, generator):

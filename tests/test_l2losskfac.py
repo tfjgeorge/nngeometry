@@ -104,3 +104,6 @@ def test_pspace_blockdiag_vs_kfac():
         frob_kfac = M_kfac.frobenius_norm()
         ratios_frob = frob_bd / frob_kfac
         assert ratios_frob < 1.01 and ratios_frob > .99
+
+        assert torch.norm(M_blockdiag.mv(random_v).get_flat_representation() -
+                          M_kfac.mv(random_v).get_flat_representation()) < 1e-3
