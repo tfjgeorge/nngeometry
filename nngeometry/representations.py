@@ -2,6 +2,7 @@ import torch
 from abc import ABC, abstractmethod
 from .maths import kronecker
 from .utils import get_individual_modules
+from .vector import Vector
 
 class AbstractMatrix(ABC):
 
@@ -104,7 +105,18 @@ class BlockDiagMatrix(AbstractMatrix):
         return M
 
     def mv(self, vs):
-        return [torch.mv(b, v) for b, v in zip(self.data, vs)]
+        vs_dict = vs.get_dict_representation()
+        out_dict = dict()
+        for m in vs_dict.keys():
+            v = vs_dict[m][0].view(-1)
+            if m.bias is not None:
+                v = torch.cat([v, vs_dict[m][1].view(-1)])
+            mv = torch.mv(self.data[m], v)
+            mv_tuple = (mv[:m.weight.numel()].view(*m.weight.size()),)
+            if m.bias is not None:
+                mv_tuple = (mv_tuple[0], mv[m.weight.numel():].view(*m.bias.size()),)
+            out_dict[m] = mv_tuple
+        return Vector(model=vs.model, dict_repr=out_dict)
 
     def frobenius_norm(self):
         return sum([torch.norm(b)**2 for b in self.data.values()])**.5
