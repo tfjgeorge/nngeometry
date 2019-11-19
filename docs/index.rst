@@ -19,6 +19,11 @@ Indices and tables
 * :ref:`modindex`
 * :ref:`search`
 
-.. automodule:: nngeometry.representations
-  :members:
+In-depth
+========
+
+.. toctree::
+   :maxdepth: 1
+
+   api/index.rst
 
