@@ -11,7 +11,13 @@ class AbstractMatrix(ABC):
         return NotImplementedError
 
 class DenseMatrix(AbstractMatrix):
+    """
+    DenseMatrix abc
+    """
     def __init__(self, generator, compute_eigendecomposition=False):
+        """
+        :param generator: generator for the matrix
+        """
         self.generator = generator
         self.data = generator.get_matrix()
         if compute_eigendecomposition:
@@ -133,6 +139,11 @@ class BlockDiagMatrix(AbstractMatrix):
 
 
 class KFACMatrix(AbstractMatrix):
+    """
+    :param generator: The generator
+    :type generator: nngeometry.pspace.L2Loss
+    """
+
     def __init__(self, generator):
         self.generator = generator
         self.data = generator.get_kfac_blocks()
@@ -142,10 +153,14 @@ class KFACMatrix(AbstractMatrix):
 
     def get_matrix(self, split_weight_bias=False):
         """
-        - split_weight_bias (bool): if True then the parameters are ordered in
+        split_weight_bias if True then the parameters are ordered in
         the same way as in the dense or blockdiag representation, but it
         involves more operations. Otherwise the coefficients corresponding
         to the bias are mixed between coefficients of the weight matrix
+
+        :param split_weight_bias: 
+        :type split_weight_bias: bool
+        :return: A pytorch tensor
         """
         s = self.generator.get_n_parameters()
         M = torch.zeros((s, s), device=self.generator.get_device())
