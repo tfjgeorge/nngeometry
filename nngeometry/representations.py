@@ -166,7 +166,7 @@ class KFACMatrix(AbstractMatrix):
         vs_dict = vs.get_dict_representation()
         out_dict = dict()
         for m in vs_dict.keys():
-            v = vs_dict[m][0]
+            v = vs_dict[m][0].view(vs_dict[m][0].size(0), -1)
             if m.bias is not None:
                 v = torch.cat([v, vs_dict[m][1].unsqueeze(1)], dim=1)
             a, g = self.data[m]
@@ -182,7 +182,7 @@ class KFACMatrix(AbstractMatrix):
         vector_dict = vector.get_dict_representation()
         norm2 = 0
         for mod in vector_dict.keys():
-            v = vector_dict[mod][0]
+            v = vector_dict[mod][0].view(vector_dict[mod][0].size(0), -1)
             if len(vector_dict[mod]) > 1:
                 v = torch.cat([v, vector_dict[mod][1].unsqueeze(1)], dim=1)
             a, g = self.data[mod]

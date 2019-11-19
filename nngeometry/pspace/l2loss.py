@@ -83,7 +83,11 @@ class L2Loss:
         self._blocks = dict()
         for m in self.mods:
             sG = m.weight.size(0)
-            sA = m.weight.size(1)
+            mod_class = m.__class__.__name__
+            if mod_class == 'Linear':
+                sA = m.weight.size(1)
+            elif mod_class == 'Conv2d':
+                sA = m.weight.size(1) * m.weight.size(2) * m.weight.size(3)
             if m.bias is not None:
                 sA += 1
             self._blocks[m] = (torch.zeros((sA, sA), device=device),
@@ -279,6 +283,21 @@ class L2Loss:
             if mod.bias is not None:
                 x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
             block[0].add_(torch.mm(x.t(), x))
+        elif mod_class == 'Conv2d':
+            ks = (mod.weight.size(2), mod.weight.size(3))
+            # A_tilda in KFC
+            A_tilda = F.unfold(x, kernel_size=ks, stride=mod.stride, padding=mod.padding, dilation=mod.dilation)
+            # A_tilda is bs * #locations x #parameters
+            A_tilda = A_tilda.permute(0, 2, 1).contiguous().view(-1, A_tilda.size(1))
+            if mod.bias is not None:
+                A_tilda = torch.cat([A_tilda, torch.ones_like(A_tilda[:, :1])], dim=1)
+            # Omega_hat in KFC
+            block[0].add_(torch.mm(A_tilda.t(), A_tilda))
+            spatial_locations = gy.size(2) * gy.size(3)
+            os = gy.size(1)
+            # DS_tilda in KFC
+            DS_tilda = gy.permute(0, 2, 3, 1).contiguous().view(-1, os)
+            block[1].add_(torch.mm(DS_tilda.t(), DS_tilda) / spatial_locations)
         else:
             raise NotImplementedError
 
