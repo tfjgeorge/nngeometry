@@ -2,7 +2,7 @@ import torch
 from ..utils import get_individual_modules, per_example_grad_conv
 
 class L2Loss:
-    def __init__(self, model, dataloader, loss_closure):
+    def __init__(self, model, dataloader, loss_function):
         self.model = model
         self.dataloader = dataloader
         self.handles = []
@@ -12,7 +12,7 @@ class L2Loss:
         self.gy_outer = dict()
         # self.p_pos maps parameters to their position in flattened representation
         self.mods, self.p_pos = get_individual_modules(model)
-        self.loss_closure = loss_closure
+        self.loss_function = loss_function
 
     def release_buffers(self):
         self.x_outer = dict()
@@ -35,7 +35,7 @@ class L2Loss:
             inputs, targets = inputs.to(device), targets.to(device)
             bs_outer = targets.size(0)
             inputs.requires_grad = True
-            loss = self.loss_closure(inputs, targets)
+            loss = self.loss_function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
             self.outerloop_switch = False 
 
@@ -45,7 +45,7 @@ class L2Loss:
                     break
                 inputs, targets = inputs.to(device), targets.to(device)
                 inputs.requires_grad = True
-                loss = self.loss_closure(inputs, targets)
+                loss = self.loss_function(inputs, targets).sum()
                 torch.autograd.grad(loss, [inputs])
                 if i_inner < i_outer: # exclude diagonal
                     bs_inner = targets.size(0)
@@ -83,7 +83,7 @@ class L2Loss:
             i += bs
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.loss_closure(inputs, targets)
+            loss = self.loss_function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
         m_norm = (self._cTv**2).sum()**.5
 
@@ -109,7 +109,7 @@ class L2Loss:
             inputs, targets = inputs.to(device), targets.to(device)
             bs_outer = targets.size(0)
             inputs.requires_grad = True
-            loss = self.loss_closure(inputs, targets)
+            loss = self.loss_function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
             self.outerloop_switch = False 
 
@@ -119,7 +119,7 @@ class L2Loss:
                 self.mb_block = torch.zeros((bs, bs), device=device)
                 inputs, targets = inputs.to(device), targets.to(device)
                 inputs.requires_grad = True
-                loss = self.loss_closure(inputs, targets)
+                loss = self.loss_function(inputs, targets).sum()
                 torch.autograd.grad(loss, [inputs])
                 this_mb_norm2 = (self.mb_block**2).sum()
                 if i_inner < i_outer:

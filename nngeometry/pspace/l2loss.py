@@ -3,14 +3,14 @@ import torch.nn.functional as F
 from ..utils import get_individual_modules, per_example_grad_conv
 
 class L2Loss:
-    def __init__(self, model, dataloader, loss_closure):
+    def __init__(self, model, dataloader, loss_function):
         self.model = model
         self.dataloader = dataloader
         self.handles = []
         self.xs = dict()
         # self.p_pos maps parameters to their position in flattened representation
         self.mods, self.p_pos = get_individual_modules(model)
-        self.loss_closure = loss_closure
+        self.loss_function = loss_function
 
     def get_n_parameters(self):
         return sum([p.numel() for p in self.model.parameters()])
@@ -33,7 +33,7 @@ class L2Loss:
             self.grads.zero_()
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.loss_closure(inputs, targets)
+            loss = self.loss_function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
             G += torch.mm(self.grads.t(), self.grads)
         G /= n_examples
@@ -62,7 +62,7 @@ class L2Loss:
         for (inputs, targets) in self.dataloader:
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.loss_closure(inputs, targets)
+            loss = self.loss_function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
         blocks = {m: self._blocks[m] / n_examples for m in self.mods}
 
@@ -96,7 +96,7 @@ class L2Loss:
         for (inputs, targets) in self.dataloader:
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.loss_closure(inputs, targets)
+            loss = self.loss_function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
         blocks = {m: (self._blocks[m][0] / n_examples, self._blocks[m][1] / n_examples)
                   for m in self.mods}
@@ -123,7 +123,7 @@ class L2Loss:
         for (inputs, targets) in self.dataloader:
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.loss_closure(inputs, targets)
+            loss = self.loss_function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
         diag_m = self.diag_m / n_examples
 
@@ -149,7 +149,7 @@ class L2Loss:
         for (inputs, targets) in self.dataloader:
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.loss_closure(inputs, targets)
+            loss = self.loss_function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
             self.start += inputs.size(0)
         half_mat = self.grads / n_examples**.5
@@ -184,7 +184,7 @@ class L2Loss:
             self._vTg = torch.zeros(inputs.size(0), device=device)
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.loss_closure(inputs, targets)
+            loss = self.loss_function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
             norm2 += (self._vTg**2).sum(dim=0)
         norm = (norm2 / n_examples) ** .5
@@ -210,7 +210,7 @@ class L2Loss:
         for (inputs, targets) in self.dataloader:
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.loss_closure(inputs, targets)
+            loss = self.loss_function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
         trace = self._trace / n_examples
 

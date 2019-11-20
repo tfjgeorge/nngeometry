@@ -63,8 +63,8 @@ def get_fullyconnect_kfac_task(bs=1000, subs=None):
 
     net = Net(in_size=10)
     net.to('cuda')
-    loss_closure = lambda input, target: F.nll_loss(net(input), target, reduction='sum')
-    return train_loader, net, loss_closure
+    loss_function = lambda input, target: F.nll_loss(net(input), target, reduction='none')
+    return train_loader, net, loss_function
 
 def get_convnet_kfc_task(bs=1000, subs=None):
     train_set = Subset(datasets.MNIST(root=default_datapath, train=True, download=True,
@@ -79,8 +79,8 @@ def get_convnet_kfc_task(bs=1000, subs=None):
         shuffle=False)
     net = ConvNet()
     net.to('cuda')
-    loss_closure = lambda input, target: F.nll_loss(net(input), target, reduction='sum')
-    return train_loader, net, loss_closure
+    loss_function = lambda input, target: F.nll_loss(net(input), target, reduction='none')
+    return train_loader, net, loss_function
 
 def to_onexdataset(dataset, device):
     # this weird dataset only uses a single input x repeated, it is only
@@ -93,9 +93,9 @@ def to_onexdataset(dataset, device):
 
 def test_pspace_blockdiag_vs_kfac():
     for get_task in [get_convnet_kfc_task, get_fullyconnect_kfac_task]:
-        train_loader, net, loss_closure = get_task()
+        train_loader, net, loss_function = get_task()
 
-        el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+        el2 = L2Loss(model=net, dataloader=train_loader, loss_function=loss_function)
         M_kfac = KFACMatrix(el2)
         M_blockdiag = BlockDiagMatrix(el2)
 

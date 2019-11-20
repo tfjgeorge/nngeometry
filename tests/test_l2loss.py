@@ -54,13 +54,13 @@ def update_model(net, dw):
         p.data += dw[i:j].view(*p.size())
         i = j
 
-def get_l_vector(dataloader, loss_closure):
+def get_l_vector(dataloader, loss_function):
     with torch.no_grad():
         l = torch.zeros((len(dataloader.sampler),), device='cuda')
         i = 0
         for inputs, targets in dataloader: 
             inputs, targets = inputs.to('cuda'), targets.to('cuda')
-            l[i:i+inputs.size(0)] = loss_closure(inputs, targets)
+            l[i:i+inputs.size(0)] = loss_function(inputs, targets)
             i += inputs.size(0)
         return l
 
@@ -74,8 +74,8 @@ def get_fullyconnect_task(bs=1000, subs=None):
         shuffle=False)
     net = Net(in_size=10)
     net.to('cuda')
-    loss_closure = lambda input, target: tF.nll_loss(net(input), target, reduction='sum')
-    return train_loader, net, loss_closure
+    loss_function = lambda input, target: tF.nll_loss(net(input), target, reduction='none')
+    return train_loader, net, loss_function
 
 def get_convnet_task(bs=1000, subs=None):
     train_set = Subset(datasets.MNIST(root=default_datapath, train=True, download=True,
@@ -90,25 +90,25 @@ def get_convnet_task(bs=1000, subs=None):
         shuffle=False)
     net = ConvNet()
     net.to('cuda')
-    loss_closure = lambda input, target: tF.nll_loss(net(input), target, reduction='sum')
-    return train_loader, net, loss_closure
+    loss_function = lambda input, target: tF.nll_loss(net(input), target, reduction='none')
+    return train_loader, net, loss_function
 
 def test_pspace_l2loss():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
-        train_loader, net, loss_closure = get_task()
+        train_loader, net, loss_function = get_task()
 
-        el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+        el2 = L2Loss(model=net, dataloader=train_loader, loss_function=loss_function)
         M = DenseMatrix(el2)
 
         # compare with || l(w+dw) - l(w) ||_F for randomly sampled dw
-        loss_closure = lambda input, target: tF.nll_loss(net(input), target, reduction='none')
-        l_0 = get_l_vector(train_loader, loss_closure)
+        loss_function = lambda input, target: tF.nll_loss(net(input), target, reduction='none')
+        l_0 = get_l_vector(train_loader, loss_function)
         eps = 1e-3
         dw = torch.rand((M.size(0),), device='cuda')
         dw /= torch.norm(dw)
         dw_vec = Vector(net, vector_repr=dw)
         update_model(net, eps * dw)
-        l_upd = get_l_vector(train_loader, loss_closure)
+        l_upd = get_l_vector(train_loader, loss_function)
         update_model(net, -eps * dw)
         ratios = torch.norm(l_upd - l_0)**2 / len(train_loader.sampler) / torch.dot(M.mv(dw_vec), dw) / eps ** 2
         assert ratios < 1.01 and ratios > .99
@@ -137,12 +137,12 @@ def test_pspace_l2loss():
 
 def test_pspace_vs_ispace():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
-        train_loader, net, loss_closure = get_task(subs=3000)
+        train_loader, net, loss_function = get_task(subs=3000)
 
-        ispace_el2 = ISpace_L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+        ispace_el2 = ISpace_L2Loss(model=net, dataloader=train_loader, loss_function=loss_function)
         MIspace = DenseMatrix(ispace_el2)
 
-        el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+        el2 = L2Loss(model=net, dataloader=train_loader, loss_function=loss_function)
         M = DenseMatrix(el2)
 
         n_examples = len(train_loader.sampler)
@@ -156,9 +156,9 @@ def test_pspace_vs_ispace():
 
 def test_pspace_implicit_vs_dense():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
-        train_loader, net, loss_closure = get_task()
+        train_loader, net, loss_function = get_task()
 
-        el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+        el2 = L2Loss(model=net, dataloader=train_loader, loss_function=loss_function)
         M_dense = DenseMatrix(el2)
         M_implicit = ImplicitMatrix(el2)
 
@@ -176,12 +176,12 @@ def test_pspace_implicit_vs_dense():
         trace_den = M_dense.trace()
         ratio_trace = trace_imp / trace_den
         assert ratio_trace < 1.01 and ratio_trace > .99
-
+        
 def test_pspace_lowrank_vs_dense():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
-        train_loader, net, loss_closure = get_task(bs=100, subs=500)
+        train_loader, net, loss_function = get_task(bs=100, subs=500)
 
-        el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+        el2 = L2Loss(model=net, dataloader=train_loader, loss_function=loss_function)
         M_dense = DenseMatrix(el2)
         M_lowrank = LowRankMatrix(el2)
 
@@ -211,8 +211,8 @@ def test_pspace_lowrank_vs_dense():
 
 def test_pspace_lowrank():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
-        train_loader, net, loss_closure = get_fullyconnect_task(bs=100, subs=500)
-        el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+        train_loader, net, loss_function = get_fullyconnect_task(bs=100, subs=500)
+        el2 = L2Loss(model=net, dataloader=train_loader, loss_function=loss_function)
         M = LowRankMatrix(el2)
 
         M.compute_eigendecomposition()
@@ -235,9 +235,9 @@ def test_pspace_lowrank():
 
 def test_pspace_diag_vs_dense():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
-        train_loader, net, loss_closure = get_task(bs=100, subs=500)
+        train_loader, net, loss_function = get_task(bs=100, subs=500)
 
-        el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+        el2 = L2Loss(model=net, dataloader=train_loader, loss_function=loss_function)
         M_dense = DenseMatrix(el2)
         M_diag = DiagMatrix(el2)
 
@@ -265,9 +265,9 @@ def test_pspace_diag_vs_dense():
         assert ratio_m_norm < 1.01 and ratio_m_norm > .99
 
 def test_ispace_dense_vs_implicit():
-    train_loader, net, loss_closure = get_fullyconnect_task()
+    train_loader, net, loss_function = get_fullyconnect_task()
 
-    ispace_el2 = ISpace_L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+    ispace_el2 = ISpace_L2Loss(model=net, dataloader=train_loader, loss_function=loss_function)
     M_dense = DenseMatrix(ispace_el2)
     M_implicit = ImplicitMatrix(ispace_el2)
 
@@ -288,9 +288,9 @@ def test_ispace_dense_vs_implicit():
 
 def test_pspace_blockdiag_vs_dense():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
-        train_loader, net, loss_closure = get_task()
+        train_loader, net, loss_function = get_task()
 
-        el2 = L2Loss(model=net, dataloader=train_loader, loss_closure=loss_closure)
+        el2 = L2Loss(model=net, dataloader=train_loader, loss_function=loss_function)
         M_dense = DenseMatrix(el2)
         M_blockdiag = BlockDiagMatrix(el2)
 
