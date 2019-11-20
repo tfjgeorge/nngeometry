@@ -67,9 +67,9 @@ class M2Gradients:
 
         return G
 
-    def implicit_m_norm(self, v):
+    def implicit_vTMv(self, v):
         # add hooks
-        self.handles += self._add_hooks(self._hook_savex, self._hook_compute_m_norm)
+        self.handles += self._add_hooks(self._hook_savex, self._hook_compute_cTv)
 
         device = next(self.model.parameters()).device
         n_examples = len(self.dataloader.sampler)
@@ -85,7 +85,7 @@ class M2Gradients:
             inputs.requires_grad = True
             loss = self.loss_function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
-        m_norm = (self._cTv**2).sum()**.5
+        m_norm = (self._cTv**2).sum()
 
         # remove hooks
         del self._cTv
@@ -198,7 +198,7 @@ class M2Gradients:
             else:
                 raise NotImplementedError
 
-    def _hook_compute_m_norm(self, mod, grad_input, grad_output):
+    def _hook_compute_cTv(self, mod, grad_input, grad_output):
         mod_class = mod.__class__.__name__
         gy = grad_output[0]
         xs = self.xs[mod]

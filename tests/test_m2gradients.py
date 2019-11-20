@@ -167,8 +167,8 @@ def test_pspace_implicit_vs_dense():
         dw *= eps / torch.norm(dw)
         dw = Vector(net, vector_repr=dw)
         
-        M_norm_imp = M_implicit.m_norm(dw)
-        M_norm_den = M_dense.m_norm(dw)
+        M_norm_imp = M_implicit.vTMv(dw)
+        M_norm_den = M_dense.vTMv(dw)
         ratio_m_norms = M_norm_imp / M_norm_den
         assert ratio_m_norms < 1.01 and ratio_m_norms > .99
 
@@ -195,8 +195,8 @@ def test_pspace_lowrank_vs_dense():
         dw *= eps / torch.norm(dw)
         dw = Vector(net, vector_repr=dw)
 
-        M_norm_lr = M_lowrank.m_norm(dw)
-        M_norm_den = M_dense.m_norm(dw)
+        M_norm_lr = M_lowrank.vTMv(dw)
+        M_norm_den = M_dense.vTMv(dw)
         ratio_m_norms = M_norm_lr / M_norm_den
         assert ratio_m_norms < 1.01 and ratio_m_norms > .99
 
@@ -262,8 +262,8 @@ def test_pspace_diag_vs_dense():
         ratio_frob = frob_diag / frob_dense
         assert ratio_frob < 1.01 and ratio_frob > .99
 
-        m_norm_diag = M_diag.m_norm(dw_vec)
-        m_norm_dense = torch.dot(dw, torch.mv(M_diag.get_matrix(), dw))**.5
+        m_norm_diag = M_diag.vTMv(dw_vec)
+        m_norm_dense = torch.dot(dw, torch.mv(M_diag.get_matrix(), dw))
         ratio_m_norm = m_norm_diag / m_norm_dense
         assert ratio_m_norm < 1.01 and ratio_m_norm > .99
 
@@ -278,8 +278,8 @@ def test_ispace_dense_vs_implicit():
     v = torch.rand((n_examples,), device='cuda')
     v = Vector(net, vector_repr=v)
 
-    m_norm_dense = M_dense.m_norm(v)
-    m_norm_implicit = M_implicit.m_norm(v)
+    m_norm_dense = M_dense.vTMv(v)
+    m_norm_implicit = M_implicit.vTMv(v)
 
     ratios_norms = m_norm_dense / m_norm_implicit
     assert ratios_norms < 1.01 and ratios_norms > .99
@@ -332,8 +332,8 @@ def test_pspace_blockdiag_vs_dense():
         random_v = Vector(net, dict_repr=random_v)
         random_v_flat = random_v.get_flat_representation()
 
-        m_norm_blockdiag = M_blockdiag.m_norm(random_v)
-        m_norm_direct = torch.dot(torch.mv(G_blockdiag, random_v_flat), random_v_flat)**.5
+        m_norm_blockdiag = M_blockdiag.vTMv(random_v)
+        m_norm_direct = torch.dot(torch.mv(G_blockdiag, random_v_flat), random_v_flat)
         ratios_m_norm = m_norm_direct / m_norm_blockdiag
         assert ratios_m_norm < 1.01 and ratios_m_norm > .99
 

@@ -122,8 +122,8 @@ def test_pspace_blockdiag_vs_kfac():
             else:
                 random_v[mod] = (dw,)
         random_v = Vector(net, dict_repr=random_v)
-        m_norm_kfac = M_kfac.m_norm(random_v)
-        m_norm_blockdiag = M_blockdiag.m_norm(random_v)
+        m_norm_kfac = M_kfac.vTMv(random_v)
+        m_norm_blockdiag = M_blockdiag.vTMv(random_v)
         ratios_m_norm = m_norm_blockdiag / m_norm_kfac
         assert ratios_m_norm < 1.01 and ratios_m_norm > .99
 

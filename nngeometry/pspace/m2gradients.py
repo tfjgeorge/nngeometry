@@ -211,7 +211,7 @@ class M2Gradients:
 
         return Vector(model=self.model, dict_repr=output_dict) 
 
-    def implicit_m_norm(self, v):
+    def implicit_vTMv(self, v):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex, self._hook_compute_vTg)
 
@@ -234,7 +234,7 @@ class M2Gradients:
             loss = self.loss_function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
             norm2 += (self._vTg**2).sum(dim=0)
-        norm = (norm2 / n_examples) ** .5
+        norm = norm2 / n_examples
 
         # remove hooks
         self.xs = dict()

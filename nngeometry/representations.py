@@ -26,9 +26,9 @@ class DenseMatrix(AbstractMatrix):
     def mv(self, v):
         return torch.mv(self.data, v.get_flat_representation())
 
-    def m_norm(self, v):
+    def vTMv(self, v):
         v_flat = v.get_flat_representation()
-        return torch.dot(v_flat, torch.mv(self.data, v_flat)) ** .5
+        return torch.dot(v_flat, torch.mv(self.data, v_flat))
 
     def frobenius_norm(self):
         return torch.norm(self.data)
@@ -67,9 +67,9 @@ class DiagMatrix(AbstractMatrix):
     def trace(self):
         return self.data.sum()
 
-    def m_norm(self, v):
+    def vTMv(self, v):
         v_flat = v.get_flat_representation()
-        return torch.dot(v_flat, self.data * v_flat) ** .5
+        return torch.dot(v_flat, self.data * v_flat)
 
     def frobenius_norm(self):
         return torch.norm(self.data)
@@ -121,7 +121,7 @@ class BlockDiagMatrix(AbstractMatrix):
     def frobenius_norm(self):
         return sum([torch.norm(b)**2 for b in self.data.values()])**.5
 
-    def m_norm(self, vector):
+    def vTMv(self, vector):
         vector_dict = vector.get_dict_representation()
         norm2 = 0
         for mod in vector_dict.keys():
@@ -129,7 +129,7 @@ class BlockDiagMatrix(AbstractMatrix):
             if len(vector_dict[mod]) > 1:
                 v = torch.cat([v, vector_dict[mod][1].view(-1)])
             norm2 += torch.dot(torch.mv(self.data[mod], v), v)
-        return norm2**.5
+        return norm2
 
 
 class KFACMatrix(AbstractMatrix):
@@ -178,7 +178,7 @@ class KFACMatrix(AbstractMatrix):
             out_dict[m] = mv_tuple
         return Vector(model=vs.model, dict_repr=out_dict)
 
-    def m_norm(self, vector):
+    def vTMv(self, vector):
         vector_dict = vector.get_dict_representation()
         norm2 = 0
         for mod in vector_dict.keys():
@@ -187,7 +187,7 @@ class KFACMatrix(AbstractMatrix):
                 v = torch.cat([v, vector_dict[mod][1].unsqueeze(1)], dim=1)
             a, g = self.data[mod]
             norm2 += torch.dot(torch.mm(torch.mm(g, v), a).view(-1), v.view(-1))
-        return norm2**.5
+        return norm2
 
     def frobenius_norm(self):
         return sum([torch.trace(torch.mm(a, a)) * torch.trace(torch.mm(g, g))
@@ -200,8 +200,8 @@ class ImplicitMatrix(AbstractMatrix):
     def mv(self, v):
         return self.generator.implicit_mv(v.get_flat_representation())
 
-    def m_norm(self, v):
-        return self.generator.implicit_m_norm(v.get_flat_representation())
+    def vTMv(self, v):
+        return self.generator.implicit_vTMv(v.get_flat_representation())
 
     def frobenius_norm(self):
         return self.generator.implicit_frobenius()
@@ -223,9 +223,9 @@ class LowRankMatrix(AbstractMatrix):
         self.generator = generator
         self.data = generator.get_lowrank_matrix()
 
-    def m_norm(self, v):
+    def vTMv(self, v):
         Av = torch.mv(self.data, v.get_flat_representation())
-        return torch.dot(Av, Av) ** .5
+        return torch.dot(Av, Av)
 
     def get_matrix(self):
         # you probably don't want to do that: you are
