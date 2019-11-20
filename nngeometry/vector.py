@@ -1,5 +1,5 @@
 import torch
-from .utils import get_individual_modules
+from .utils import get_individual_modules, get_n_parameters
 
 def from_model(model):
     dict_repr = dict()
@@ -10,11 +10,28 @@ def from_model(model):
             dict_repr[mod] = (mod.weight)
     return dict_repr
 
+def random_vector_dict(model):
+    v_dict = dict()
+    for m in get_individual_modules(model)[0]:
+        if m.bias is not None:
+            v_dict[m] = (torch.rand_like(m.weight),
+                         torch.rand_like(m.bias))
+        else:
+            v_dict[m] = (torch.rand_like(m.weight))
+    return Vector(model=model, dict_repr=v_dict)
+
+def random_vector(model):
+    n_parameters = get_n_parameters(model)
+    return Vector(model=model,
+                  vector_repr=torch.rand((n_parameters,),
+                                         device=next(model.parameters()).device))
+
 class Vector:
     def __init__(self, model, vector_repr=None, dict_repr=None):
         self.model = model
         self.vector_repr = vector_repr
         self.dict_repr = dict_repr
+        self.mods, self.p_pos = get_individual_modules(model)
 
     def get_flat_representation(self):
         if self.vector_repr is not None:
@@ -53,3 +70,35 @@ class Vector:
             else:
                 dict_repr[mod] = (w,)
         return dict_repr
+
+    def __add__(self, other):
+        if self.dict_repr is not None and other.dict_repr is not None:
+            v_dict = dict()
+            for m in self.mods:
+                if m.bias is not None:
+                    v_dict[m] = (self.dict_repr[m][0] + other.dict_repr[m][0],
+                                 self.dict_repr[m][1] + other.dict_repr[m][1])
+                else:
+                    v_dict[m] = (self.dict_repr[m][0] + other.dict_repr[m][0])
+            return Vector(self.model, dict_repr=v_dict)
+        elif self.vector_repr is not None and other.vector_repr is not None:
+            return Vector(self.model, vector_repr=self.vector_repr+other.vector_repr)
+        else:
+            return Vector(self.model, vector_repr=(self.get_flat_representation() +
+                                                   other.get_flat_representation()))
+
+    def __sub__(self, other):
+        if self.dict_repr is not None and other.dict_repr is not None:
+            v_dict = dict()
+            for m in self.mods:
+                if m.bias is not None:
+                    v_dict[m] = (self.dict_repr[m][0] - other.dict_repr[m][0],
+                                 self.dict_repr[m][1] - other.dict_repr[m][1])
+                else:
+                    v_dict[m] = (self.dict_repr[m][0] - other.dict_repr[m][0])
+            return Vector(self.model, dict_repr=v_dict)
+        elif self.vector_repr is not None and other.vector_repr is not None:
+            return Vector(self.model, vector_repr=self.vector_repr-other.vector_repr)
+        else:
+            return Vector(self.model, vector_repr=(self.get_flat_representation() -
+                                                   other.get_flat_representation()))

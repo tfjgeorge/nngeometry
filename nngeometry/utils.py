@@ -1,6 +1,9 @@
 import torch
 import torch.nn.functional as F
 
+def get_n_parameters(model):
+    return sum([p.numel() for p in model.parameters()])
+
 def get_individual_modules(model):
     mods = []
     sizes_mods = []

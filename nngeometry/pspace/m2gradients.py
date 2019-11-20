@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from ..utils import get_individual_modules, per_example_grad_conv
+from ..utils import get_individual_modules, per_example_grad_conv, get_n_parameters
 from ..vector import Vector
 
 class M2Gradients:
@@ -14,7 +14,7 @@ class M2Gradients:
         self.loss_function = loss_function
 
     def get_n_parameters(self):
-        return sum([p.numel() for p in self.model.parameters()])
+        return get_n_parameters(self.model)
 
     def get_device(self):
         return next(self.model.parameters()).device

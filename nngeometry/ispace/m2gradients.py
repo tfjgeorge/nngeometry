@@ -1,5 +1,5 @@
 import torch
-from ..utils import get_individual_modules, per_example_grad_conv
+from ..utils import get_individual_modules, per_example_grad_conv, get_n_parameters
 
 class M2Gradients:
     def __init__(self, model, dataloader, loss_function):
@@ -73,7 +73,7 @@ class M2Gradients:
 
         device = next(self.model.parameters()).device
         n_examples = len(self.dataloader.sampler)
-        n_parameters = sum([p.numel() for p in self.model.parameters()])
+        n_parameters = get_n_parameters(self.model)
         bs = self.dataloader.batch_size
 
         self._cTv = torch.zeros((n_parameters,), device=device)
@@ -101,7 +101,7 @@ class M2Gradients:
 
         device = next(self.model.parameters()).device
         n_examples = len(self.dataloader.sampler)
-        n_parameters = sum([p.numel() for p in self.model.parameters()])
+        n_parameters = get_n_parameters(self.model)
         bs = self.dataloader.batch_size
         norm2 = 0
         for i_outer, (inputs, targets) in enumerate(self.dataloader):

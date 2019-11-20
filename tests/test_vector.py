@@ -1,5 +1,6 @@
 import torch
-from nngeometry.vector import Vector, from_model
+from nngeometry.vector import Vector, from_model, random_vector, random_vector_dict
+from nngeometry.utils import get_individual_modules
 import torch.nn as nn
 import torch.nn.functional as tF
 
@@ -34,3 +35,43 @@ def test_from_dict_to_vector():
         assert torch.norm(d1[k][0] - d2[k][0]) < eps
         if len(d1[k]) == 2:
             assert torch.norm(d1[k][1] - d2[k][1]) < eps
+
+def test_add():
+    model = ConvNet()
+    r1 = random_vector(model)
+    r2 = random_vector(model)
+    sumr1r2 = r1 + r2
+    assert torch.norm(sumr1r2.get_flat_representation() -
+                      (r1.get_flat_representation() + r2.get_flat_representation())) < 1e-5   
+
+    r1 = random_vector_dict(model)
+    r2 = random_vector_dict(model)
+    sumr1r2 = r1 + r2
+    assert torch.norm(sumr1r2.get_flat_representation() -
+                      (r1.get_flat_representation() + r2.get_flat_representation())) < 1e-5
+
+    r1 = random_vector(model)
+    r2 = random_vector_dict(model)
+    sumr1r2 = r1 + r2
+    assert torch.norm(sumr1r2.get_flat_representation() -
+                      (r1.get_flat_representation() + r2.get_flat_representation())) < 1e-5
+
+def test_sub():
+    model = ConvNet()
+    r1 = random_vector(model)
+    r2 = random_vector(model)
+    sumr1r2 = r1 - r2
+    assert torch.norm(sumr1r2.get_flat_representation() -
+                      (r1.get_flat_representation() - r2.get_flat_representation())) < 1e-5   
+
+    r1 = random_vector_dict(model)
+    r2 = random_vector_dict(model)
+    sumr1r2 = r1 - r2
+    assert torch.norm(sumr1r2.get_flat_representation() -
+                      (r1.get_flat_representation() - r2.get_flat_representation())) < 1e-5
+
+    r1 = random_vector(model)
+    r2 = random_vector_dict(model)
+    sumr1r2 = r1 - r2
+    assert torch.norm(sumr1r2.get_flat_representation() -
+                      (r1.get_flat_representation() - r2.get_flat_representation())) < 1e-5
