@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 from ..utils import get_individual_modules, per_example_grad_conv
+from ..vector import Vector
 
 class L2Loss:
     def __init__(self, model, dataloader, loss_function):
@@ -163,11 +164,56 @@ class L2Loss:
         return half_mat
 
     def implicit_mv(self, v):
-        raise NotImplementedError
+        # add hooks
+        self.handles += self._add_hooks(self._hook_savex, self._hook_compute_vTg)
+
+        i = 0
+        self._v = dict()
+        output = dict()
+        for p in self.model.parameters():
+            self._v[p] = v[i:i+p.numel()].view(*p.size())
+            output[p] = torch.zeros_like(self._v[p])
+            i += p.numel()
+
+        device = next(self.model.parameters()).device
+        n_examples = len(self.dataloader.sampler)
+        n_parameters = sum([p.numel() for p in self.model.parameters()])
+        bs = self.dataloader.batch_size
+        for (inputs, targets) in self.dataloader:
+            self._vTg = torch.zeros(inputs.size(0), device=device)
+            inputs, targets = inputs.to(device), targets.to(device)
+            inputs.requires_grad = True
+            self.compute_switch = True
+            loss_indiv_examples = self.loss_function(inputs, targets)
+            loss = loss_indiv_examples.sum()
+            torch.autograd.grad(loss, [inputs], retain_graph=True)
+            self.compute_switch = False
+            loss_weighted = (self._vTg * loss_indiv_examples).sum()
+            grads = torch.autograd.grad(loss_weighted, self.model.parameters())
+            for i, p in enumerate(self.model.parameters()):
+                output[p].add_(grads[i])
+
+        output_dict = dict()
+        for m in self.mods:
+            if m.bias is None:
+                output_dict[m] = (output[m.weight] / n_examples,)
+            else:
+                output_dict[m] = (output[m.weight] / n_examples,
+                                  output[m.bias] / n_examples)
+
+        # remove hooks
+        self.xs = dict()
+        del self._vTg
+        del self._v
+        del self.compute_switch
+        for h in self.handles:
+            h.remove()
+
+        return Vector(model=self.model, dict_repr=output_dict) 
 
     def implicit_m_norm(self, v):
         # add hooks
-        self.handles += self._add_hooks(self._hook_savex, self._hook_compute_m_norm)
+        self.handles += self._add_hooks(self._hook_savex, self._hook_compute_vTg)
 
         i = 0
         self._v = dict()
@@ -180,6 +226,7 @@ class L2Loss:
         n_parameters = sum([p.numel() for p in self.model.parameters()])
         bs = self.dataloader.batch_size
         norm2 = 0
+        self.compute_switch = True
         for (inputs, targets) in self.dataloader:
             self._vTg = torch.zeros(inputs.size(0), device=device)
             inputs, targets = inputs.to(device), targets.to(device)
@@ -193,6 +240,7 @@ class L2Loss:
         self.xs = dict()
         del self._vTg
         del self._v
+        del self.compute_switch
         for h in self.handles:
             h.remove()
 
@@ -321,22 +369,23 @@ class L2Loss:
         else:
             raise NotImplementedError
 
-    def _hook_compute_m_norm(self, mod, grad_input, grad_output):
-        mod_class = mod.__class__.__name__
-        gy = grad_output[0]
-        x = self.xs[mod]
-        bs = x.size(0)
-        if mod_class == 'Linear':
-            self._vTg += (torch.mm(x, self._v[mod.weight].t()) * gy).sum(dim=1)
-            if mod.bias is not None:
-                self._vTg += torch.mv(gy, self._v[mod.bias])
-        elif mod_class == 'Conv2d':
-            gy2 = F.conv2d(x, self._v[mod.weight], stride=mod.stride, padding=mod.padding, dilation=mod.dilation)
-            self._vTg += (gy * gy2).view(bs, -1).sum(dim=1)
-            if mod.bias is not None:
-                self._vTg += torch.mv(gy.sum(dim=(2, 3)), self._v[mod.bias])
-        else:
-            raise NotImplementedError
+    def _hook_compute_vTg(self, mod, grad_input, grad_output):
+        if self.compute_switch:
+            mod_class = mod.__class__.__name__
+            gy = grad_output[0]
+            x = self.xs[mod]
+            bs = x.size(0)
+            if mod_class == 'Linear':
+                self._vTg += (torch.mm(x, self._v[mod.weight].t()) * gy).sum(dim=1)
+                if mod.bias is not None:
+                    self._vTg += torch.mv(gy, self._v[mod.bias])
+            elif mod_class == 'Conv2d':
+                gy2 = F.conv2d(x, self._v[mod.weight], stride=mod.stride, padding=mod.padding, dilation=mod.dilation)
+                self._vTg += (gy * gy2).view(bs, -1).sum(dim=1)
+                if mod.bias is not None:
+                    self._vTg += torch.mv(gy.sum(dim=(2, 3)), self._v[mod.bias])
+            else:
+                raise NotImplementedError
 
     def _hook_compute_trace(self, mod, grad_input, grad_output):
         mod_class = mod.__class__.__name__

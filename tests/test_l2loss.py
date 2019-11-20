@@ -176,6 +176,9 @@ def test_pspace_implicit_vs_dense():
         trace_den = M_dense.trace()
         ratio_trace = trace_imp / trace_den
         assert ratio_trace < 1.01 and ratio_trace > .99
+
+        assert torch.norm(M_dense.mv(dw) -
+                          M_implicit.mv(dw).get_flat_representation()) < 1e-3
         
 def test_pspace_lowrank_vs_dense():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
