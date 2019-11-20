@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from ..utils import get_individual_modules, per_example_grad_conv
 from ..vector import Vector
 
-class L2Loss:
+class M2Gradients:
     def __init__(self, model, dataloader, loss_function):
         self.model = model
         self.dataloader = dataloader

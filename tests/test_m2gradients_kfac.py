@@ -1,4 +1,4 @@
-from nngeometry.pspace import L2Loss
+from nngeometry.pspace import M2Gradients
 from nngeometry.representations import BlockDiagMatrix, KFACMatrix
 from nngeometry.vector import Vector
 from nngeometry.utils import get_individual_modules
@@ -95,7 +95,7 @@ def test_pspace_blockdiag_vs_kfac():
     for get_task in [get_convnet_kfc_task, get_fullyconnect_kfac_task]:
         train_loader, net, loss_function = get_task()
 
-        el2 = L2Loss(model=net, dataloader=train_loader, loss_function=loss_function)
+        el2 = M2Gradients(model=net, dataloader=train_loader, loss_function=loss_function)
         M_kfac = KFACMatrix(el2)
         M_blockdiag = BlockDiagMatrix(el2)
 

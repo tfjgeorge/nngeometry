@@ -1,1 +1,1 @@
-from .l2loss import L2Loss
+from .m2gradients import M2Gradients

@@ -1,5 +1,5 @@
-from nngeometry.pspace import L2Loss
-from nngeometry.ispace import L2Loss as ISpace_L2Loss
+from nngeometry.pspace import M2Gradients
+from nngeometry.ispace import M2Gradients as ISpace_M2Gradients
 from nngeometry.representations import DenseMatrix, ImplicitMatrix, LowRankMatrix, DiagMatrix, BlockDiagMatrix
 from nngeometry.vector import Vector
 from nngeometry.utils import get_individual_modules
@@ -93,11 +93,11 @@ def get_convnet_task(bs=1000, subs=None):
     loss_function = lambda input, target: tF.nll_loss(net(input), target, reduction='none')
     return train_loader, net, loss_function
 
-def test_pspace_l2loss():
+def test_pspace_m2gradients():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
         train_loader, net, loss_function = get_task()
 
-        el2 = L2Loss(model=net, dataloader=train_loader, loss_function=loss_function)
+        el2 = M2Gradients(model=net, dataloader=train_loader, loss_function=loss_function)
         M = DenseMatrix(el2)
 
         # compare with || l(w+dw) - l(w) ||_F for randomly sampled dw
@@ -139,10 +139,10 @@ def test_pspace_vs_ispace():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
         train_loader, net, loss_function = get_task(subs=3000)
 
-        ispace_el2 = ISpace_L2Loss(model=net, dataloader=train_loader, loss_function=loss_function)
+        ispace_el2 = ISpace_M2Gradients(model=net, dataloader=train_loader, loss_function=loss_function)
         MIspace = DenseMatrix(ispace_el2)
 
-        el2 = L2Loss(model=net, dataloader=train_loader, loss_function=loss_function)
+        el2 = M2Gradients(model=net, dataloader=train_loader, loss_function=loss_function)
         M = DenseMatrix(el2)
 
         n_examples = len(train_loader.sampler)
@@ -158,7 +158,7 @@ def test_pspace_implicit_vs_dense():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
         train_loader, net, loss_function = get_task()
 
-        el2 = L2Loss(model=net, dataloader=train_loader, loss_function=loss_function)
+        el2 = M2Gradients(model=net, dataloader=train_loader, loss_function=loss_function)
         M_dense = DenseMatrix(el2)
         M_implicit = ImplicitMatrix(el2)
 
@@ -184,7 +184,7 @@ def test_pspace_lowrank_vs_dense():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
         train_loader, net, loss_function = get_task(bs=100, subs=500)
 
-        el2 = L2Loss(model=net, dataloader=train_loader, loss_function=loss_function)
+        el2 = M2Gradients(model=net, dataloader=train_loader, loss_function=loss_function)
         M_dense = DenseMatrix(el2)
         M_lowrank = LowRankMatrix(el2)
 
@@ -215,7 +215,7 @@ def test_pspace_lowrank_vs_dense():
 def test_pspace_lowrank():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
         train_loader, net, loss_function = get_fullyconnect_task(bs=100, subs=500)
-        el2 = L2Loss(model=net, dataloader=train_loader, loss_function=loss_function)
+        el2 = M2Gradients(model=net, dataloader=train_loader, loss_function=loss_function)
         M = LowRankMatrix(el2)
 
         M.compute_eigendecomposition()
@@ -240,7 +240,7 @@ def test_pspace_diag_vs_dense():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
         train_loader, net, loss_function = get_task(bs=100, subs=500)
 
-        el2 = L2Loss(model=net, dataloader=train_loader, loss_function=loss_function)
+        el2 = M2Gradients(model=net, dataloader=train_loader, loss_function=loss_function)
         M_dense = DenseMatrix(el2)
         M_diag = DiagMatrix(el2)
 
@@ -270,7 +270,7 @@ def test_pspace_diag_vs_dense():
 def test_ispace_dense_vs_implicit():
     train_loader, net, loss_function = get_fullyconnect_task()
 
-    ispace_el2 = ISpace_L2Loss(model=net, dataloader=train_loader, loss_function=loss_function)
+    ispace_el2 = ISpace_M2Gradients(model=net, dataloader=train_loader, loss_function=loss_function)
     M_dense = DenseMatrix(ispace_el2)
     M_implicit = ImplicitMatrix(ispace_el2)
 
@@ -293,7 +293,7 @@ def test_pspace_blockdiag_vs_dense():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
         train_loader, net, loss_function = get_task()
 
-        el2 = L2Loss(model=net, dataloader=train_loader, loss_function=loss_function)
+        el2 = M2Gradients(model=net, dataloader=train_loader, loss_function=loss_function)
         M_dense = DenseMatrix(el2)
         M_blockdiag = BlockDiagMatrix(el2)
 

@@ -1,7 +1,7 @@
 import torch
 from ..utils import get_individual_modules, per_example_grad_conv
 
-class L2Loss:
+class M2Gradients:
     def __init__(self, model, dataloader, loss_function):
         self.model = model
         self.dataloader = dataloader
