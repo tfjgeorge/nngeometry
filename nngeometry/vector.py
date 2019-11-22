@@ -8,7 +8,7 @@ def from_model(model):
             dict_repr[mod] = (mod.weight, mod.bias)
         else:
             dict_repr[mod] = (mod.weight)
-    return dict_repr
+    return Vector(model, dict_repr=dict_repr)
 
 def random_vector_dict(model):
     v_dict = dict()

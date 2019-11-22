@@ -26,7 +26,7 @@ class ConvNet(nn.Module):
 def test_from_dict_to_vector():
     eps = 1e-8
     model = ConvNet()
-    v = Vector(model, dict_repr=from_model(model))
+    v = from_model(model)
     d1 = v.get_dict_representation()
     v2 = Vector(model, vector_repr=v.get_flat_representation())
     d2 = v2.get_dict_representation()
