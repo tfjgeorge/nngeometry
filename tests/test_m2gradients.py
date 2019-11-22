@@ -174,23 +174,30 @@ def test_pspace_m2gradients_dense():
 
 
 def test_pspace_vs_ispace():
+    """
+    Check that ISpace Gram matrix and PSpace second moment matrix
+    have the same trace and frobenius norm
+    """
     for get_task in [get_convnet_task, get_fullyconnect_task]:
         train_loader, net, loss_function = get_task(subs=3000)
 
-        ispace_el2 = ISpace_M2Gradients(model=net, dataloader=train_loader, loss_function=loss_function)
-        MIspace = DenseMatrix(ispace_el2)
+        ispace_m2_generator = ISpace_M2Gradients(model=net,
+                                                 dataloader=train_loader,
+                                                 loss_function=loss_function)
+        MIspace = DenseMatrix(ispace_m2_generator)
 
-        el2 = M2Gradients(model=net, dataloader=train_loader, loss_function=loss_function)
-        M = DenseMatrix(el2)
+        m2 = M2Gradients(model=net,
+                         dataloader=train_loader,
+                         loss_function=loss_function)
+        M = DenseMatrix(m2)
 
         n_examples = len(train_loader.sampler)
-        ratios_trace = MIspace.trace() / M.trace() / n_examples
-        assert ratios_trace < 1.01 and ratios_trace > .99
+        check_ratio(M.trace(), MIspace.trace() / n_examples)
 
         MIspace_frob = MIspace.frobenius_norm()
         M_frob = M.frobenius_norm()
-        ratios_frob = MIspace_frob / M_frob / n_examples
-        assert ratios_frob < 1.01 and ratios_frob > .99
+        check_ratio(M_frob, MIspace_frob / n_examples)
+
 
 def test_pspace_implicit_vs_dense():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
