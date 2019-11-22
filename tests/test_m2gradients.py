@@ -291,35 +291,40 @@ def test_pspace_lowrank():
 
 
 def test_pspace_diag_vs_dense():
+    """
+    Check Diag representation against DenseMatrix representation
+    """
     for get_task in [get_convnet_task, get_fullyconnect_task]:
         train_loader, net, loss_function = get_task(bs=100, subs=500)
 
-        el2 = M2Gradients(model=net, dataloader=train_loader, loss_function=loss_function)
-        M_dense = DenseMatrix(el2)
-        M_diag = DiagMatrix(el2)
+        m2_generator = M2Gradients(model=net,
+                                   dataloader=train_loader,
+                                   loss_function=loss_function)
+        M_dense = DenseMatrix(m2_generator)
+        M_diag = DiagMatrix(m2_generator)
 
-        assert torch.norm(torch.diag(M_dense.get_matrix() - M_diag.get_matrix())) < 1e-3
+        check_tensors(torch.diag(torch.diag(M_dense.get_matrix())),
+                      M_diag.get_matrix())
 
         trace_diag = M_diag.trace()
         trace_den = M_dense.trace()
-        ratio_trace = trace_diag / trace_den
-        assert ratio_trace < 1.01 and ratio_trace > .99
+        check_ratio(trace_den, trace_diag)
 
-        eps = 1e-3
-        dw = torch.rand((M_dense.size(0),), device='cuda')
-        dw_vec = Vector(net, vector_repr=dw)
-        assert torch.norm(M_diag.mv(dw_vec) - 
-                          torch.mv(torch.diag(torch.diag(M_dense.get_matrix())), dw)) < 1e-3
+        dw = random_pvector(net)
+        dw_flat = dw.get_flat_representation()
+        check_tensors(M_diag.mv(dw).get_flat_representation(),
+                      torch.mv(torch.diag(torch.diag(M_dense.get_matrix())),
+                               dw_flat))
 
         frob_diag = M_diag.frobenius_norm()
         frob_dense = torch.norm(torch.diag(M_dense.get_matrix()))
-        ratio_frob = frob_diag / frob_dense
-        assert ratio_frob < 1.01 and ratio_frob > .99
+        check_ratio(frob_dense, frob_diag)
 
-        m_norm_diag = M_diag.vTMv(dw_vec)
-        m_norm_dense = torch.dot(dw, torch.mv(M_diag.get_matrix(), dw))
-        ratio_m_norm = m_norm_diag / m_norm_dense
-        assert ratio_m_norm < 1.01 and ratio_m_norm > .99
+        m_norm_diag = M_diag.vTMv(dw)
+        m_norm_dense = torch.dot(dw_flat, torch.mv(M_diag.get_matrix(),
+                                                   dw_flat))
+        check_ratio(m_norm_dense, m_norm_diag)
+
 
 def test_ispace_dense_vs_implicit():
     train_loader, net, loss_function = get_fullyconnect_task()

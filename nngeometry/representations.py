@@ -58,13 +58,15 @@ class DenseMatrix(AbstractMatrix):
     def get_matrix(self):
         return self.data
 
+
 class DiagMatrix(AbstractMatrix):
     def __init__(self, generator):
         self.generator = generator
         self.data = generator.get_diag()
 
     def mv(self, v):
-        return v.get_flat_representation() * self.data
+        v_flat = v.get_flat_representation() * self.data
+        return PVector(v.model, vector_repr=v_flat)
 
     def trace(self):
         return self.data.sum()
