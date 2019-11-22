@@ -200,31 +200,33 @@ def test_pspace_vs_ispace():
 
 
 def test_pspace_implicit_vs_dense():
+    """
+    Check that the implicit representation and dense representation in
+    Pspace actually compute the same values
+    """
     for get_task in [get_convnet_task, get_fullyconnect_task]:
         train_loader, net, loss_function = get_task()
 
-        el2 = M2Gradients(model=net, dataloader=train_loader, loss_function=loss_function)
-        M_dense = DenseMatrix(el2)
-        M_implicit = ImplicitMatrix(el2)
+        m2_generator = M2Gradients(model=net,
+                                   dataloader=train_loader,
+                                   loss_function=loss_function)
+        M_dense = DenseMatrix(m2_generator)
+        M_implicit = ImplicitMatrix(m2_generator)
 
-        eps = 1e-3
-        dw = torch.rand((M_dense.size(0),), device='cuda')
-        dw *= eps / torch.norm(dw)
-        dw = Vector(net, vector_repr=dw)
-        
+        dw = random_pvector(net)
+
         M_norm_imp = M_implicit.vTMv(dw)
         M_norm_den = M_dense.vTMv(dw)
-        ratio_m_norms = M_norm_imp / M_norm_den
-        assert ratio_m_norms < 1.01 and ratio_m_norms > .99
+        check_ratio(M_norm_den, M_norm_imp)
 
         trace_imp = M_implicit.trace()
         trace_den = M_dense.trace()
-        ratio_trace = trace_imp / trace_den
-        assert ratio_trace < 1.01 and ratio_trace > .99
+        check_ratio(trace_den, trace_imp)
 
-        assert torch.norm(M_dense.mv(dw) -
-                          M_implicit.mv(dw).get_flat_representation()) < 1e-3
-        
+        check_tensors(M_dense.mv(dw),
+                      M_implicit.mv(dw).get_flat_representation())
+
+
 def test_pspace_lowrank_vs_dense():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
         train_loader, net, loss_function = get_task(bs=100, subs=500)

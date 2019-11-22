@@ -209,7 +209,7 @@ class M2Gradients:
         for h in self.handles:
             h.remove()
 
-        return Vector(model=self.model, dict_repr=output_dict)
+        return PVector(model=self.model, dict_repr=output_dict)
 
     def implicit_vTMv(self, v):
         # add hooks
