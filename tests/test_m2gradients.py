@@ -228,36 +228,38 @@ def test_pspace_implicit_vs_dense():
 
 
 def test_pspace_lowrank_vs_dense():
+    """
+    Check lowrank representation results against DenseMatrix
+    representation results
+    """
     for get_task in [get_convnet_task, get_fullyconnect_task]:
         train_loader, net, loss_function = get_task(bs=100, subs=500)
 
-        el2 = M2Gradients(model=net, dataloader=train_loader, loss_function=loss_function)
-        M_dense = DenseMatrix(el2)
-        M_lowrank = LowRankMatrix(el2)
+        m2_generator = M2Gradients(model=net,
+                                   dataloader=train_loader,
+                                   loss_function=loss_function)
+        M_dense = DenseMatrix(m2_generator)
+        M_lowrank = LowRankMatrix(m2_generator)
 
-        assert torch.norm(M_dense.get_matrix() - M_lowrank.get_matrix()) < 1e-3
+        check_tensors(M_dense.get_matrix(), M_lowrank.get_matrix())
 
-        eps = 1e-3
-        dw = torch.rand((M_dense.size(0),), device='cuda')
-        dw *= eps / torch.norm(dw)
-        dw = Vector(net, vector_repr=dw)
+        dw = random_pvector(net)
 
         M_norm_lr = M_lowrank.vTMv(dw)
         M_norm_den = M_dense.vTMv(dw)
-        ratio_m_norms = M_norm_lr / M_norm_den
-        assert ratio_m_norms < 1.01 and ratio_m_norms > .99
+        check_ratio(M_norm_den, M_norm_lr)
 
-        assert torch.norm(M_dense.mv(dw) - M_lowrank.mv(dw)) < 1e-3
+        check_tensors(M_dense.mv(dw).get_flat_representation(),
+                      M_lowrank.mv(dw).get_flat_representation())
 
         trace_lr = M_lowrank.trace()
         trace_den = M_dense.trace()
-        ratio_trace = trace_lr / trace_den
-        assert ratio_trace < 1.01 and ratio_trace > .99
+        check_ratio(trace_den, trace_lr)
 
         frob_lr = M_lowrank.frobenius_norm()
         frob_den = M_dense.frobenius_norm()
-        ratio_frob = frob_lr / frob_den
-        assert ratio_frob < 1.01 and ratio_frob > .99
+        check_ratio(frob_den, frob_lr)
+
 
 def test_pspace_lowrank():
     for get_task in [get_convnet_task, get_fullyconnect_task]:

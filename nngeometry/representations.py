@@ -26,7 +26,8 @@ class DenseMatrix(AbstractMatrix):
             _, self.evals, self.evecs = torch.svd(self.data, some=False)
 
     def mv(self, v):
-        return torch.mv(self.data, v.get_flat_representation())
+        v_flat = torch.mv(self.data, v.get_flat_representation())
+        return PVector(v.model, vector_repr=v_flat)
 
     def vTMv(self, v):
         v_flat = v.get_flat_representation()
@@ -219,6 +220,7 @@ class ImplicitMatrix(AbstractMatrix):
         else:
             raise IndexError
 
+
 class LowRankMatrix(AbstractMatrix):
     def __init__(self, generator):
         self.generator = generator
@@ -236,7 +238,9 @@ class LowRankMatrix(AbstractMatrix):
         return torch.mm(self.data.t(), self.data)
 
     def mv(self, v):
-        return torch.mv(self.data.t(), torch.mv(self.data, v.get_flat_representation()))
+        v_flat = torch.mv(self.data.t(),
+                          torch.mv(self.data, v.get_flat_representation()))
+        return PVector(v.model, vector_repr=v_flat)
 
     def compute_eigendecomposition(self, impl='symeig'):
         if impl == 'symeig':
