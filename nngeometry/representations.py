@@ -2,13 +2,15 @@ import torch
 from abc import ABC, abstractmethod
 from .maths import kronecker
 from .utils import get_individual_modules
-from .vector import Vector
+from .vector import PVector
+
 
 class AbstractMatrix(ABC):
 
     @abstractmethod
     def __init__(self, generator):
         return NotImplementedError
+
 
 class DenseMatrix(AbstractMatrix):
     def __init__(self, generator, compute_eigendecomposition=False):
@@ -34,15 +36,14 @@ class DenseMatrix(AbstractMatrix):
         return torch.norm(self.data)
 
     def project_to_diag(self, v):
-        if v.dim() == 1:
-            return torch.mv(self.evecs.t(), v)
-        elif v.dim() == 2:
-            return torch.mm(torch.mm(self.evecs.t(), v), self.evecs)
-        else:
-            raise NotImplementedError
+        return PVector(model=v.model,
+                       vector_repr=torch.mv(self.evecs.t(),
+                                            v.get_flat_representation()))
 
     def project_from_diag(self, v):
-        return torch.mv(self.evecs, v)
+        return PVector(model=v.model,
+                       vector_repr=torch.mv(self.evecs,
+                                            v.get_flat_representation()))
 
     def get_eigendecomposition(self):
         return self.evals, self.evecs

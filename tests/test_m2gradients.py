@@ -1,7 +1,9 @@
 from nngeometry.pspace import M2Gradients
 from nngeometry.ispace import M2Gradients as ISpace_M2Gradients
-from nngeometry.representations import DenseMatrix, ImplicitMatrix, LowRankMatrix, DiagMatrix, BlockDiagMatrix
-from nngeometry.vector import Vector
+from nngeometry.representations import (DenseMatrix, ImplicitMatrix,
+                                        LowRankMatrix, DiagMatrix,
+                                        BlockDiagMatrix)
+from nngeometry.vector import PVector, random_pvector
 from nngeometry.utils import get_individual_modules
 from subsampled_mnist import get_dataset, default_datapath
 import torch
@@ -9,6 +11,8 @@ import torch.nn as nn
 import torch.nn.functional as tF
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
+from utils import check_ratio, check_tensors
+
 
 class Net(nn.Module):
     def __init__(self, in_size=10, out_size=10, n_hidden=2, hidden_size=25,
@@ -19,13 +23,15 @@ class Net(nn.Module):
         for s_in, s_out in zip(sizes[:-1], sizes[1:]):
             layers.append(nn.Linear(s_in, s_out))
             layers.append(nonlinearity())
-        layers.pop() # remove last nonlin
+        # remove last nonlinearity:
+        layers.pop()
         self.net = nn.Sequential(*layers)
 
     def forward(self, x):
         x = x.view(x.size(0), -1)
         out = self.net(x)
         return tF.log_softmax(out, dim=1)
+
 
 class ConvNet(nn.Module):
     def __init__(self):
@@ -46,23 +52,25 @@ class ConvNet(nn.Module):
         x = self.fc1(x)
         return tF.log_softmax(x, dim=1)
 
+
 def update_model(net, dw):
-    # new_net = net.clone()
     i = 0
     for p in net.parameters():
         j = i + p.numel()
         p.data += dw[i:j].view(*p.size())
         i = j
 
+
 def get_l_vector(dataloader, loss_function):
     with torch.no_grad():
-        l = torch.zeros((len(dataloader.sampler),), device='cuda')
+        losses = torch.zeros((len(dataloader.sampler),), device='cuda')
         i = 0
-        for inputs, targets in dataloader: 
+        for inputs, targets in dataloader:
             inputs, targets = inputs.to('cuda'), targets.to('cuda')
-            l[i:i+inputs.size(0)] = loss_function(inputs, targets)
+            losses[i:i+inputs.size(0)] = loss_function(inputs, targets)
             i += inputs.size(0)
-        return l
+        return losses
+
 
 def get_fullyconnect_task(bs=1000, subs=None):
     train_set = get_dataset('train')
@@ -74,14 +82,19 @@ def get_fullyconnect_task(bs=1000, subs=None):
         shuffle=False)
     net = Net(in_size=10)
     net.to('cuda')
-    loss_function = lambda input, target: tF.nll_loss(net(input), target, reduction='none')
+
+    def loss_function(input, target):
+        return tF.nll_loss(net(input), target, reduction='none')
+
     return train_loader, net, loss_function
 
+
 def get_convnet_task(bs=1000, subs=None):
-    train_set = Subset(datasets.MNIST(root=default_datapath, train=True, download=True,
-                                      transform=transforms.ToTensor()), range(40000))
-    # train_set = datasets.MNIST(default_datapath, train=True, download=True,
-    #                            transform=transforms.ToTensor(), range(40000))
+    train_set = Subset(datasets.MNIST(root=default_datapath,
+                                      train=True,
+                                      download=True,
+                                      transform=transforms.ToTensor()),
+                       range(40000))
     if subs is not None:
         train_set = Subset(train_set, range(subs))
     train_loader = DataLoader(
@@ -90,50 +103,75 @@ def get_convnet_task(bs=1000, subs=None):
         shuffle=False)
     net = ConvNet()
     net.to('cuda')
-    loss_function = lambda input, target: tF.nll_loss(net(input), target, reduction='none')
+
+    def loss_function(input, target):
+        return tF.nll_loss(net(input), target, reduction='none')
+
     return train_loader, net, loss_function
 
-def test_pspace_m2gradients():
+
+def test_pspace_m2gradients_vs_loss():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
         train_loader, net, loss_function = get_task()
 
-        el2 = M2Gradients(model=net, dataloader=train_loader, loss_function=loss_function)
-        M = DenseMatrix(el2)
+        m2_generator = M2Gradients(model=net,
+                                   dataloader=train_loader,
+                                   loss_function=loss_function)
+        M = DenseMatrix(m2_generator)
 
         # compare with || l(w+dw) - l(w) ||_F for randomly sampled dw
-        loss_function = lambda input, target: tF.nll_loss(net(input), target, reduction='none')
         l_0 = get_l_vector(train_loader, loss_function)
-        eps = 1e-3
-        dw = torch.rand((M.size(0),), device='cuda')
-        dw /= torch.norm(dw)
-        dw_vec = Vector(net, vector_repr=dw)
-        update_model(net, eps * dw)
-        l_upd = get_l_vector(train_loader, loss_function)
-        update_model(net, -eps * dw)
-        ratios = torch.norm(l_upd - l_0)**2 / len(train_loader.sampler) / torch.dot(M.mv(dw_vec), dw) / eps ** 2
-        assert ratios < 1.01 and ratios > .99
+        eps = 1e-4
 
+        dw = torch.rand((M.size(0),), device='cuda')
+        dw *= eps / torch.norm(dw)
+        dw_vec = PVector(net, vector_repr=dw)
+        update_model(net, dw)
+        l_upd = get_l_vector(train_loader, loss_function)
+        update_model(net, - dw)
+        check_ratio(torch.norm(l_upd - l_0)**2 / len(train_loader.sampler),
+                    torch.dot(M.mv(dw_vec), dw))
+
+
+def test_pspace_m2gradients_dense():
+    for get_task in [get_convnet_task, get_fullyconnect_task]:
+        train_loader, net, loss_function = get_task()
+
+        m2_generator = M2Gradients(model=net,
+                                   dataloader=train_loader,
+                                   loss_function=loss_function)
+        M = DenseMatrix(m2_generator)
+        dw = random_pvector(net)
         for impl in ['symeig', 'svd']:
             # compare project_to_diag to project_from_diag
             M.compute_eigendecomposition(impl)
-            assert torch.norm(dw - M.project_to_diag(M.project_from_diag(dw))) < 1e-4
+            dw2 = M.project_to_diag(M.project_from_diag(dw))
+            check_tensors(dw.get_flat_representation(),
+                          dw2.get_flat_representation())
 
             # project M to its diag space and compare to the evals
-            M2 = torch.stack([M.project_to_diag(M.get_matrix()[:, i]) for i in range(M.size(0))])
-            M2 = torch.stack([M.project_to_diag(M2[:, i]) for i in range(M.size(0))])
-            assert torch.norm(M2 - torch.diag(M.evals)) < 1e-4
-
-            # same but directly with the matrix:
-            assert torch.norm(M.project_to_diag(M.get_matrix()) - torch.diag(M.evals)) < 1e-4
+            cols = []
+            for i in range(M.size(0)):
+                vi = PVector(net, vector_repr=M.get_matrix()[:, i])
+                cols.append(M.project_to_diag(vi))
+            M2 = torch.stack([c.get_flat_representation() for c in cols])
+            cols2 = []
+            for i in range(M.size(0)):
+                vi = PVector(net, vector_repr=M2[:, i])
+                cols2.append(M.project_to_diag(vi))
+            M2 = torch.stack([c.get_flat_representation() for c in cols2])
+            check_tensors(M2, torch.diag(M.evals))
 
             evals, evecs = M.get_eigendecomposition()
-            assert torch.norm(torch.mm(torch.mm(evecs, torch.diag(evals)), evecs.t()) - M.get_matrix()) < 1e-3
+            check_tensors(M.get_matrix(),
+                          torch.mm(torch.mm(evecs, torch.diag(evals)),
+                                   evecs.t()))
 
         # compare frobenius norm to trace(M^T M)
         f_norm = M.frobenius_norm()
         f_norm2 = torch.trace(torch.mm(M.get_matrix().t(), M.get_matrix()))**.5
-        ratio = f_norm / f_norm2
-        assert ratio < 1.01 and ratio > .99
+        check_ratio(f_norm, f_norm2)
+
 
 def test_pspace_vs_ispace():
     for get_task in [get_convnet_task, get_fullyconnect_task]:

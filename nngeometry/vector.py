@@ -1,6 +1,7 @@
 import torch
 from .utils import get_individual_modules, get_n_parameters
 
+
 def from_model(model):
     dict_repr = dict()
     for mod in get_individual_modules(model)[0]:
@@ -8,9 +9,10 @@ def from_model(model):
             dict_repr[mod] = (mod.weight, mod.bias)
         else:
             dict_repr[mod] = (mod.weight)
-    return Vector(model, dict_repr=dict_repr)
+    return PVector(model, dict_repr=dict_repr)
 
-def random_vector_dict(model):
+
+def random_pvector_dict(model):
     v_dict = dict()
     for m in get_individual_modules(model)[0]:
         if m.bias is not None:
@@ -18,15 +20,21 @@ def random_vector_dict(model):
                          torch.rand_like(m.bias))
         else:
             v_dict[m] = (torch.rand_like(m.weight))
-    return Vector(model=model, dict_repr=v_dict)
+    return PVector(model=model, dict_repr=v_dict)
 
-def random_vector(model):
+
+def random_pvector(model):
     n_parameters = get_n_parameters(model)
-    return Vector(model=model,
-                  vector_repr=torch.rand((n_parameters,),
-                                         device=next(model.parameters()).device))
+    random_v_flat = torch.rand((n_parameters,),
+                               device=next(model.parameters()).device)
+    return PVector(model=model,
+                   vector_repr=random_v_flat)
 
-class Vector:
+
+class PVector:
+    """
+    A vector in parameter space
+    """
     def __init__(self, model, vector_repr=None, dict_repr=None):
         self.model = model
         self.vector_repr = vector_repr
@@ -61,10 +69,12 @@ class Vector:
         start = 0
         dict_repr = dict()
         for mod in get_individual_modules(self.model)[0]:
-            w = self.vector_repr[start:start+mod.weight.numel()].view(*mod.weight.size())
+            w = self.vector_repr[start:start+mod.weight.numel()] \
+                    .view(*mod.weight.size())
             start += mod.weight.numel()
             if mod.bias is not None:
-                b = self.vector_repr[start:start+mod.bias.numel()].view(*mod.bias.size())
+                b = self.vector_repr[start:start+mod.bias.numel()] \
+                        .view(*mod.bias.size())
                 start += mod.bias.numel()
                 dict_repr[mod] = (w, b)
             else:
@@ -80,12 +90,14 @@ class Vector:
                                  self.dict_repr[m][1] + other.dict_repr[m][1])
                 else:
                     v_dict[m] = (self.dict_repr[m][0] + other.dict_repr[m][0])
-            return Vector(self.model, dict_repr=v_dict)
+            return PVector(self.model, dict_repr=v_dict)
         elif self.vector_repr is not None and other.vector_repr is not None:
-            return Vector(self.model, vector_repr=self.vector_repr+other.vector_repr)
+            return PVector(self.model,
+                           vector_repr=self.vector_repr+other.vector_repr)
         else:
-            return Vector(self.model, vector_repr=(self.get_flat_representation() +
-                                                   other.get_flat_representation()))
+            return PVector(self.model,
+                           vector_repr=(self.get_flat_representation() +
+                                        other.get_flat_representation()))
 
     def __sub__(self, other):
         if self.dict_repr is not None and other.dict_repr is not None:
@@ -96,9 +108,26 @@ class Vector:
                                  self.dict_repr[m][1] - other.dict_repr[m][1])
                 else:
                     v_dict[m] = (self.dict_repr[m][0] - other.dict_repr[m][0])
-            return Vector(self.model, dict_repr=v_dict)
+            return PVector(self.model, dict_repr=v_dict)
         elif self.vector_repr is not None and other.vector_repr is not None:
-            return Vector(self.model, vector_repr=self.vector_repr-other.vector_repr)
+            return PVector(self.model,
+                           vector_repr=self.vector_repr-other.vector_repr)
         else:
-            return Vector(self.model, vector_repr=(self.get_flat_representation() -
-                                                   other.get_flat_representation()))
+            return PVector(self.model,
+                           vector_repr=(self.get_flat_representation() -
+                                        other.get_flat_representation()))
+
+
+class IVector:
+    """
+    A vector in input space
+    """
+    def __init__(self, model, vector_repr=None):
+        self.model = model
+        self.vector_repr = vector_repr
+
+    def get_flat_representation(self):
+        if self.vector_repr is not None:
+            return self.vector_repr
+        else:
+            return NotImplementedError
