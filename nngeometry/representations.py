@@ -249,12 +249,6 @@ class LowRankMatrix(AbstractMatrix):
         else:
             raise NotImplementedError
 
-    def project_to_diag(self, v):
-        if v.dim() == 1:
-            return torch.mv(self.evecs.t(), v)
-        elif v.dim() == 2:
-            return torch.mm(torch.mm(self.evecs.t(), v), self.evecs)
-
     def get_eigendecomposition(self):
         return self.evals, self.evecs
 

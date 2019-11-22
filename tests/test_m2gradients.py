@@ -263,27 +263,32 @@ def test_pspace_lowrank_vs_dense():
 
 def test_pspace_lowrank():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
-        train_loader, net, loss_function = get_fullyconnect_task(bs=100, subs=500)
-        el2 = M2Gradients(model=net, dataloader=train_loader, loss_function=loss_function)
-        M = LowRankMatrix(el2)
+        train_loader, net, loss_function = get_task(bs=100, subs=500)
+        m2_generator = M2Gradients(model=net,
+                                   dataloader=train_loader,
+                                   loss_function=loss_function)
+        M = LowRankMatrix(m2_generator)
 
         M.compute_eigendecomposition()
-
         evals, evecs = M.get_eigendecomposition()
-        assert torch.norm(torch.mm(torch.mm(evecs, torch.diag(evals)), evecs.t()) - M.get_matrix()) < 1e-3
+        check_tensors(M.get_matrix(),
+                      torch.mm(torch.mm(evecs, torch.diag(evals)), evecs.t()))
 
         # TODO improve this
-        assert torch.norm(M.project_to_diag(M.get_matrix()) - torch.diag(M.evals)) < 1e-3
+        # check_tensors(M.project_to_diag(M.get_matrix()).get_flat_representation(),
+        #               torch.diag(M.evals))
 
         # check evecs:
         for i in range(evecs.size(1)):
             v = evecs[:, i]
             norm_v = torch.norm(v)
-            v = Vector(net, vector_repr=v)
+            v = PVector(net, vector_repr=v)
             if not (norm_v > 0.999 and norm_v < 1.001):
                 # TODO improve this
                 print(i, norm_v)
-            assert torch.norm(M.mv(v) - v.get_flat_representation() * evals[i]) < 1e-3
+            check_tensors(M.mv(v).get_flat_representation(),
+                          v.get_flat_representation() * evals[i])
+
 
 def test_pspace_diag_vs_dense():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
