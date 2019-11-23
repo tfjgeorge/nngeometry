@@ -355,55 +355,41 @@ def test_pspace_blockdiag_vs_dense():
     for get_task in [get_convnet_task, get_fullyconnect_task]:
         train_loader, net, loss_function = get_task()
 
-        el2 = M2Gradients(model=net, dataloader=train_loader, loss_function=loss_function)
-        M_dense = DenseMatrix(el2)
-        M_blockdiag = BlockDiagMatrix(el2)
+        m2_generator = M2Gradients(model=net,
+                                   dataloader=train_loader,
+                                   loss_function=loss_function)
+        M_dense = DenseMatrix(m2_generator)
+        M_blockdiag = BlockDiagMatrix(m2_generator)
 
-        eps = 1e-3
-        start = 0
+        eps = 1e-5
         G_dense = M_dense.get_matrix()
         G_blockdiag = M_blockdiag.get_matrix()
-        for mod in net.modules():
-            mod_class = mod.__class__.__name__
-            if mod_class in ['Linear', 'Conv2d']:
-                numel = mod.weight.numel() + mod.bias.numel()
-                # check that the blocks are equal
-                assert torch.norm(G_dense[start:start+numel, start:start+numel] -
-                                  G_blockdiag[start:start+numel, start:start+numel]) < eps
-                # check that the rest is 0
-                assert torch.norm(G_blockdiag[start+numel:, start:start+numel]) < eps
-                assert torch.norm(G_blockdiag[start:start+numel, start+numel:]) < eps
-                start += numel
+        mods, p_pos = get_individual_modules(net)
+        for mod in mods:
+            pos = p_pos[mod]
+            numel = mod.weight.numel() + mod.bias.numel()
+            # check that the blocks are equal
+            check_tensors(G_dense[pos:pos+numel, pos:pos+numel],
+                          G_blockdiag[pos:pos+numel, pos:pos+numel])
+            # check that the rest is 0
+            assert torch.norm(G_blockdiag[pos+numel:, pos:pos+numel]) < eps
+            assert torch.norm(G_blockdiag[pos:pos+numel, pos+numel:]) < eps
 
         trace_bd = M_blockdiag.trace()
         trace_den = M_dense.trace()
-        ratio_trace = trace_bd / trace_den
-        assert ratio_trace < 1.01 and ratio_trace > .99
+        check_ratio(trace_den, trace_bd)
 
-        eps = 1e-3
-        random_v = dict()
-        for mod in get_individual_modules(net)[0]:
-            dw = torch.rand(mod.weight.size(), device='cuda')
-            dw *= eps / torch.norm(dw)
-            if mod.bias is not None:
-                db = torch.rand(mod.bias.size(), device='cuda')
-                db *= eps / torch.norm(db)
-                random_v[mod] = (dw, db)
-            else:
-                random_v[mod] = (dw,)
-        random_v = Vector(net, dict_repr=random_v)
+        random_v = random_pvector(net)
         random_v_flat = random_v.get_flat_representation()
 
         m_norm_blockdiag = M_blockdiag.vTMv(random_v)
-        m_norm_direct = torch.dot(torch.mv(G_blockdiag, random_v_flat), random_v_flat)
-        ratios_m_norm = m_norm_direct / m_norm_blockdiag
-        assert ratios_m_norm < 1.01 and ratios_m_norm > .99
+        m_norm_direct = torch.dot(torch.mv(G_blockdiag, random_v_flat),
+                                  random_v_flat)
+        check_ratio(m_norm_direct, m_norm_blockdiag)
 
         frob_blockdiag = M_blockdiag.frobenius_norm()
         frob_frommatrix = torch.norm(G_blockdiag)
-        ratios_frob = frob_blockdiag / frob_frommatrix
-        assert ratios_frob < 1.01 and ratios_frob > .99
+        check_ratio(frob_frommatrix, frob_blockdiag)
 
-        assert torch.norm(M_blockdiag.mv(random_v).get_flat_representation() -
-                          torch.mv(M_blockdiag.get_matrix(), random_v_flat)) < 1e-3
-
+        check_tensors(torch.mv(M_blockdiag.get_matrix(), random_v_flat),
+                      M_blockdiag.mv(random_v).get_flat_representation())

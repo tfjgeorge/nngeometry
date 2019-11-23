@@ -120,7 +120,7 @@ class BlockDiagMatrix(AbstractMatrix):
             if m.bias is not None:
                 mv_tuple = (mv_tuple[0], mv[m.weight.numel():].view(*m.bias.size()),)
             out_dict[m] = mv_tuple
-        return Vector(model=vs.model, dict_repr=out_dict)
+        return PVector(model=vs.model, dict_repr=out_dict)
 
     def frobenius_norm(self):
         return sum([torch.norm(b)**2 for b in self.data.values()])**.5
