@@ -130,7 +130,7 @@ def test_pspace_m2gradients_vs_loss():
         l_upd = get_l_vector(train_loader, loss_function)
         update_model(net, - dw)
         check_ratio(torch.norm(l_upd - l_0)**2 / len(train_loader.sampler),
-                    torch.dot(M.mv(dw_vec), dw))
+                    torch.dot(M.mv(dw_vec).get_flat_representation(), dw))
 
 
 def test_pspace_m2gradients_dense():
@@ -160,12 +160,13 @@ def test_pspace_m2gradients_dense():
                 vi = PVector(net, vector_repr=M2[:, i])
                 cols2.append(M.project_to_diag(vi))
             M2 = torch.stack([c.get_flat_representation() for c in cols2])
-            check_tensors(M2, torch.diag(M.evals))
+            # need to raise eps because of numerical stability
+            check_tensors(M2, torch.diag(M.evals), eps=1e-4)
 
             evals, evecs = M.get_eigendecomposition()
             check_tensors(M.get_matrix(),
                           torch.mm(torch.mm(evecs, torch.diag(evals)),
-                                   evecs.t()))
+                                   evecs.t()), eps=1e-4)
 
         # compare frobenius norm to trace(M^T M)
         f_norm = M.frobenius_norm()
@@ -223,7 +224,7 @@ def test_pspace_implicit_vs_dense():
         trace_den = M_dense.trace()
         check_ratio(trace_den, trace_imp)
 
-        check_tensors(M_dense.mv(dw),
+        check_tensors(M_dense.mv(dw).get_flat_representation(),
                       M_implicit.mv(dw).get_flat_representation())
 
 

@@ -106,6 +106,10 @@ def to_onexdataset(dataset, device):
 
 
 def test_pspace_blockdiag_vs_kfac():
+    """
+    Compares blockdiag and kfac representation on datasets/architectures
+    where they are the same
+    """
     for get_task in [get_convnet_kfc_task, get_fullyconnect_kfac_task]:
         train_loader, net, loss_function = get_task()
 
