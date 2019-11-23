@@ -180,7 +180,7 @@ class KFACMatrix(AbstractMatrix):
             else:
                 mv_tuple = (mv[:, :-1].contiguous(), mv[:, -1:].contiguous())
             out_dict[m] = mv_tuple
-        return Vector(model=vs.model, dict_repr=out_dict)
+        return PVector(model=vs.model, dict_repr=out_dict)
 
     def vTMv(self, vector):
         vector_dict = vector.get_dict_representation()
