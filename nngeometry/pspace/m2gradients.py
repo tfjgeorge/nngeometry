@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from ..utils import get_individual_modules, per_example_grad_conv, get_n_parameters
-from ..vector import Vector
+from ..vector import PVector
 
 class M2Gradients:
     def __init__(self, model, dataloader, loss_function):
@@ -209,7 +209,7 @@ class M2Gradients:
         for h in self.handles:
             h.remove()
 
-        return Vector(model=self.model, dict_repr=output_dict) 
+        return PVector(model=self.model, dict_repr=output_dict)
 
     def implicit_vTMv(self, v):
         # add hooks

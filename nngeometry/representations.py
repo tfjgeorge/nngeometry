@@ -2,13 +2,15 @@ import torch
 from abc import ABC, abstractmethod
 from .maths import kronecker
 from .utils import get_individual_modules
-from .vector import Vector
+from .vector import PVector
+
 
 class AbstractMatrix(ABC):
 
     @abstractmethod
     def __init__(self, generator):
         return NotImplementedError
+
 
 class DenseMatrix(AbstractMatrix):
     def __init__(self, generator, compute_eigendecomposition=False):
@@ -24,7 +26,8 @@ class DenseMatrix(AbstractMatrix):
             _, self.evals, self.evecs = torch.svd(self.data, some=False)
 
     def mv(self, v):
-        return torch.mv(self.data, v.get_flat_representation())
+        v_flat = torch.mv(self.data, v.get_flat_representation())
+        return PVector(v.model, vector_repr=v_flat)
 
     def vTMv(self, v):
         v_flat = v.get_flat_representation()
@@ -34,15 +37,14 @@ class DenseMatrix(AbstractMatrix):
         return torch.norm(self.data)
 
     def project_to_diag(self, v):
-        if v.dim() == 1:
-            return torch.mv(self.evecs.t(), v)
-        elif v.dim() == 2:
-            return torch.mm(torch.mm(self.evecs.t(), v), self.evecs)
-        else:
-            raise NotImplementedError
+        return PVector(model=v.model,
+                       vector_repr=torch.mv(self.evecs.t(),
+                                            v.get_flat_representation()))
 
     def project_from_diag(self, v):
-        return torch.mv(self.evecs, v)
+        return PVector(model=v.model,
+                       vector_repr=torch.mv(self.evecs,
+                                            v.get_flat_representation()))
 
     def get_eigendecomposition(self):
         return self.evals, self.evecs
@@ -56,13 +58,15 @@ class DenseMatrix(AbstractMatrix):
     def get_matrix(self):
         return self.data
 
+
 class DiagMatrix(AbstractMatrix):
     def __init__(self, generator):
         self.generator = generator
         self.data = generator.get_diag()
 
     def mv(self, v):
-        return v.get_flat_representation() * self.data
+        v_flat = v.get_flat_representation() * self.data
+        return PVector(v.model, vector_repr=v_flat)
 
     def trace(self):
         return self.data.sum()
@@ -116,7 +120,7 @@ class BlockDiagMatrix(AbstractMatrix):
             if m.bias is not None:
                 mv_tuple = (mv_tuple[0], mv[m.weight.numel():].view(*m.bias.size()),)
             out_dict[m] = mv_tuple
-        return Vector(model=vs.model, dict_repr=out_dict)
+        return PVector(model=vs.model, dict_repr=out_dict)
 
     def frobenius_norm(self):
         return sum([torch.norm(b)**2 for b in self.data.values()])**.5
@@ -176,7 +180,7 @@ class KFACMatrix(AbstractMatrix):
             else:
                 mv_tuple = (mv[:, :-1].contiguous(), mv[:, -1:].contiguous())
             out_dict[m] = mv_tuple
-        return Vector(model=vs.model, dict_repr=out_dict)
+        return PVector(model=vs.model, dict_repr=out_dict)
 
     def vTMv(self, vector):
         vector_dict = vector.get_dict_representation()
@@ -218,6 +222,7 @@ class ImplicitMatrix(AbstractMatrix):
         else:
             raise IndexError
 
+
 class LowRankMatrix(AbstractMatrix):
     def __init__(self, generator):
         self.generator = generator
@@ -235,7 +240,9 @@ class LowRankMatrix(AbstractMatrix):
         return torch.mm(self.data.t(), self.data)
 
     def mv(self, v):
-        return torch.mv(self.data.t(), torch.mv(self.data, v.get_flat_representation()))
+        v_flat = torch.mv(self.data.t(),
+                          torch.mv(self.data, v.get_flat_representation()))
+        return PVector(v.model, vector_repr=v_flat)
 
     def compute_eigendecomposition(self, impl='symeig'):
         if impl == 'symeig':
@@ -243,12 +250,6 @@ class LowRankMatrix(AbstractMatrix):
             self.evecs = torch.mm(self.data.t(), V) / (self.evals**.5).unsqueeze(0)
         else:
             raise NotImplementedError
-
-    def project_to_diag(self, v):
-        if v.dim() == 1:
-            return torch.mv(self.evecs.t(), v)
-        elif v.dim() == 2:
-            return torch.mm(torch.mm(self.evecs.t(), v), self.evecs)
 
     def get_eigendecomposition(self):
         return self.evals, self.evecs
