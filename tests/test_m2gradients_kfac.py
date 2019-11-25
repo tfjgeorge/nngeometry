@@ -1,6 +1,8 @@
 from nngeometry.pspace import M2Gradients
 from nngeometry.representations import BlockDiagMatrix, KFACMatrix
-from nngeometry.vector import random_pvector
+from nngeometry.vector import random_pvector, PVector
+from nngeometry.utils import get_individual_modules
+from nngeometry.maths import kronecker
 from subsampled_mnist import get_dataset, default_datapath
 import torch
 import torch.nn as nn
@@ -8,6 +10,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 from utils import check_ratio, check_tensors
+from test_m2gradients import get_fullyconnect_task
 
 
 class Net(nn.Module):
@@ -139,3 +142,51 @@ def test_pspace_blockdiag_vs_kfac():
 
         check_tensors(M_blockdiag.mv(random_v).get_flat_representation(),
                       M_kfac.mv(random_v).get_flat_representation())
+
+
+def angle(v1, v2):
+    v1_flat = v1.get_flat_representation()
+    v2_flat = v2.get_flat_representation()
+    return torch.dot(v1_flat, v2_flat) / \
+        (torch.norm(v1_flat) * torch.norm(v2_flat))
+
+
+def test_pspace_kfac_eigendecomposition():
+    """
+    Check KFAC eigendecomposition by comparing Mv products with v
+    where v are the top eigenvectors. The remaining ones can be
+    more erratic because of numerical precision
+    """
+    eps = 1e-3
+    train_loader, net, loss_function = get_fullyconnect_task()
+
+    m2_generator = M2Gradients(model=net,
+                               dataloader=train_loader,
+                               loss_function=loss_function)
+
+    M_kfac = KFACMatrix(m2_generator)
+    M_kfac.compute_eigendecomposition()
+    evals, evecs = M_kfac.get_eigendecomposition()
+    # Loop through all vectors in KFE
+    mods, p_pos = get_individual_modules(net)
+    for m in mods:
+        for i_a in range(-4, 0):
+            for i_g in range(-4, 0):
+                evec_v = dict()
+                for m2 in mods:
+                    if m2 is m:
+                        v_a = evecs[m][0][:, i_a].unsqueeze(0)
+                        v_g = evecs[m][1][:, i_g].unsqueeze(1)
+                        evec_block = kronecker(v_g, v_a)
+                        evec_tuple = (evec_block[:, :-1].contiguous(),
+                                      evec_block[:, -1].contiguous())
+                        evec_v[m2] = evec_tuple
+                    else:
+                        evec_v[m2] = (torch.zeros_like(m2.weight),
+                                      torch.zeros_like(m2.bias))
+                evec_v = PVector(net, dict_repr=evec_v)
+                Mv = M_kfac.mv(evec_v)
+                angle_v_Mv = angle(Mv, evec_v)
+                assert angle_v_Mv < 1 + eps and angle_v_Mv > 1 - eps
+                norm_mv = torch.norm(Mv.get_flat_representation())
+                check_ratio(evals[m][0][i_a] * evals[m][1][i_g], norm_mv)

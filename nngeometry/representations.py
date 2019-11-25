@@ -192,7 +192,7 @@ class KFACMatrix(AbstractMatrix):
             if m.bias is None:
                 mv_tuple = (mv,)
             else:
-                mv_tuple = (mv[:, :-1].contiguous(), mv[:, -1:].contiguous())
+                mv_tuple = (mv[:, :-1].contiguous(), mv[:, -1].contiguous())
             out_dict[m] = mv_tuple
         return PVector(model=vs.model, dict_repr=out_dict)
 
@@ -211,6 +211,23 @@ class KFACMatrix(AbstractMatrix):
     def frobenius_norm(self):
         return sum([torch.trace(torch.mm(a, a)) * torch.trace(torch.mm(g, g))
                     for a, g in self.data.values()])**.5
+
+    def compute_eigendecomposition(self, impl='symeig'):
+        self.evals = dict()
+        self.evecs = dict()
+        mods, p_pos = get_individual_modules(self.generator.model)
+        if impl == 'symeig':
+            for mod in mods:
+                a, g = self.data[mod]
+                evals_a, evecs_a = torch.symeig(a, eigenvectors=True)
+                evals_g, evecs_g = torch.symeig(g, eigenvectors=True)
+                self.evals[mod] = (evals_a, evals_g)
+                self.evecs[mod] = (evecs_a, evecs_g)
+        else:
+            raise NotImplementedError
+
+    def get_eigendecomposition(self):
+        return self.evals, self.evecs
 
 
 class ImplicitMatrix(AbstractMatrix):
