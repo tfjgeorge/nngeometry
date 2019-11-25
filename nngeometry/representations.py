@@ -60,9 +60,12 @@ class DenseMatrix(AbstractMatrix):
 
 
 class DiagMatrix(AbstractMatrix):
-    def __init__(self, generator):
+    def __init__(self, generator=None, data=None):
         self.generator = generator
-        self.data = generator.get_diag()
+        if data is not None:
+            self.data = data
+        else:
+            self.data = generator.get_diag()
 
     def mv(self, v):
         v_flat = v.get_flat_representation() * self.data
@@ -89,6 +92,11 @@ class DiagMatrix(AbstractMatrix):
             return (s, s)
         else:
             raise IndexError
+
+    def __add__(self, other):
+        sum_diags = self.data + other.data
+        return DiagMatrix(generator=self.generator,
+                          data=sum_diags)
 
 
 class BlockDiagMatrix(AbstractMatrix):
