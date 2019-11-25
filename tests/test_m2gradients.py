@@ -327,6 +327,34 @@ def test_pspace_diag_vs_dense():
         check_ratio(m_norm_dense, m_norm_diag)
 
 
+def test_pspace_diag():
+    """
+    Check basic operations on diag matrices
+    """
+    train_loader1, net1, loss_function1 = \
+        get_fullyconnect_task(bs=100, subs=500)
+    train_loader2, net2, loss_function2 = \
+        get_fullyconnect_task(bs=100, subs=500)
+
+    m2_generator1 = M2Gradients(model=net1,
+                                dataloader=train_loader1,
+                                loss_function=loss_function1)
+    m2_generator2 = M2Gradients(model=net2,
+                                dataloader=train_loader2,
+                                loss_function=loss_function2)
+    M_diag1 = DiagMatrix(m2_generator1)
+    M_diag2 = DiagMatrix(m2_generator2)
+
+    sum_M = M_diag1 + M_diag2
+    trace_1 = M_diag1.trace()
+    trace_2 = M_diag2.trace()
+    trace_sum = sum_M.trace()
+    check_ratio(trace_1 + trace_2, trace_sum)
+
+    check_tensors(M_diag1.get_matrix() + M_diag2.get_matrix(),
+                  sum_M.get_matrix())
+
+
 def test_ispace_dense_vs_implicit():
     """
     Check implicit ISpace representation vs Dense

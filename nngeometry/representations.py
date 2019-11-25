@@ -60,9 +60,12 @@ class DenseMatrix(AbstractMatrix):
 
 
 class DiagMatrix(AbstractMatrix):
-    def __init__(self, generator):
+    def __init__(self, generator=None, data=None):
         self.generator = generator
-        self.data = generator.get_diag()
+        if data is not None:
+            self.data = data
+        else:
+            self.data = generator.get_diag()
 
     def mv(self, v):
         v_flat = v.get_flat_representation() * self.data
@@ -89,6 +92,12 @@ class DiagMatrix(AbstractMatrix):
             return (s, s)
         else:
             raise IndexError
+
+    def __add__(self, other):
+        sum_diags = self.data + other.data
+        return DiagMatrix(generator=self.generator,
+                          data=sum_diags)
+
 
 class BlockDiagMatrix(AbstractMatrix):
     def __init__(self, generator):
@@ -118,7 +127,8 @@ class BlockDiagMatrix(AbstractMatrix):
             mv = torch.mv(self.data[m], v)
             mv_tuple = (mv[:m.weight.numel()].view(*m.weight.size()),)
             if m.bias is not None:
-                mv_tuple = (mv_tuple[0], mv[m.weight.numel():].view(*m.bias.size()),)
+                mv_tuple = (mv_tuple[0],
+                            mv[m.weight.numel():].view(*m.bias.size()),)
             out_dict[m] = mv_tuple
         return PVector(model=vs.model, dict_repr=out_dict)
 
@@ -142,7 +152,8 @@ class KFACMatrix(AbstractMatrix):
         self.data = generator.get_kfac_blocks()
 
     def trace(self):
-        return sum([torch.trace(a) * torch.trace(g) for a, g in self.data.values()])
+        return sum([torch.trace(a) * torch.trace(g)
+                    for a, g in self.data.values()])
 
     def get_matrix(self, split_weight_bias=False):
         """
@@ -159,8 +170,11 @@ class KFACMatrix(AbstractMatrix):
             start = p_pos[mod]
             sAG = a.size(0) * g.size(0)
             if split_weight_bias:
-                reconstruct = torch.cat([torch.cat([kronecker(g, a[:-1,:-1]), kronecker(g, a[:-1,-1:])], dim=1),
-                                         torch.cat([kronecker(g, a[-1:,:-1]), kronecker(g, a[-1:,-1:])], dim=1)], dim=0)
+                reconstruct = torch.cat([
+                    torch.cat([kronecker(g, a[:-1, :-1]),
+                               kronecker(g, a[:-1, -1:])], dim=1),
+                    torch.cat([kronecker(g, a[-1:, :-1]),
+                               kronecker(g, a[-1:, -1:])], dim=1)], dim=0)
                 M[start:start+sAG, start:start+sAG].add_(reconstruct)
             else:
                 M[start:start+sAG, start:start+sAG].add_(kronecker(g, a))
@@ -190,12 +204,14 @@ class KFACMatrix(AbstractMatrix):
             if len(vector_dict[mod]) > 1:
                 v = torch.cat([v, vector_dict[mod][1].unsqueeze(1)], dim=1)
             a, g = self.data[mod]
-            norm2 += torch.dot(torch.mm(torch.mm(g, v), a).view(-1), v.view(-1))
+            norm2 += torch.dot(torch.mm(torch.mm(g, v), a).view(-1),
+                               v.view(-1))
         return norm2
 
     def frobenius_norm(self):
         return sum([torch.trace(torch.mm(a, a)) * torch.trace(torch.mm(g, g))
                     for a, g in self.data.values()])**.5
+
 
 class ImplicitMatrix(AbstractMatrix):
     def __init__(self, generator):
@@ -246,8 +262,10 @@ class LowRankMatrix(AbstractMatrix):
 
     def compute_eigendecomposition(self, impl='symeig'):
         if impl == 'symeig':
-            self.evals, V = torch.symeig(torch.mm(self.data, self.data.t()), eigenvectors=True)
-            self.evecs = torch.mm(self.data.t(), V) / (self.evals**.5).unsqueeze(0)
+            self.evals, V = torch.symeig(torch.mm(self.data, self.data.t()),
+                                         eigenvectors=True)
+            self.evecs = torch.mm(self.data.t(), V) / \
+                (self.evals**.5).unsqueeze(0)
         else:
             raise NotImplementedError
 
@@ -260,6 +278,7 @@ class LowRankMatrix(AbstractMatrix):
     def frobenius_norm(self):
         A = torch.mm(self.data, self.data.t())
         return torch.trace(torch.mm(A, A))**.5
+
 
 class KrylovLowRankMatrix(AbstractMatrix):
     def __init__(self, generator):
