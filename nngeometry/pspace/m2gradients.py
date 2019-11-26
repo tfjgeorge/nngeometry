@@ -1,7 +1,9 @@
 import torch
 import torch.nn.functional as F
-from ..utils import get_individual_modules, per_example_grad_conv, get_n_parameters
+from ..utils import (get_individual_modules, per_example_grad_conv,
+                     get_n_parameters)
 from ..vector import PVector
+
 
 class M2Gradients:
     def __init__(self, model, dataloader, loss_function):
@@ -9,7 +11,7 @@ class M2Gradients:
         self.dataloader = dataloader
         self.handles = []
         self.xs = dict()
-        # self.p_pos maps parameters to their position in flattened representation
+        # maps parameters to their position in flattened representation
         self.mods, self.p_pos = get_individual_modules(model)
         self.loss_function = loss_function
 
@@ -21,7 +23,8 @@ class M2Gradients:
 
     def get_matrix(self):
         # add hooks
-        self.handles += self._add_hooks(self._hook_savex, self._hook_compute_flat_grad)
+        self.handles += self._add_hooks(self._hook_savex,
+                                        self._hook_compute_flat_grad)
 
         device = next(self.model.parameters()).device
         n_examples = len(self.dataloader.sampler)
@@ -49,7 +52,8 @@ class M2Gradients:
 
     def get_layer_blocks(self):
         # add hooks
-        self.handles += self._add_hooks(self._hook_savex, self._hook_compute_layer_blocks)
+        self.handles += self._add_hooks(self._hook_savex,
+                                        self._hook_compute_layer_blocks)
 
         device = next(self.model.parameters()).device
         n_examples = len(self.dataloader.sampler)
@@ -77,7 +81,8 @@ class M2Gradients:
 
     def get_kfac_blocks(self):
         # add hooks
-        self.handles += self._add_hooks(self._hook_savex, self._hook_compute_kfac_blocks)
+        self.handles += self._add_hooks(self._hook_savex,
+                                        self._hook_compute_kfac_blocks)
 
         device = next(self.model.parameters()).device
         n_examples = len(self.dataloader.sampler)
@@ -99,7 +104,8 @@ class M2Gradients:
             inputs.requires_grad = True
             loss = self.loss_function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
-        blocks = {m: (self._blocks[m][0] / n_examples, self._blocks[m][1] / n_examples)
+        blocks = {m: (self._blocks[m][0] / n_examples,
+                      self._blocks[m][1] / n_examples)
                   for m in self.mods}
 
         # remove hooks
@@ -112,13 +118,12 @@ class M2Gradients:
 
     def get_diag(self):
         # add hooks
-        self.handles += self._add_hooks(self._hook_savex, self._hook_compute_diag)
+        self.handles += self._add_hooks(self._hook_savex,
+                                        self._hook_compute_diag)
 
         device = next(self.model.parameters()).device
         n_examples = len(self.dataloader.sampler)
         n_parameters = sum([p.numel() for p in self.model.parameters()])
-        bs = self.dataloader.batch_size
-        G = torch.zeros((n_parameters, n_parameters), device=device)
         self.diag_m = torch.zeros((n_parameters,), device=device)
         self.start = 0
         for (inputs, targets) in self.dataloader:
@@ -138,13 +143,12 @@ class M2Gradients:
 
     def get_lowrank_matrix(self):
         # add hooks
-        self.handles += self._add_hooks(self._hook_savex, self._hook_compute_flat_grad)
+        self.handles += self._add_hooks(self._hook_savex,
+                                        self._hook_compute_flat_grad)
 
         device = next(self.model.parameters()).device
         n_examples = len(self.dataloader.sampler)
         n_parameters = sum([p.numel() for p in self.model.parameters()])
-        bs = self.dataloader.batch_size
-        G = torch.zeros((n_parameters, n_parameters), device=device)
         self.grads = torch.zeros((n_examples, n_parameters), device=device)
         self.start = 0
         for (inputs, targets) in self.dataloader:
@@ -165,7 +169,8 @@ class M2Gradients:
 
     def implicit_mv(self, v):
         # add hooks
-        self.handles += self._add_hooks(self._hook_savex, self._hook_compute_vTg)
+        self.handles += self._add_hooks(self._hook_savex,
+                                        self._hook_compute_vTg)
 
         i = 0
         self._v = dict()
@@ -177,8 +182,6 @@ class M2Gradients:
 
         device = next(self.model.parameters()).device
         n_examples = len(self.dataloader.sampler)
-        n_parameters = sum([p.numel() for p in self.model.parameters()])
-        bs = self.dataloader.batch_size
         for (inputs, targets) in self.dataloader:
             self._vTg = torch.zeros(inputs.size(0), device=device)
             inputs, targets = inputs.to(device), targets.to(device)
@@ -213,7 +216,8 @@ class M2Gradients:
 
     def implicit_vTMv(self, v):
         # add hooks
-        self.handles += self._add_hooks(self._hook_savex, self._hook_compute_vTg)
+        self.handles += self._add_hooks(self._hook_savex,
+                                        self._hook_compute_vTg)
 
         i = 0
         self._v = dict()
@@ -223,8 +227,6 @@ class M2Gradients:
 
         device = next(self.model.parameters()).device
         n_examples = len(self.dataloader.sampler)
-        n_parameters = sum([p.numel() for p in self.model.parameters()])
-        bs = self.dataloader.batch_size
         norm2 = 0
         self.compute_switch = True
         for (inputs, targets) in self.dataloader:
@@ -248,11 +250,11 @@ class M2Gradients:
 
     def implicit_trace(self):
         # add hooks
-        self.handles += self._add_hooks(self._hook_savex, self._hook_compute_trace)
+        self.handles += self._add_hooks(self._hook_savex,
+                                        self._hook_compute_trace)
 
         device = next(self.model.parameters()).device
         n_examples = len(self.dataloader.sampler)
-        n_parameters = sum([p.numel() for p in self.model.parameters()])
 
         self._trace = 0
         for (inputs, targets) in self.dataloader:
@@ -287,16 +289,24 @@ class M2Gradients:
         bs = x.size(0)
         start_p = self.p_pos[mod]
         if mod_class == 'Linear':
-            self.grads[self.start:self.start+bs, start_p:start_p+mod.weight.numel()].add_(torch.bmm(gy.unsqueeze(2), x.unsqueeze(1)).view(bs, -1))
+            self.grads[self.start:self.start+bs,
+                       start_p:start_p+mod.weight.numel()] \
+                .add_(torch.bmm(gy.unsqueeze(2), x.unsqueeze(1)).view(bs, -1))
             if mod.bias is not None:
-                self.grads[self.start:self.start+bs, start_p+mod.weight.numel():start_p+mod.weight.numel()+mod.bias.numel()] \
+                start_p += mod.weight.numel()
+                self.grads[self.start:self.start+bs,
+                           start_p:start_p+mod.bias.numel()] \
                     .add_(gy)
         elif mod_class == 'Conv2d':
             indiv_gw = per_example_grad_conv(mod, x, gy)
-            self.grads[self.start:self.start+bs, start_p:start_p+mod.weight.numel()].add_(indiv_gw.view(bs, -1))
+            self.grads[self.start:self.start+bs,
+                       start_p:start_p+mod.weight.numel()] \
+                .add_(indiv_gw.view(bs, -1))
             if mod.bias is not None:
-                self.grads[self.start:self.start+bs, start_p+mod.weight.numel():start_p+mod.weight.numel()+mod.bias.numel()] \
-                    .add_(gy.sum(dim=(2,3)))
+                start_p += mod.weight.numel()
+                self.grads[self.start:self.start+bs,
+                           start_p:start_p+mod.bias.numel()] \
+                    .add_(gy.sum(dim=(2, 3)))
         else:
             raise NotImplementedError
 
@@ -313,9 +323,9 @@ class M2Gradients:
             block.add_(torch.mm(gw.t(), gw))
         elif mod_class == 'Conv2d':
             gw = per_example_grad_conv(mod, x, gy)
-            spatial_positions = gy.size(2) * gy.size(3)
             if mod.bias is not None:
-                gw = torch.cat([gw.view(bs, -1), gy.sum(dim=(2, 3)).view(bs, -1)], dim=1)
+                gw = torch.cat([gw.view(bs, -1),
+                                gy.sum(dim=(2, 3)).view(bs, -1)], dim=1)
             block.add_(torch.mm(gw.t(), gw))
         else:
             raise NotImplementedError
@@ -324,7 +334,6 @@ class M2Gradients:
         mod_class = mod.__class__.__name__
         gy = grad_output[0]
         x = self.xs[mod]
-        bs = x.size(0)
         block = self._blocks[mod]
         if mod_class == 'Linear':
             block[1].add_(torch.mm(gy.t(), gy))
@@ -334,11 +343,14 @@ class M2Gradients:
         elif mod_class == 'Conv2d':
             ks = (mod.weight.size(2), mod.weight.size(3))
             # A_tilda in KFC
-            A_tilda = F.unfold(x, kernel_size=ks, stride=mod.stride, padding=mod.padding, dilation=mod.dilation)
+            A_tilda = F.unfold(x, kernel_size=ks, stride=mod.stride,
+                               padding=mod.padding, dilation=mod.dilation)
             # A_tilda is bs * #locations x #parameters
-            A_tilda = A_tilda.permute(0, 2, 1).contiguous().view(-1, A_tilda.size(1))
+            A_tilda = A_tilda.permute(0, 2, 1).contiguous() \
+                .view(-1, A_tilda.size(1))
             if mod.bias is not None:
-                A_tilda = torch.cat([A_tilda, torch.ones_like(A_tilda[:, :1])], dim=1)
+                A_tilda = torch.cat([A_tilda,
+                                     torch.ones_like(A_tilda[:, :1])], dim=1)
             # Omega_hat in KFC
             block[0].add_(torch.mm(A_tilda.t(), A_tilda))
             spatial_locations = gy.size(2) * gy.size(3)
@@ -353,18 +365,21 @@ class M2Gradients:
         mod_class = mod.__class__.__name__
         gy = grad_output[0]
         x = self.xs[mod]
-        bs = x.size(0)
         start_p = self.p_pos[mod]
         if mod_class == 'Linear':
-            self.diag_m[start_p:start_p+mod.weight.numel()].add_(torch.mm(gy.t()**2, x**2).view(-1))
+            self.diag_m[start_p:start_p+mod.weight.numel()] \
+                .add_(torch.mm(gy.t()**2, x**2).view(-1))
             if mod.bias is not None:
-                self.diag_m[start_p+mod.weight.numel():start_p+mod.weight.numel()+mod.bias.numel()] \
+                start_p += mod.weight.numel()
+                self.diag_m[start_p: start_p+mod.bias.numel()] \
                     .add_((gy**2).sum(dim=0))
         elif mod_class == 'Conv2d':
             indiv_gw = per_example_grad_conv(mod, x, gy)
-            self.diag_m[start_p:start_p+mod.weight.numel()].add_((indiv_gw**2).sum(dim=0).view(-1))
+            self.diag_m[start_p:start_p+mod.weight.numel()] \
+                .add_((indiv_gw**2).sum(dim=0).view(-1))
             if mod.bias is not None:
-                self.diag_m[start_p+mod.weight.numel():start_p+mod.weight.numel()+mod.bias.numel()] \
+                start_p += mod.weight.numel()
+                self.diag_m[start_p:start_p+mod.bias.numel()] \
                     .add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
         else:
             raise NotImplementedError
@@ -376,14 +391,17 @@ class M2Gradients:
             x = self.xs[mod]
             bs = x.size(0)
             if mod_class == 'Linear':
-                self._vTg += (torch.mm(x, self._v[mod.weight].t()) * gy).sum(dim=1)
+                self._vTg += (torch.mm(x, self._v[mod.weight].t())
+                              * gy).sum(dim=1)
                 if mod.bias is not None:
                     self._vTg += torch.mv(gy, self._v[mod.bias])
             elif mod_class == 'Conv2d':
-                gy2 = F.conv2d(x, self._v[mod.weight], stride=mod.stride, padding=mod.padding, dilation=mod.dilation)
+                gy2 = F.conv2d(x, self._v[mod.weight], stride=mod.stride,
+                               padding=mod.padding, dilation=mod.dilation)
                 self._vTg += (gy * gy2).view(bs, -1).sum(dim=1)
                 if mod.bias is not None:
-                    self._vTg += torch.mv(gy.sum(dim=(2, 3)), self._v[mod.bias])
+                    self._vTg += torch.mv(gy.sum(dim=(2, 3)),
+                                          self._v[mod.bias])
             else:
                 raise NotImplementedError
 
@@ -391,7 +409,6 @@ class M2Gradients:
         mod_class = mod.__class__.__name__
         gy = grad_output[0]
         x = self.xs[mod]
-        bs = x.size(0)
         if mod_class == 'Linear':
             self._trace += torch.mm(gy.t()**2, x**2).sum()
             if mod.bias is not None:
@@ -400,6 +417,6 @@ class M2Gradients:
             indiv_gw = per_example_grad_conv(mod, x, gy)
             self._trace += (indiv_gw**2).sum()
             if mod.bias is not None:
-                self._trace += (gy.sum(dim=(2,3))**2).sum()
+                self._trace += (gy.sum(dim=(2, 3))**2).sum()
         else:
             raise NotImplementedError
