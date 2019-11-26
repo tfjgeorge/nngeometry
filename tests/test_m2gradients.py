@@ -16,12 +16,14 @@ from utils import check_ratio, check_tensors
 
 class Net(nn.Module):
     def __init__(self, in_size=10, out_size=10, n_hidden=2, hidden_size=25,
-                 nonlinearity=nn.ReLU):
+                 nonlinearity=nn.ReLU, batch_norm=False):
         super(Net, self).__init__()
         layers = []
         sizes = [in_size] + [hidden_size] * n_hidden + [out_size]
         for s_in, s_out in zip(sizes[:-1], sizes[1:]):
             layers.append(nn.Linear(s_in, s_out))
+            if batch_norm:
+                layers.append(nn.BatchNorm1d(s_out))
             layers.append(nonlinearity())
         # remove last nonlinearity:
         layers.pop()
@@ -72,7 +74,7 @@ def get_l_vector(dataloader, loss_function):
         return losses
 
 
-def get_fullyconnect_task(bs=1000, subs=None):
+def get_fullyconnect_task(bs=1000, subs=None, batch_norm=False):
     train_set = get_dataset('train')
     if subs is not None:
         train_set = Subset(train_set, range(subs))
@@ -80,13 +82,17 @@ def get_fullyconnect_task(bs=1000, subs=None):
         dataset=train_set,
         batch_size=bs,
         shuffle=False)
-    net = Net(in_size=10)
+    net = Net(in_size=10, batch_norm=batch_norm)
     net.to('cuda')
 
     def loss_function(input, target):
         return tF.nll_loss(net(input), target, reduction='none')
 
     return train_loader, net, loss_function
+
+
+def get_fullyconnect_batchnorm_task(*args, **kwargs):
+    return get_fullyconnect_task(*args, batch_norm=True, **kwargs)
 
 
 def get_convnet_task(bs=1000, subs=None):
@@ -111,6 +117,10 @@ def get_convnet_task(bs=1000, subs=None):
 
 
 def test_pspace_m2gradients_vs_loss():
+    """
+    Test || l(w+dw) - l(w) ||_2 against it linerarization given
+    by the geometry matrix m2 of the gradients of the loss
+    """
     for get_task in [get_convnet_task, get_fullyconnect_task]:
         train_loader, net, loss_function = get_task()
 
@@ -131,6 +141,40 @@ def test_pspace_m2gradients_vs_loss():
         update_model(net, - dw)
         check_ratio(torch.norm(l_upd - l_0)**2 / len(train_loader.sampler),
                     torch.dot(M.mv(dw_vec).get_flat_representation(), dw))
+
+
+def test_pspace_m2gradients_bn_vs_loss():
+    """
+    Test || l(w+dw) - l(w) ||_2 against it linerarization given
+    by the geometry matrix m2 of the gradients of the loss
+    NB: This is a test for batch norm, notice the following things:
+     - the net is put in eval mode
+     - the dataset contains a single 1000 examples minibatch
+     - in check_ratio in the end we have a much larger value for eps
+    than usually
+    """
+    for get_task in [get_fullyconnect_batchnorm_task]:
+        train_loader, net, loss_function = get_task(bs=1000, subs=1000)
+        net.eval()
+
+        m2_generator = M2Gradients(model=net,
+                                   dataloader=train_loader,
+                                   loss_function=loss_function)
+        M = DenseMatrix(m2_generator)
+
+        # compare with || l(w+dw) - l(w) ||_F for randomly sampled dw
+        l_0 = get_l_vector(train_loader, loss_function)
+        eps = 1e-4
+
+        dw = torch.rand((M.size(0),), device='cuda')
+        dw *= eps / torch.norm(dw)
+        dw_vec = PVector(net, vector_repr=dw)
+        update_model(net, dw)
+        l_upd = get_l_vector(train_loader, loss_function)
+        update_model(net, - dw)
+        check_ratio(torch.norm(l_upd - l_0)**2 / len(train_loader.sampler),
+                    torch.dot(M.mv(dw_vec).get_flat_representation(), dw),
+                    eps=1e-2)
 
 
 def test_pspace_m2gradients_dense():
@@ -353,6 +397,48 @@ def test_pspace_diag():
 
     check_tensors(M_diag1.get_matrix() + M_diag2.get_matrix(),
                   sum_M.get_matrix())
+
+    sub_M = M_diag1 - M_diag2
+    trace_sub = sub_M.trace()
+    check_ratio(trace_1 - trace_2, trace_sub)
+
+    check_tensors(M_diag1.get_matrix() - M_diag2.get_matrix(),
+                  sub_M.get_matrix())
+
+
+def test_pspace_dense():
+    """
+    Check basic operations on dense matrices
+    """
+    train_loader1, net1, loss_function1 = \
+        get_fullyconnect_task(bs=100, subs=500)
+    train_loader2, net2, loss_function2 = \
+        get_fullyconnect_task(bs=100, subs=500)
+
+    m2_generator1 = M2Gradients(model=net1,
+                                dataloader=train_loader1,
+                                loss_function=loss_function1)
+    m2_generator2 = M2Gradients(model=net2,
+                                dataloader=train_loader2,
+                                loss_function=loss_function2)
+    M_dense1 = DenseMatrix(m2_generator1)
+    M_dense2 = DenseMatrix(m2_generator2)
+
+    sum_M = M_dense1 + M_dense2
+    trace_1 = M_dense1.trace()
+    trace_2 = M_dense2.trace()
+    trace_sum = sum_M.trace()
+    check_ratio(trace_1 + trace_2, trace_sum)
+
+    check_tensors(M_dense1.get_matrix() + M_dense2.get_matrix(),
+                  sum_M.get_matrix())
+
+    sub_M = M_dense1 - M_dense2
+    trace_sub = sub_M.trace()
+    check_ratio(trace_1 - trace_2, trace_sub)
+
+    check_tensors(M_dense1.get_matrix() - M_dense2.get_matrix(),
+                  sub_M.get_matrix())
 
 
 def test_ispace_dense_vs_implicit():

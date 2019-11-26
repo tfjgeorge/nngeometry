@@ -13,9 +13,12 @@ class AbstractMatrix(ABC):
 
 
 class DenseMatrix(AbstractMatrix):
-    def __init__(self, generator, compute_eigendecomposition=False):
+    def __init__(self, generator, data=None, compute_eigendecomposition=False):
         self.generator = generator
-        self.data = generator.get_matrix()
+        if data is not None:
+            self.data = data
+        else:
+            self.data = generator.get_matrix()
         if compute_eigendecomposition:
             self.compute_eigendecomposition()
 
@@ -53,10 +56,20 @@ class DenseMatrix(AbstractMatrix):
         return self.data.size(*args)
 
     def trace(self):
-        return self.data.trace()
+        return torch.trace(self.data)
 
     def get_matrix(self):
         return self.data
+
+    def __add__(self, other):
+        sum_data = self.data + other.data
+        return DenseMatrix(generator=self.generator,
+                           data=sum_data)
+
+    def __sub__(self, other):
+        sub_data = self.data - other.data
+        return DenseMatrix(generator=self.generator,
+                           data=sub_data)
 
 
 class DiagMatrix(AbstractMatrix):
@@ -97,6 +110,11 @@ class DiagMatrix(AbstractMatrix):
         sum_diags = self.data + other.data
         return DiagMatrix(generator=self.generator,
                           data=sum_diags)
+
+    def __sub__(self, other):
+        sub_diags = self.data - other.data
+        return DiagMatrix(generator=self.generator,
+                          data=sub_diags)
 
 
 class BlockDiagMatrix(AbstractMatrix):
@@ -155,7 +173,7 @@ class KFACMatrix(AbstractMatrix):
         return sum([torch.trace(a) * torch.trace(g)
                     for a, g in self.data.values()])
 
-    def get_matrix(self, split_weight_bias=False):
+    def get_matrix(self, split_weight_bias=True):
         """
         - split_weight_bias (bool): if True then the parameters are ordered in
         the same way as in the dense or blockdiag representation, but it
@@ -192,7 +210,7 @@ class KFACMatrix(AbstractMatrix):
             if m.bias is None:
                 mv_tuple = (mv,)
             else:
-                mv_tuple = (mv[:, :-1].contiguous(), mv[:, -1:].contiguous())
+                mv_tuple = (mv[:, :-1].contiguous(), mv[:, -1].contiguous())
             out_dict[m] = mv_tuple
         return PVector(model=vs.model, dict_repr=out_dict)
 
@@ -211,6 +229,23 @@ class KFACMatrix(AbstractMatrix):
     def frobenius_norm(self):
         return sum([torch.trace(torch.mm(a, a)) * torch.trace(torch.mm(g, g))
                     for a, g in self.data.values()])**.5
+
+    def compute_eigendecomposition(self, impl='symeig'):
+        self.evals = dict()
+        self.evecs = dict()
+        mods, p_pos = get_individual_modules(self.generator.model)
+        if impl == 'symeig':
+            for mod in mods:
+                a, g = self.data[mod]
+                evals_a, evecs_a = torch.symeig(a, eigenvectors=True)
+                evals_g, evecs_g = torch.symeig(g, eigenvectors=True)
+                self.evals[mod] = (evals_a, evals_g)
+                self.evecs[mod] = (evecs_a, evecs_g)
+        else:
+            raise NotImplementedError
+
+    def get_eigendecomposition(self):
+        return self.evals, self.evecs
 
 
 class ImplicitMatrix(AbstractMatrix):
