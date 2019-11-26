@@ -307,6 +307,20 @@ class M2Gradients:
                 self.grads[self.start:self.start+bs,
                            start_p:start_p+mod.bias.numel()] \
                     .add_(gy.sum(dim=(2, 3)))
+        elif mod_class == 'BatchNorm1d':
+            # BN should be in eval mode
+            assert not mod.training
+            x_normalized = F.batch_norm(x, mod.running_mean,
+                                        mod.running_var,
+                                        None, None, False)
+            self.grads[self.start:self.start+bs,
+                       start_p:start_p+mod.weight.numel()] \
+                .add_(gy * x_normalized)
+            if mod.bias is not None:
+                start_p += mod.weight.numel()
+                self.grads[self.start:self.start+bs,
+                           start_p:start_p+mod.bias.numel()] \
+                    .add_(gy)
         else:
             raise NotImplementedError
 
