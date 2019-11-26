@@ -13,9 +13,12 @@ class AbstractMatrix(ABC):
 
 
 class DenseMatrix(AbstractMatrix):
-    def __init__(self, generator, compute_eigendecomposition=False):
+    def __init__(self, generator, data=None, compute_eigendecomposition=False):
         self.generator = generator
-        self.data = generator.get_matrix()
+        if data is not None:
+            self.data = data
+        else:
+            self.data = generator.get_matrix()
         if compute_eigendecomposition:
             self.compute_eigendecomposition()
 
@@ -53,10 +56,20 @@ class DenseMatrix(AbstractMatrix):
         return self.data.size(*args)
 
     def trace(self):
-        return self.data.trace()
+        return torch.trace(self.data)
 
     def get_matrix(self):
         return self.data
+
+    def __add__(self, other):
+        sum_data = self.data + other.data
+        return DenseMatrix(generator=self.generator,
+                           data=sum_data)
+
+    def __sub__(self, other):
+        sub_data = self.data - other.data
+        return DenseMatrix(generator=self.generator,
+                           data=sub_data)
 
 
 class DiagMatrix(AbstractMatrix):
