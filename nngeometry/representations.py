@@ -98,6 +98,11 @@ class DiagMatrix(AbstractMatrix):
         return DiagMatrix(generator=self.generator,
                           data=sum_diags)
 
+    def __sub__(self, other):
+        sub_diags = self.data - other.data
+        return DiagMatrix(generator=self.generator,
+                          data=sub_diags)
+
 
 class BlockDiagMatrix(AbstractMatrix):
     def __init__(self, generator):
@@ -155,7 +160,7 @@ class KFACMatrix(AbstractMatrix):
         return sum([torch.trace(a) * torch.trace(g)
                     for a, g in self.data.values()])
 
-    def get_matrix(self, split_weight_bias=False):
+    def get_matrix(self, split_weight_bias=True):
         """
         - split_weight_bias (bool): if True then the parameters are ordered in
         the same way as in the dense or blockdiag representation, but it

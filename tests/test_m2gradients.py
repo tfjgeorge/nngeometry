@@ -354,6 +354,13 @@ def test_pspace_diag():
     check_tensors(M_diag1.get_matrix() + M_diag2.get_matrix(),
                   sum_M.get_matrix())
 
+    sub_M = M_diag1 - M_diag2
+    trace_sub = sub_M.trace()
+    check_ratio(trace_1 - trace_2, trace_sub)
+
+    check_tensors(M_diag1.get_matrix() - M_diag2.get_matrix(),
+                  sub_M.get_matrix())
+
 
 def test_ispace_dense_vs_implicit():
     """
