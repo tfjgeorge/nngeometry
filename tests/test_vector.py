@@ -1,9 +1,9 @@
 import torch
-from nngeometry.vector import (PVector, from_model, random_pvector,
+from nngeometry.vector import (PVector, random_pvector,
                                random_pvector_dict)
-from nngeometry.utils import get_individual_modules
 import torch.nn as nn
 import torch.nn.functional as tF
+from nngeometry.utils import get_individual_modules
 
 
 class ConvNet(nn.Module):
@@ -29,7 +29,7 @@ class ConvNet(nn.Module):
 def test_from_dict_to_pvector():
     eps = 1e-8
     model = ConvNet()
-    v = from_model(model)
+    v = PVector.from_model(model)
     d1 = v.get_dict_representation()
     v2 = PVector(model, vector_repr=v.get_flat_representation())
     d2 = v2.get_dict_representation()
@@ -86,3 +86,52 @@ def test_sub():
     assert torch.norm(sumr1r2.get_flat_representation() -
                       (r1.get_flat_representation() -
                        r2.get_flat_representation())) < 1e-5
+
+
+def test_clone():
+    eps = 1e-8
+    model = ConvNet()
+    pvec = PVector.from_model(model)
+    pvec_clone = pvec.clone()
+    mods, p_pos = get_individual_modules(model)
+    for m in mods:
+        assert m.weight is pvec.get_dict_representation()[m][0]
+        assert m.weight is not pvec_clone.get_dict_representation()[m][0]
+        assert torch.norm(m.weight -
+                          pvec_clone.get_dict_representation()[m][0]) < eps
+        if m.bias is not None:
+            assert m.bias is pvec.get_dict_representation()[m][1]
+            assert m.bias is not pvec_clone.get_dict_representation()[m][1]
+            assert torch.norm(m.bias -
+                              pvec_clone.get_dict_representation()[m][1]) < eps
+
+
+def test_detach():
+    eps = 1e-8
+    model = ConvNet()
+    pvec = PVector.from_model(model)
+    pvec_clone = pvec.clone()
+    mods, p_pos = get_individual_modules(model)
+
+    # first check grad on pvec_clone
+    loss = torch.norm(pvec_clone.get_flat_representation())
+    loss.backward()
+    pvec_clone_dict = pvec_clone.get_dict_representation()
+    pvec_dict = pvec.get_dict_representation()
+    for m in mods:
+        assert torch.norm(pvec_dict[m][0].grad) > eps
+        assert pvec_clone_dict[m][0].grad is None
+        pvec_dict[m][0].grad.zero_()
+        if m.bias is not None:
+            assert torch.norm(pvec_dict[m][1].grad) > eps
+            assert pvec_clone_dict[m][1].grad is None
+            pvec_dict[m][1].grad.zero_()
+
+    # second check that detached grad stays at 0 when detaching
+    y = torch.tensor(1., requires_grad=True)
+    loss = torch.norm(pvec.detach().get_flat_representation()) + y
+    loss.backward()
+    for m in mods:
+        assert torch.norm(pvec_dict[m][0].grad) < eps
+        if m.bias is not None:
+            assert torch.norm(pvec_dict[m][1].grad) < eps
