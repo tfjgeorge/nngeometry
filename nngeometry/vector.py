@@ -2,16 +2,6 @@ import torch
 from .utils import get_individual_modules, get_n_parameters
 
 
-def from_model(model):
-    dict_repr = dict()
-    for mod in get_individual_modules(model)[0]:
-        if mod.bias is not None:
-            dict_repr[mod] = (mod.weight, mod.bias)
-        else:
-            dict_repr[mod] = (mod.weight)
-    return PVector(model, dict_repr=dict_repr)
-
-
 def random_pvector_dict(model):
     v_dict = dict()
     for m in get_individual_modules(model)[0]:
@@ -40,6 +30,39 @@ class PVector:
         self.vector_repr = vector_repr
         self.dict_repr = dict_repr
         self.mods, self.p_pos = get_individual_modules(model)
+
+    def from_model(model):
+        dict_repr = dict()
+        for mod in get_individual_modules(model)[0]:
+            if mod.bias is not None:
+                dict_repr[mod] = (mod.weight, mod.bias)
+            else:
+                dict_repr[mod] = (mod.weight)
+        return PVector(model, dict_repr=dict_repr)
+
+    def clone(self):
+        if self.dict_repr is not None:
+            dict_clone = dict()
+            for k, v in self.dict_repr.items():
+                if len(v) == 2:
+                    dict_clone[k] = (v[0].clone(), v[1].clone())
+                else:
+                    dict_clone[k] = (v[0].clone(),)
+            return PVector(self.model, dict_repr=dict_clone)
+        if self.vector_repr is not None:
+            return PVector(self.model,  vector_repr=self.vector_repr.clone())
+
+    def detach(self):
+        if self.dict_repr is not None:
+            dict_detach = dict()
+            for k, v in self.dict_repr.items():
+                if len(v) == 2:
+                    dict_detach[k] = (v[0].detach(), v[1].detach())
+                else:
+                    dict_detach[k] = (v[0].detach(),)
+            return PVector(self.model, dict_repr=dict_detach)
+        if self.vector_repr is not None:
+            return PVector(self.model,  vector_repr=self.vector_repr.detach())
 
     def get_flat_representation(self):
         if self.vector_repr is not None:
