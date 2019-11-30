@@ -294,6 +294,20 @@ class EKFACMatrix:
     def update_diag(self):
         self.diags = self.generator.get_kfe_diag(self.evecs)
 
+    def vTMv(self, vector):
+        vector_dict = vector.get_dict_representation()
+        norm2 = 0
+        for mod in vector_dict.keys():
+            evecs_a, evecs_g = self.evecs[mod]
+            diag = self.diags[mod]
+            v = vector_dict[mod][0].view(vector_dict[mod][0].size(0), -1)
+            if len(vector_dict[mod]) > 1:
+                v = torch.cat([v, vector_dict[mod][1].unsqueeze(1)], dim=1)
+
+            v_kfe = torch.mm(torch.mm(evecs_g.t(), v), evecs_a)
+            norm2 += torch.dot(v_kfe.view(-1)**2, diag.view(-1))
+        return norm2
+
 
 class ImplicitMatrix(AbstractMatrix):
     def __init__(self, generator):
