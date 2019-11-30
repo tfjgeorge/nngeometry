@@ -248,6 +248,53 @@ class KFACMatrix(AbstractMatrix):
         return self.evals, self.evecs
 
 
+class EKFACMatrix:
+    def __init__(self, generator):
+        self.generator = generator
+        self.diags = dict()
+        self.evecs = dict()
+
+        mods, p_pos = get_individual_modules(generator.model)
+        self.data = generator.get_kfac_blocks()
+        for mod in mods:
+            a, g = self.data[mod]
+            evals_a, evecs_a = torch.symeig(a, eigenvectors=True)
+            evals_g, evecs_g = torch.symeig(g, eigenvectors=True)
+            self.evecs[mod] = (evecs_a, evecs_g)
+            self.diags[mod] = kronecker(evals_g.view(-1, 1),
+                                        evals_a.view(-1, 1))
+
+    def get_matrix(self, split_weight_bias=True):
+        """
+        - split_weight_bias (bool): if True then the parameters are ordered in
+        the same way as in the dense or blockdiag representation, but it
+        involves more operations. Otherwise the coefficients corresponding
+        to the bias are mixed between coefficients of the weight matrix
+        """
+        s = self.generator.get_n_parameters()
+        M = torch.zeros((s, s), device=self.generator.get_device())
+        mods, p_pos = get_individual_modules(self.generator.model)
+        for mod in mods:
+            evecs_a, evecs_g = self.evecs[mod]
+            diag = self.diags[mod]
+            start = p_pos[mod]
+            sAG = diag.numel()
+            if split_weight_bias:
+                kronecker(evecs_g, evecs_a[:-1, :])
+                kronecker(evecs_g, evecs_a[-1:, :].contiguous())
+                KFE = torch.cat([kronecker(evecs_g, evecs_a[:-1, :]),
+                                 kronecker(evecs_g, evecs_a[-1:, :])], dim=0)
+            else:
+                KFE = kronecker(evecs_g, evecs_a)
+            M[start:start+sAG, start:start+sAG].add_(
+                    torch.mm(KFE, torch.mm(torch.diag(diag.view(-1)),
+                                           KFE.t())))
+        return M
+
+    def update_diag(self):
+        self.diags = self.generator.get_kfe_diag(self.evecs)
+
+
 class ImplicitMatrix(AbstractMatrix):
     def __init__(self, generator):
         self.generator = generator

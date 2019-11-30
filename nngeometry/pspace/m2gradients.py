@@ -116,6 +116,42 @@ class M2Gradients:
 
         return blocks
 
+    def get_kfe_diag(self, kfe):
+        # add hooks
+        self.handles += self._add_hooks(self._hook_savex,
+                                        self._hook_compute_kfe_diag)
+
+        device = next(self.model.parameters()).device
+        n_examples = len(self.dataloader.sampler)
+        self._diags = dict()
+        self._kfe = kfe
+        for m in self.mods:
+            sG = m.weight.size(0)
+            mod_class = m.__class__.__name__
+            if mod_class == 'Linear':
+                sA = m.weight.size(1)
+            elif mod_class == 'Conv2d':
+                sA = m.weight.size(1) * m.weight.size(2) * m.weight.size(3)
+            if m.bias is not None:
+                sA += 1
+            self._diags[m] = torch.zeros((sG * sA), device=device)
+
+        for (inputs, targets) in self.dataloader:
+            inputs, targets = inputs.to(device), targets.to(device)
+            inputs.requires_grad = True
+            loss = self.loss_function(inputs, targets).sum()
+            torch.autograd.grad(loss, [inputs])
+        diags = {m: self._diags[m] / n_examples for m in self.mods}
+
+        # remove hooks
+        del self._diags
+        del self._kfe
+        self.xs = dict()
+        for h in self.handles:
+            h.remove()
+
+        return diags
+
     def get_diag(self):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex,
@@ -341,6 +377,43 @@ class M2Gradients:
                 gw = torch.cat([gw.view(bs, -1),
                                 gy.sum(dim=(2, 3)).view(bs, -1)], dim=1)
             block.add_(torch.mm(gw.t(), gw))
+        else:
+            raise NotImplementedError
+
+    def _hook_compute_kfe_diag(self, mod, grad_input, grad_output):
+        mod_class = mod.__class__.__name__
+        gy = grad_output[0]
+        x = self.xs[mod]
+        evecs_a, evecs_g = self._kfe[mod]
+        if mod_class == 'Linear':
+            if mod.bias is not None:
+                x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
+            gy_kfe = torch.mm(gy, evecs_g)
+            x_kfe = torch.mm(x, evecs_a)
+            self._diags[mod].add_(torch.mm(gy_kfe.t()**2, x_kfe**2).view(-1))
+        elif mod_class == 'Conv2d':
+            ks = (mod.weight.size(2), mod.weight.size(3))
+            gy_s = gy.size()
+            bs = gy_s[0]
+            # project x to kfe
+            x_unfold = F.unfold(x, kernel_size=ks, stride=mod.stride,
+                                padding=mod.padding, dilation=mod.dilation)
+            x_unfold_s = x_unfold.size()
+            x_unfold = x_unfold.view(bs, x_unfold_s[1], -1).permute(0, 2, 1)\
+                .contiguous().view(-1, x_unfold_s[1])
+            if mod.bias is not None:
+                x_unfold = torch.cat([x_unfold,
+                                      torch.ones_like(x_unfold[:, :1])], dim=1)
+            x_kfe = torch.mm(x_unfold, evecs_a)
+
+            # project gy to kfe
+            gy = gy.view(bs, gy_s[1], -1).permute(0, 2, 1).contiguous()
+            gy_kfe = torch.mm(gy.view(-1, gy_s[1]), evecs_g)
+            gy_kfe = gy_kfe.view(bs, -1, gy_s[1]).permute(0, 2, 1).contiguous()
+
+            indiv_gw = torch.bmm(gy_kfe.view(bs, gy_s[1], -1),
+                                 x_kfe.view(bs, -1, x_kfe.size(1)))
+            self._diags[mod].add_((indiv_gw**2).sum(dim=0).view(-1))
         else:
             raise NotImplementedError
 
