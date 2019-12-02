@@ -308,6 +308,12 @@ class EKFACMatrix:
             norm2 += torch.dot(v_kfe.view(-1)**2, diag.view(-1))
         return norm2
 
+    def trace(self):
+        return sum([d.sum() for d in self.diags.values()])
+
+    def frobenius_norm(self):
+        return sum([(d**2).sum() for d in self.diags.values()])**.5
+
 
 class ImplicitMatrix(AbstractMatrix):
     def __init__(self, generator):

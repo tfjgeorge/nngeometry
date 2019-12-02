@@ -37,8 +37,8 @@ def test_pspace_ekfac_vs_kfac():
 
 def test_pspace_ekfac_vs_direct():
     """
-    Check that EKFAC matrix is closer to block diag one in the
-    sense of the Frobenius norm
+    Check EKFAC basis operations against direct computation using
+    get_matrix
     """
     for get_task in [get_fullyconnect_task, get_convnet_task]:
         train_loader, net, loss_function = get_task()
@@ -56,5 +56,14 @@ def test_pspace_ekfac_vs_direct():
                                              v.get_flat_representation()),
                                     v.get_flat_representation())
             vTMv_ekfac = M_ekfac.vTMv(v)
-            M_ekfac.update_diag()
             check_ratio(vTMv_direct, vTMv_ekfac)
+
+            trace_ekfac = M_ekfac.trace()
+            trace_direct = torch.trace(M_ekfac.get_matrix())
+            check_ratio(trace_direct, trace_ekfac)
+
+            frob_ekfac = M_ekfac.frobenius_norm()
+            frob_direct = torch.norm(M_ekfac.get_matrix())
+            check_ratio(frob_direct, frob_ekfac)
+
+            M_ekfac.update_diag()
