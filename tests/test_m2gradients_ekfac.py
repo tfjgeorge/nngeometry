@@ -3,7 +3,7 @@ from nngeometry.representations import BlockDiagMatrix, KFACMatrix, EKFACMatrix
 import torch
 from test_m2gradients import get_fullyconnect_task, get_convnet_task
 from nngeometry.vector import random_pvector
-from utils import check_ratio
+from utils import check_ratio, check_tensors
 
 
 def test_pspace_ekfac_vs_kfac():
@@ -65,5 +65,10 @@ def test_pspace_ekfac_vs_direct():
             frob_ekfac = M_ekfac.frobenius_norm()
             frob_direct = torch.norm(M_ekfac.get_matrix())
             check_ratio(frob_direct, frob_ekfac)
+
+            mv_direct = torch.mv(M_ekfac.get_matrix(),
+                                 v.get_flat_representation())
+            mv_ekfac = M_ekfac.mv(v)
+            check_tensors(mv_direct, mv_ekfac.get_flat_representation())
 
             M_ekfac.update_diag()

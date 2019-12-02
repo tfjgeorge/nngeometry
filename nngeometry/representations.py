@@ -294,6 +294,25 @@ class EKFACMatrix:
     def update_diag(self):
         self.diags = self.generator.get_kfe_diag(self.evecs)
 
+    def mv(self, vs):
+        vs_dict = vs.get_dict_representation()
+        out_dict = dict()
+        for m in vs_dict.keys():
+            diag = self.diags[m]
+            v = vs_dict[m][0].view(vs_dict[m][0].size(0), -1)
+            if m.bias is not None:
+                v = torch.cat([v, vs_dict[m][1].unsqueeze(1)], dim=1)
+            evecs_a, evecs_g = self.evecs[m]
+            v_kfe = torch.mm(torch.mm(evecs_g.t(), v), evecs_a)
+            mv_kfe = v_kfe * diag.view(*v_kfe.size())
+            mv = torch.mm(torch.mm(evecs_g, mv_kfe), evecs_a.t())
+            if m.bias is None:
+                mv_tuple = (mv,)
+            else:
+                mv_tuple = (mv[:, :-1].contiguous(), mv[:, -1].contiguous())
+            out_dict[m] = mv_tuple
+        return PVector(model=vs.model, dict_repr=out_dict)
+
     def vTMv(self, vector):
         vector_dict = vector.get_dict_representation()
         norm2 = 0
