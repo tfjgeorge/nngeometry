@@ -11,7 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as tF
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
-from utils import check_ratio, check_tensors
+from utils import check_ratio, check_tensors, angle
 
 
 class Net(nn.Module):
@@ -323,16 +323,18 @@ def test_pspace_lowrank():
         # check_tensors(M.project_to_diag(M.get_matrix()).get_flat_representation(),
         #               torch.diag(M.evals))
 
-        # check evecs:
-        for i in range(evecs.size(1)):
+        # check first 200 evecs
+        # NB given the fact that the spectrum of this matrix is ill conditioned
+        # we can not expect the remaining evals/evecs to be very accurate. In
+        # fact this technique suffers from ill-conditioning:
+        for j in range(200):
+            i = evecs.size(1) - j - 1
             v = evecs[:, i]
             norm_v = torch.norm(v)
             v = PVector(net, vector_repr=v)
-            if not (norm_v > 0.999 and norm_v < 1.001):
-                # TODO improve this
-                print(i, norm_v)
-            check_tensors(M.mv(v).get_flat_representation(),
-                          v.get_flat_representation() * evals[i])
+            angle_v_mv = angle(M.mv(v), v)
+            assert (norm_v > 0.999 and norm_v < 1.001)
+            assert (angle_v_mv > 0.999 and angle_v_mv < 1.001)
 
 
 def test_pspace_diag_vs_dense():

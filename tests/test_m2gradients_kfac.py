@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
-from utils import check_ratio, check_tensors
+from utils import check_ratio, check_tensors, angle
 from test_m2gradients import get_fullyconnect_task
 
 
@@ -142,13 +142,6 @@ def test_pspace_blockdiag_vs_kfac():
 
         check_tensors(M_blockdiag.mv(random_v).get_flat_representation(),
                       M_kfac.mv(random_v).get_flat_representation())
-
-
-def angle(v1, v2):
-    v1_flat = v1.get_flat_representation()
-    v2_flat = v2.get_flat_representation()
-    return torch.dot(v1_flat, v2_flat) / \
-        (torch.norm(v1_flat) * torch.norm(v2_flat))
 
 
 def test_pspace_kfac_eigendecomposition():
