@@ -11,6 +11,9 @@ Welcome to NNGeometry's documentation!
    :caption: Contents:
 
 
+NNGeometry is a library built on top of PyTorch aiming at giving tools
+to easily manipulate and study properties of matrices describing the geometry
+of the function spaces where these networks live.
 
 Indices and tables
 ==================

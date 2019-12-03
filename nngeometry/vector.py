@@ -40,6 +40,7 @@ class PVector:
         self.dict_repr = dict_repr
         self.mods, self.p_pos = get_individual_modules(model)
 
+    @staticmethod
     def from_model(model):
         """
         Create a new PVector by using the parameters of the
