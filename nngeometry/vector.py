@@ -40,6 +40,16 @@ class PVector:
                 dict_repr[mod] = (mod.weight)
         return PVector(model, dict_repr=dict_repr)
 
+    @staticmethod
+    def from_model_grad(model):
+        dict_repr = dict()
+        for mod in get_individual_modules(model)[0]:
+            if mod.bias is not None:
+                dict_repr[mod] = (mod.weight.grad, mod.bias.grad)
+            else:
+                dict_repr[mod] = (mod.weight.grad)
+        return PVector(model, dict_repr=dict_repr)
+
     def clone(self):
         if self.dict_repr is not None:
             dict_clone = dict()
