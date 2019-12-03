@@ -1,8 +1,8 @@
 import torch
-from ..utils import get_individual_modules, per_example_grad_conv
+from ..utils import get_individual_modules, per_example_grad_conv, get_n_parameters
 
-class L2Loss:
-    def __init__(self, model, dataloader, loss_closure):
+class M2Gradients:
+    def __init__(self, model, dataloader, loss_function):
         self.model = model
         self.dataloader = dataloader
         self.handles = []
@@ -12,7 +12,7 @@ class L2Loss:
         self.gy_outer = dict()
         # self.p_pos maps parameters to their position in flattened representation
         self.mods, self.p_pos = get_individual_modules(model)
-        self.loss_closure = loss_closure
+        self.loss_function = loss_function
 
     def release_buffers(self):
         self.x_outer = dict()
@@ -35,7 +35,7 @@ class L2Loss:
             inputs, targets = inputs.to(device), targets.to(device)
             bs_outer = targets.size(0)
             inputs.requires_grad = True
-            loss = self.loss_closure(inputs, targets)
+            loss = self.loss_function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
             self.outerloop_switch = False 
 
@@ -45,7 +45,7 @@ class L2Loss:
                     break
                 inputs, targets = inputs.to(device), targets.to(device)
                 inputs.requires_grad = True
-                loss = self.loss_closure(inputs, targets)
+                loss = self.loss_function(inputs, targets).sum()
                 torch.autograd.grad(loss, [inputs])
                 if i_inner < i_outer: # exclude diagonal
                     bs_inner = targets.size(0)
@@ -67,13 +67,13 @@ class L2Loss:
 
         return G
 
-    def implicit_m_norm(self, v):
+    def implicit_vTMv(self, v):
         # add hooks
-        self.handles += self._add_hooks(self._hook_savex, self._hook_compute_m_norm)
+        self.handles += self._add_hooks(self._hook_savex, self._hook_compute_cTv)
 
         device = next(self.model.parameters()).device
         n_examples = len(self.dataloader.sampler)
-        n_parameters = sum([p.numel() for p in self.model.parameters()])
+        n_parameters = get_n_parameters(self.model)
         bs = self.dataloader.batch_size
 
         self._cTv = torch.zeros((n_parameters,), device=device)
@@ -83,9 +83,9 @@ class L2Loss:
             i += bs
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.loss_closure(inputs, targets)
+            loss = self.loss_function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
-        m_norm = (self._cTv**2).sum()**.5
+        m_norm = (self._cTv**2).sum()
 
         # remove hooks
         del self._cTv
@@ -101,7 +101,7 @@ class L2Loss:
 
         device = next(self.model.parameters()).device
         n_examples = len(self.dataloader.sampler)
-        n_parameters = sum([p.numel() for p in self.model.parameters()])
+        n_parameters = get_n_parameters(self.model)
         bs = self.dataloader.batch_size
         norm2 = 0
         for i_outer, (inputs, targets) in enumerate(self.dataloader):
@@ -109,7 +109,7 @@ class L2Loss:
             inputs, targets = inputs.to(device), targets.to(device)
             bs_outer = targets.size(0)
             inputs.requires_grad = True
-            loss = self.loss_closure(inputs, targets)
+            loss = self.loss_function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
             self.outerloop_switch = False 
 
@@ -119,7 +119,7 @@ class L2Loss:
                 self.mb_block = torch.zeros((bs, bs), device=device)
                 inputs, targets = inputs.to(device), targets.to(device)
                 inputs.requires_grad = True
-                loss = self.loss_closure(inputs, targets)
+                loss = self.loss_function(inputs, targets).sum()
                 torch.autograd.grad(loss, [inputs])
                 this_mb_norm2 = (self.mb_block**2).sum()
                 if i_inner < i_outer:
@@ -198,7 +198,7 @@ class L2Loss:
             else:
                 raise NotImplementedError
 
-    def _hook_compute_m_norm(self, mod, grad_input, grad_output):
+    def _hook_compute_cTv(self, mod, grad_input, grad_output):
         mod_class = mod.__class__.__name__
         gy = grad_output[0]
         xs = self.xs[mod]
