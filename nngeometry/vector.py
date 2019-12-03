@@ -3,6 +3,10 @@ from .utils import get_individual_modules, get_n_parameters
 
 
 def random_pvector_dict(model):
+    """
+    Generates and returns a random PVector where each component
+    is uniformly sampled from a uniform distribution in [0, 1)
+    """
     v_dict = dict()
     for m in get_individual_modules(model)[0]:
         if m.bias is not None:
@@ -14,6 +18,10 @@ def random_pvector_dict(model):
 
 
 def random_pvector(model):
+    """
+    Generate and return a random PVector where each component
+    is uniformly sampled from a uniform distribution in [0, 1)
+    """
     n_parameters = get_n_parameters(model)
     random_v_flat = torch.rand((n_parameters,),
                                device=next(model.parameters()).device)
@@ -23,7 +31,8 @@ def random_pvector(model):
 
 class PVector:
     """
-    A vector in parameter space
+    A vector in parameter space. You can think of it as the concatenation
+    of all of all weight matrices seen as vectors and bias vectors
     """
     def __init__(self, model, vector_repr=None, dict_repr=None):
         self.model = model
@@ -32,6 +41,18 @@ class PVector:
         self.mods, self.p_pos = get_individual_modules(model)
 
     def from_model(model):
+        """
+        Create a new PVector by using the parameters of the
+        `model` given as parameter. Note that the parameter tensors
+        are not copied but instead they are shared with the model.
+        This means that any modification of the model will also modify
+        the PVector. If it is not the expected behaviour you should
+        consider calling `.clone()` on the resulting Pvector.
+
+        Arguments:
+            model (nn.Module): The model from which the PVector is
+                extracted
+        """
         dict_repr = dict()
         for mod in get_individual_modules(model)[0]:
             if mod.bias is not None:
@@ -41,6 +62,12 @@ class PVector:
         return PVector(model, dict_repr=dict_repr)
 
     def clone(self):
+        """
+        Return a copy of the `self` PVector.
+        This function is recorded in the computation graph. Gradients
+        propagating to the cloned PVector will propagate to the original
+        PVector.
+        """
         if self.dict_repr is not None:
             dict_clone = dict()
             for k, v in self.dict_repr.items():
@@ -53,6 +80,9 @@ class PVector:
             return PVector(self.model,  vector_repr=self.vector_repr.clone())
 
     def detach(self):
+        """
+        Return a detached version of the `self` PVector.
+        """
         if self.dict_repr is not None:
             dict_detach = dict()
             for k, v in self.dict_repr.items():
@@ -65,6 +95,10 @@ class PVector:
             return PVector(self.model,  vector_repr=self.vector_repr.detach())
 
     def get_flat_representation(self):
+        """
+        Get a PyTorch 1D tensor (a vector) of all components of the
+        PVector
+        """
         if self.vector_repr is not None:
             return self.vector_repr
         elif self.dict_repr is not None:
@@ -73,6 +107,11 @@ class PVector:
             return NotImplementedError
 
     def get_dict_representation(self):
+        """
+        Get a dictionary (key, value) where keys are PyTorch layers (nn.Module)
+        and values are tuples of tensors corresponding to the parameters of a
+        the given layer
+        """
         if self.dict_repr is not None:
             return self.dict_repr
         elif self.vector_repr is not None:

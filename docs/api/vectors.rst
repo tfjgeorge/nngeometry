@@ -1,7 +1,7 @@
 Vector representations
-==========
+======================
 
-.. automodule:: nngeometry.vector.
+.. automodule:: nngeometry.vector
     :members:
     :undoc-members:
     :show-inheritance:
