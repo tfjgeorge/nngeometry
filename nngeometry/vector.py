@@ -151,9 +151,9 @@ class PVector:
                                         other.get_flat_representation()))
 
 
-class IVector:
+class FVector:
     """
-    A vector in input space
+    A vector in function space
     """
     def __init__(self, model, vector_repr=None):
         self.model = model
