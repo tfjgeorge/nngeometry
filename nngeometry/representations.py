@@ -404,3 +404,15 @@ class LowRankMatrix(AbstractMatrix):
 class KrylovLowRankMatrix(AbstractMatrix):
     def __init__(self, generator):
         raise NotImplementedError()
+
+
+class DenseJacobian(AbstractMatrix):
+    def __init__(self, generator, data=None):
+        self.generator = generator
+        if data is not None:
+            self.data = data
+        else:
+            self.data = generator.get_matrix()
+
+    def get_matrix(self):
+        return self.data

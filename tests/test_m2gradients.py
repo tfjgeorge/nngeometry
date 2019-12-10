@@ -1,8 +1,9 @@
 from nngeometry.pspace import M2Gradients
 from nngeometry.fspace import M2Gradients as FSpace_M2Gradients
+from nngeometry.jacobian import M2Gradients as Jacobian_M2Gradients
 from nngeometry.representations import (DenseMatrix, ImplicitMatrix,
                                         LowRankMatrix, DiagMatrix,
-                                        BlockDiagMatrix)
+                                        BlockDiagMatrix, DenseJacobian)
 from nngeometry.vector import PVector, random_pvector, FVector
 from nngeometry.utils import get_individual_modules
 from subsampled_mnist import get_dataset, default_datapath
@@ -114,6 +115,35 @@ def get_convnet_task(bs=1000, subs=None):
         return tF.nll_loss(net(input), target, reduction='none')
 
     return train_loader, net, loss_function
+
+
+def test_jacobians_m2gradients_vs_loss():
+    """
+    Test || l(w+dw) - l(w) ||_2 against it linerarization given
+    by the jacobian matrix of the gradients of the loss
+    """
+    for get_task in [get_convnet_task, get_fullyconnect_task]:
+        train_loader, net, loss_function = get_task()
+
+        m2_generator = Jacobian_M2Gradients(model=net,
+                                            dataloader=train_loader,
+                                            loss_function=loss_function)
+        M = DenseJacobian(m2_generator)
+
+        # compare with || l(w+dw) - l(w) ||_F for randomly sampled dw
+        l_0 = get_l_vector(train_loader, loss_function)
+        eps = 1e-4
+
+        dw = torch.randn((m2_generator.get_n_parameters(),), device='cuda')
+        dw *= eps / torch.norm(dw)
+        update_model(net, dw)
+        l_upd = get_l_vector(train_loader, loss_function)
+        update_model(net, - dw)
+        # NB: this is a very high value for eps but this is the best
+        # we can expect with float32 for this kind of task
+        # TODO: do a float64 test
+        check_tensors(l_upd - l_0,
+                      torch.mv(M.get_matrix(), dw), eps=1e-1)
 
 
 def test_pspace_m2gradients_vs_loss():
