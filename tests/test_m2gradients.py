@@ -1,9 +1,9 @@
 from nngeometry.pspace import M2Gradients
-from nngeometry.ispace import M2Gradients as ISpace_M2Gradients
+from nngeometry.fspace import M2Gradients as FSpace_M2Gradients
 from nngeometry.representations import (DenseMatrix, ImplicitMatrix,
                                         LowRankMatrix, DiagMatrix,
                                         BlockDiagMatrix)
-from nngeometry.vector import PVector, random_pvector, IVector
+from nngeometry.vector import PVector, random_pvector, FVector
 from nngeometry.utils import get_individual_modules
 from subsampled_mnist import get_dataset, default_datapath
 import torch
@@ -218,18 +218,18 @@ def test_pspace_m2gradients_dense():
         check_ratio(f_norm, f_norm2)
 
 
-def test_pspace_vs_ispace():
+def test_pspace_vs_fspace():
     """
-    Check that ISpace Gram matrix and PSpace second moment matrix
+    Check that FSpace Gram matrix and PSpace second moment matrix
     have the same trace and frobenius norm
     """
     for get_task in [get_convnet_task, get_fullyconnect_task]:
         train_loader, net, loss_function = get_task(subs=3000)
 
-        ispace_m2_generator = ISpace_M2Gradients(model=net,
+        fspace_m2_generator = FSpace_M2Gradients(model=net,
                                                  dataloader=train_loader,
                                                  loss_function=loss_function)
-        MIspace = DenseMatrix(ispace_m2_generator)
+        MIspace = DenseMatrix(fspace_m2_generator)
 
         m2 = M2Gradients(model=net,
                          dataloader=train_loader,
@@ -443,21 +443,21 @@ def test_pspace_dense():
                   sub_M.get_matrix())
 
 
-def test_ispace_dense_vs_implicit():
+def test_fspace_dense_vs_implicit():
     """
-    Check implicit ISpace representation vs Dense
+    Check implicit FSpace representation vs Dense
     """
     train_loader, net, loss_function = get_fullyconnect_task()
 
-    ispace_m2 = ISpace_M2Gradients(model=net,
+    fspace_m2 = FSpace_M2Gradients(model=net,
                                    dataloader=train_loader,
                                    loss_function=loss_function)
-    M_dense = DenseMatrix(ispace_m2)
-    M_implicit = ImplicitMatrix(ispace_m2)
+    M_dense = DenseMatrix(fspace_m2)
+    M_implicit = ImplicitMatrix(fspace_m2)
 
     n_examples = len(train_loader.sampler)
     v = torch.rand((n_examples,), device='cuda')
-    v = IVector(net, vector_repr=v)
+    v = FVector(net, vector_repr=v)
 
     m_norm_dense = M_dense.vTMv(v)
     m_norm_implicit = M_implicit.vTMv(v)
