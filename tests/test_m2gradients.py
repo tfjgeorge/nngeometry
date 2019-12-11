@@ -540,3 +540,17 @@ def test_pspace_blockdiag_vs_dense():
 
         check_tensors(torch.mv(M_blockdiag.get_matrix(), random_v_flat),
                       M_blockdiag.mv(random_v).get_flat_representation())
+
+
+def test_jacobians_m2gradients_dense():
+    for get_task in [get_convnet_task, get_fullyconnect_task]:
+        train_loader, net, loss_function = get_task()
+
+        m2_generator = M2Gradients(model=net,
+                                   dataloader=train_loader,
+                                   loss_function=loss_function)
+        M = DenseJacobian(m2_generator)
+        dw = random_pvector(net)
+
+        check_tensors(torch.mv(M.get_matrix(), dw.get_flat_representation()),
+                      M.mv(dw).get_flat_representation())

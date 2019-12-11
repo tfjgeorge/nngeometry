@@ -2,7 +2,7 @@ import torch
 from abc import ABC, abstractmethod
 from .maths import kronecker
 from .utils import get_individual_modules
-from .vector import PVector
+from .vector import PVector, FVector
 
 
 class AbstractMatrix(ABC):
@@ -416,3 +416,7 @@ class DenseJacobian(AbstractMatrix):
 
     def get_matrix(self):
         return self.data
+
+    def mv(self, v):
+        v_flat = torch.mv(self.data, v.get_flat_representation())
+        return FVector(v.model, vector_repr=v_flat)
