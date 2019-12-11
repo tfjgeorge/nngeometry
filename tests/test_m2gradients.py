@@ -3,7 +3,8 @@ from nngeometry.fspace import M2Gradients as FSpace_M2Gradients
 from nngeometry.jacobian import M2Gradients as Jacobian_M2Gradients
 from nngeometry.representations import (DenseMatrix, ImplicitMatrix,
                                         LowRankMatrix, DiagMatrix,
-                                        BlockDiagMatrix, DenseJacobian)
+                                        BlockDiagMatrix, DenseJacobian,
+                                        ImplicitJacobian)
 from nngeometry.vector import PVector, random_pvector, FVector
 from nngeometry.utils import get_individual_modules
 from subsampled_mnist import get_dataset, default_datapath
@@ -554,3 +555,18 @@ def test_jacobians_m2gradients_dense():
 
         check_tensors(torch.mv(M.get_matrix(), dw.get_flat_representation()),
                       M.mv(dw).get_flat_representation())
+
+
+def test_jacobians_m2gradients_implicit_vs_dense():
+    for get_task in [get_convnet_task, get_fullyconnect_task]:
+        train_loader, net, loss_function = get_task()
+
+        m2_generator = Jacobian_M2Gradients(model=net,
+                                            dataloader=train_loader,
+                                            loss_function=loss_function)
+        M_dense = DenseJacobian(m2_generator)
+        M_imp = ImplicitJacobian(m2_generator)
+        dw = random_pvector(net)
+
+        check_tensors(M_dense.mv(dw).get_flat_representation(),
+                      M_imp.mv(dw).get_flat_representation())

@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 from ..utils import (get_individual_modules, per_example_grad_conv,
                      get_n_parameters)
+from ..vector import FVector
 
 
 class M2Gradients:
@@ -45,6 +46,41 @@ class M2Gradients:
             h.remove()
 
         return grads
+
+    def implicit_Jv(self, v):
+        # add hooks
+        self.handles += self._add_hooks(self._hook_savex,
+                                        self._hook_compute_vTg)
+
+        i = 0
+        self._v = dict()
+        for p in self.model.parameters():
+            self._v[p] = v[i:i+p.numel()].view(*p.size())
+            i += p.numel()
+
+        device = next(self.model.parameters()).device
+        n_examples = len(self.dataloader.sampler)
+        self.compute_switch = True
+        self._vTg = torch.zeros(n_examples, device=device)
+        self.start = 0
+        for (inputs, targets) in self.dataloader:
+            inputs, targets = inputs.to(device), targets.to(device)
+            inputs.requires_grad = True
+            loss = self.loss_function(inputs, targets).sum()
+            torch.autograd.grad(loss, [inputs])
+            self.start += inputs.size(0)
+        vTg = self._vTg
+
+        # remove hooks
+        self.xs = dict()
+        del self._vTg
+        del self._v
+        del self.start
+        del self.compute_switch
+        for h in self.handles:
+            h.remove()
+
+        return FVector(self.model, vector_repr=vTg)
 
     def _add_hooks(self, hook_x, hook_gy):
         handles = []
@@ -105,16 +141,18 @@ class M2Gradients:
             x = self.xs[mod]
             bs = x.size(0)
             if mod_class == 'Linear':
-                self._vTg += (torch.mm(x, self._v[mod.weight].t())
-                              * gy).sum(dim=1)
+                self._vTg[self.start:self.start+bs].add_(
+                    (torch.mm(x, self._v[mod.weight].t()) * gy).sum(dim=1))
                 if mod.bias is not None:
-                    self._vTg += torch.mv(gy, self._v[mod.bias])
+                    self._vTg[self.start:self.start+bs].add_(
+                        torch.mv(gy, self._v[mod.bias]))
             elif mod_class == 'Conv2d':
                 gy2 = F.conv2d(x, self._v[mod.weight], stride=mod.stride,
                                padding=mod.padding, dilation=mod.dilation)
-                self._vTg += (gy * gy2).view(bs, -1).sum(dim=1)
+                self._vTg[self.start:self.start+bs].add_(
+                    (gy * gy2).view(bs, -1).sum(dim=1))
                 if mod.bias is not None:
-                    self._vTg += torch.mv(gy.sum(dim=(2, 3)),
-                                          self._v[mod.bias])
+                    self._vTg[self.start:self.start+bs].add_(
+                        torch.mv(gy.sum(dim=(2, 3)), self._v[mod.bias]))
             else:
                 raise NotImplementedError

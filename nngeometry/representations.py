@@ -420,3 +420,11 @@ class DenseJacobian(AbstractMatrix):
     def mv(self, v):
         v_flat = torch.mv(self.data, v.get_flat_representation())
         return FVector(v.model, vector_repr=v_flat)
+
+
+class ImplicitJacobian(AbstractMatrix):
+    def __init__(self, generator):
+        self.generator = generator
+
+    def mv(self, v):
+        return self.generator.implicit_Jv(v.get_flat_representation())
