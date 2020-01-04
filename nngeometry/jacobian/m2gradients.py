@@ -63,10 +63,10 @@ class M2Gradients:
         self.compute_switch = True
         self._vTg = torch.zeros(n_examples, device=device)
         self.start = 0
-        for (inputs, targets) in self.dataloader:
-            inputs, targets = inputs.to(device), targets.to(device)
+        for d in self.dataloader:
+            inputs = d[0]
             inputs.requires_grad = True
-            loss = self.loss_function(inputs, targets).sum()
+            loss = self.loss_function(*d).sum()
             torch.autograd.grad(loss, [inputs])
             self.start += inputs.size(0)
         vTg = self._vTg
