@@ -2,7 +2,7 @@ import torch
 from abc import ABC, abstractmethod
 from .maths import kronecker
 from .utils import get_individual_modules
-from .vector import PVector, FVector
+from .vector import PVector
 
 
 class AbstractMatrix(ABC):
@@ -404,27 +404,3 @@ class LowRankMatrix(AbstractMatrix):
 class KrylovLowRankMatrix(AbstractMatrix):
     def __init__(self, generator):
         raise NotImplementedError()
-
-
-class DenseJacobian(AbstractMatrix):
-    def __init__(self, generator, data=None):
-        self.generator = generator
-        if data is not None:
-            self.data = data
-        else:
-            self.data = generator.get_matrix()
-
-    def get_matrix(self):
-        return self.data
-
-    def mv(self, v):
-        v_flat = torch.mv(self.data, v.get_flat_representation())
-        return FVector(v.model, vector_repr=v_flat)
-
-
-class ImplicitJacobian(AbstractMatrix):
-    def __init__(self, generator):
-        self.generator = generator
-
-    def mv(self, v):
-        return self.generator.implicit_Jv(v.get_flat_representation())
