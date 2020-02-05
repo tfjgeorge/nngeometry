@@ -30,7 +30,9 @@ class M2Gradients:
         bs = self.dataloader.batch_size
         self.G = torch.zeros((n_examples, n_examples), device=device)
         self.e_outer = 0
-        for i_outer, (inputs, targets) in enumerate(self.dataloader):
+        for i_outer, d in enumerate(self.dataloader):
+            inputs = d[0]
+            targets = d[1]
             self.outerloop_switch = True # used in hooks to switch between store/compute
             inputs, targets = inputs.to(device), targets.to(device)
             bs_outer = targets.size(0)
@@ -40,7 +42,9 @@ class M2Gradients:
             self.outerloop_switch = False 
 
             self.e_inner = 0
-            for i_inner, (inputs, targets) in enumerate(self.dataloader):
+            for i_inner, d in enumerate(self.dataloader):
+                inputs = d[0]
+                targets = d[1]
                 if i_inner > i_outer:
                     break
                 inputs, targets = inputs.to(device), targets.to(device)
