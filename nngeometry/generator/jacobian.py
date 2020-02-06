@@ -2,18 +2,18 @@ import torch
 import torch.nn.functional as F
 from ..utils import (get_individual_modules, per_example_grad_conv,
                      get_n_parameters)
-from ..vector import PVector
+from ..object.vector import PVector
 
 
-class M2Gradients:
-    def __init__(self, model, dataloader, loss_function):
+class Jacobian:
+    def __init__(self, model, loader, output_fn):
         self.model = model
-        self.dataloader = dataloader
+        self.loader = loader
         self.handles = []
         self.xs = dict()
         # maps parameters to their position in flattened representation
         self.mods, self.p_pos = get_individual_modules(model)
-        self.loss_function = loss_function
+        self.output_fn = output_fn
 
     def get_n_parameters(self):
         return get_n_parameters(self.model)
@@ -27,17 +27,17 @@ class M2Gradients:
                                         self._hook_compute_flat_grad)
 
         device = next(self.model.parameters()).device
-        n_examples = len(self.dataloader.sampler)
+        n_examples = len(self.loader.sampler)
         n_parameters = sum([p.numel() for p in self.model.parameters()])
-        bs = self.dataloader.batch_size
+        bs = self.loader.batch_size
         G = torch.zeros((n_parameters, n_parameters), device=device)
         self.grads = torch.zeros((bs, n_parameters), device=device)
         self.start = 0
-        for (inputs, targets) in self.dataloader:
+        for (inputs, targets) in self.loader:
             self.grads.zero_()
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.loss_function(inputs, targets).sum()
+            loss = self.output_fn(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
             G += torch.mm(self.grads.t(), self.grads)
         G /= n_examples
@@ -50,13 +50,39 @@ class M2Gradients:
 
         return G
 
+    def get_jacobian(self):
+        # add hooks
+        self.handles += self._add_hooks(self._hook_savex,
+                                        self._hook_compute_flat_grad)
+
+        device = next(self.model.parameters()).device
+        n_examples = len(self.loader.sampler)
+        n_parameters = sum([p.numel() for p in self.model.parameters()])
+        self.grads = torch.zeros((n_examples, n_parameters), device=device)
+        self.start = 0
+        for (inputs, targets) in self.loader:
+            inputs, targets = inputs.to(device), targets.to(device)
+            inputs.requires_grad = True
+            loss = self.output_fn(inputs, targets).sum()
+            torch.autograd.grad(loss, [inputs])
+            self.start += inputs.size(0)
+        grads = self.grads
+
+        # remove hooks
+        del self.grads
+        self.xs = dict()
+        for h in self.handles:
+            h.remove()
+
+        return grads
+
     def get_layer_blocks(self):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex,
                                         self._hook_compute_layer_blocks)
 
         device = next(self.model.parameters()).device
-        n_examples = len(self.dataloader.sampler)
+        n_examples = len(self.loader.sampler)
         self._blocks = dict()
         for m in self.mods:
             s = m.weight.numel()
@@ -64,10 +90,10 @@ class M2Gradients:
                 s += m.bias.numel()
             self._blocks[m] = torch.zeros((s, s), device=device)
 
-        for (inputs, targets) in self.dataloader:
+        for (inputs, targets) in self.loader:
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.loss_function(inputs, targets).sum()
+            loss = self.output_fn(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
         blocks = {m: self._blocks[m] / n_examples for m in self.mods}
 
@@ -85,7 +111,7 @@ class M2Gradients:
                                         self._hook_compute_kfac_blocks)
 
         device = next(self.model.parameters()).device
-        n_examples = len(self.dataloader.sampler)
+        n_examples = len(self.loader.sampler)
         self._blocks = dict()
         for m in self.mods:
             sG = m.weight.size(0)
@@ -99,10 +125,10 @@ class M2Gradients:
             self._blocks[m] = (torch.zeros((sA, sA), device=device),
                                torch.zeros((sG, sG), device=device))
 
-        for (inputs, targets) in self.dataloader:
+        for (inputs, targets) in self.loader:
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.loss_function(inputs, targets).sum()
+            loss = self.output_fn(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
         blocks = {m: (self._blocks[m][0] / n_examples,
                       self._blocks[m][1] / n_examples)
@@ -122,7 +148,7 @@ class M2Gradients:
                                         self._hook_compute_kfe_diag)
 
         device = next(self.model.parameters()).device
-        n_examples = len(self.dataloader.sampler)
+        n_examples = len(self.loader.sampler)
         self._diags = dict()
         self._kfe = kfe
         for m in self.mods:
@@ -136,10 +162,10 @@ class M2Gradients:
                 sA += 1
             self._diags[m] = torch.zeros((sG * sA), device=device)
 
-        for (inputs, targets) in self.dataloader:
+        for (inputs, targets) in self.loader:
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.loss_function(inputs, targets).sum()
+            loss = self.output_fn(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
         diags = {m: self._diags[m] / n_examples for m in self.mods}
 
@@ -158,14 +184,14 @@ class M2Gradients:
                                         self._hook_compute_diag)
 
         device = next(self.model.parameters()).device
-        n_examples = len(self.dataloader.sampler)
+        n_examples = len(self.loader.sampler)
         n_parameters = sum([p.numel() for p in self.model.parameters()])
         self.diag_m = torch.zeros((n_parameters,), device=device)
         self.start = 0
-        for (inputs, targets) in self.dataloader:
+        for (inputs, targets) in self.loader:
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.loss_function(inputs, targets).sum()
+            loss = self.output_fn(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
         diag_m = self.diag_m / n_examples
 
@@ -183,14 +209,14 @@ class M2Gradients:
                                         self._hook_compute_flat_grad)
 
         device = next(self.model.parameters()).device
-        n_examples = len(self.dataloader.sampler)
+        n_examples = len(self.loader.sampler)
         n_parameters = sum([p.numel() for p in self.model.parameters()])
         self.grads = torch.zeros((n_examples, n_parameters), device=device)
         self.start = 0
-        for (inputs, targets) in self.dataloader:
+        for (inputs, targets) in self.loader:
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.loss_function(inputs, targets).sum()
+            loss = self.output_fn(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
             self.start += inputs.size(0)
         half_mat = self.grads / n_examples**.5
@@ -217,13 +243,13 @@ class M2Gradients:
             i += p.numel()
 
         device = next(self.model.parameters()).device
-        n_examples = len(self.dataloader.sampler)
-        for (inputs, targets) in self.dataloader:
+        n_examples = len(self.loader.sampler)
+        for (inputs, targets) in self.loader:
             self._vTg = torch.zeros(inputs.size(0), device=device)
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
             self.compute_switch = True
-            loss_indiv_examples = self.loss_function(inputs, targets)
+            loss_indiv_examples = self.output_fn(inputs, targets)
             loss = loss_indiv_examples.sum()
             torch.autograd.grad(loss, [inputs], retain_graph=True)
             self.compute_switch = False
@@ -262,14 +288,14 @@ class M2Gradients:
             i += p.numel()
 
         device = next(self.model.parameters()).device
-        n_examples = len(self.dataloader.sampler)
+        n_examples = len(self.loader.sampler)
         norm2 = 0
         self.compute_switch = True
-        for (inputs, targets) in self.dataloader:
+        for (inputs, targets) in self.loader:
             self._vTg = torch.zeros(inputs.size(0), device=device)
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.loss_function(inputs, targets).sum()
+            loss = self.output_fn(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
             norm2 += (self._vTg**2).sum(dim=0)
         norm = norm2 / n_examples
@@ -290,13 +316,13 @@ class M2Gradients:
                                         self._hook_compute_trace)
 
         device = next(self.model.parameters()).device
-        n_examples = len(self.dataloader.sampler)
+        n_examples = len(self.loader.sampler)
 
         self._trace = 0
-        for (inputs, targets) in self.dataloader:
+        for (inputs, targets) in self.loader:
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.loss_function(inputs, targets).sum()
+            loss = self.output_fn(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
         trace = self._trace / n_examples
 

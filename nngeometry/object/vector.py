@@ -1,5 +1,5 @@
 import torch
-from .utils import get_individual_modules, get_n_parameters
+from ..utils import get_individual_modules, get_n_parameters
 
 
 def random_pvector_dict(model):

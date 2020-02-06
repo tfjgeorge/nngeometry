@@ -16,7 +16,7 @@ class DensePushForward(AbstractPushForward):
         if data is not None:
             self.data = data
         else:
-            self.data = generator.get_matrix()
+            self.data = generator.get_jacobian()
 
     def get_matrix(self):
         return self.data
