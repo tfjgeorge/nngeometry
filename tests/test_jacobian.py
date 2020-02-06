@@ -47,7 +47,7 @@ def test_jacobian_pushforward_implicit():
                          loader=loader,
                          output_fn=output_fn)
     dense_push_forward = DensePushForward(generator)
-    implicit_push_forward = DensePushForward(generator)
+    implicit_push_forward = ImplicitPushForward(generator)
     dw = random_pvector(model)
 
     doutput_lin_dense = dense_push_forward.mv(dw)

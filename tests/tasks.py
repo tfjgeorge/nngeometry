@@ -79,7 +79,7 @@ def get_linear_task():
     net.to('cuda')
 
     def output_fn(input, target):
-        return net(input)
+        return net(input.to('cuda'))
 
     return train_loader, net, output_fn
 
