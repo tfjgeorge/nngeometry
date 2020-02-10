@@ -1,6 +1,7 @@
 import torch
 from tasks import get_linear_task
-from nngeometry.object.map import DensePushForward, ImplicitPushForward
+from nngeometry.object.map import (DensePushForward, ImplicitPushForward,
+                                   DensePullBack)
 from nngeometry.generator import Jacobian
 from nngeometry.object.vector import random_pvector
 from utils import check_ratio, check_tensors
@@ -55,3 +56,19 @@ def test_jacobian_pushforward_implicit():
 
     check_tensors(doutput_lin_dense.get_flat_representation(),
                   doutput_lin_implicit.get_flat_representation())
+
+
+def test_jacobian_pullback_dense():
+    loader, model, output_fn = get_linear_task()
+    generator = Jacobian(model=model,
+                         loader=loader,
+                         output_fn=output_fn)
+    pull_back = DensePullBack(generator)
+    push_forward = DensePushForward(generator)
+    dw = random_pvector(model)
+
+    doutput_lin = push_forward.mv(dw)
+    dinput_lin = pull_back.mv(doutput_lin)
+    check_ratio(torch.dot(dw.get_flat_representation(),
+                          dinput_lin.get_flat_representation()),
+                torch.norm(doutput_lin.get_flat_representation())**2)
