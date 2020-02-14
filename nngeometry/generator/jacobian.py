@@ -6,14 +6,14 @@ from ..object.vector import PVector, FVector
 
 
 class Jacobian:
-    def __init__(self, model, loader, output_fn):
+    def __init__(self, model, loader, function):
         self.model = model
         self.loader = loader
         self.handles = []
         self.xs = dict()
         # maps parameters to their position in flattened representation
         self.mods, self.p_pos = get_individual_modules(model)
-        self.output_fn = output_fn
+        self.function = function
 
     def get_n_parameters(self):
         return get_n_parameters(self.model)
@@ -37,7 +37,7 @@ class Jacobian:
             self.grads.zero_()
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.output_fn(inputs, targets).sum()
+            loss = self.function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
             G += torch.mm(self.grads.t(), self.grads)
         G /= n_examples
@@ -63,7 +63,7 @@ class Jacobian:
         for (inputs, targets) in self.loader:
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.output_fn(inputs, targets).sum()
+            loss = self.function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
             self.start += inputs.size(0)
         grads = self.grads
@@ -93,7 +93,7 @@ class Jacobian:
         for (inputs, targets) in self.loader:
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.output_fn(inputs, targets).sum()
+            loss = self.function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
         blocks = {m: self._blocks[m] / n_examples for m in self.mods}
 
@@ -128,7 +128,7 @@ class Jacobian:
         for (inputs, targets) in self.loader:
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.output_fn(inputs, targets).sum()
+            loss = self.function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
         blocks = {m: (self._blocks[m][0] / n_examples,
                       self._blocks[m][1] / n_examples)
@@ -165,7 +165,7 @@ class Jacobian:
         for (inputs, targets) in self.loader:
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.output_fn(inputs, targets).sum()
+            loss = self.function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
         diags = {m: self._diags[m] / n_examples for m in self.mods}
 
@@ -191,7 +191,7 @@ class Jacobian:
         for (inputs, targets) in self.loader:
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.output_fn(inputs, targets).sum()
+            loss = self.function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
         diag_m = self.diag_m / n_examples
 
@@ -216,7 +216,7 @@ class Jacobian:
         for (inputs, targets) in self.loader:
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.output_fn(inputs, targets).sum()
+            loss = self.function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
             self.start += inputs.size(0)
         half_mat = self.grads / n_examples**.5
@@ -249,7 +249,7 @@ class Jacobian:
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
             self.compute_switch = True
-            loss_indiv_examples = self.output_fn(inputs, targets)
+            loss_indiv_examples = self.function(inputs, targets)
             loss = loss_indiv_examples.sum()
             torch.autograd.grad(loss, [inputs], retain_graph=True)
             self.compute_switch = False
@@ -295,7 +295,7 @@ class Jacobian:
             self._vTg = torch.zeros(inputs.size(0), device=device)
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.output_fn(inputs, targets).sum()
+            loss = self.function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
             norm2 += (self._vTg**2).sum(dim=0)
         norm = norm2 / n_examples
@@ -322,7 +322,7 @@ class Jacobian:
         for (inputs, targets) in self.loader:
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.output_fn(inputs, targets).sum()
+            loss = self.function(inputs, targets).sum()
             torch.autograd.grad(loss, [inputs])
         trace = self._trace / n_examples
 
@@ -353,7 +353,7 @@ class Jacobian:
         for d in self.loader:
             inputs = d[0]
             inputs.requires_grad = True
-            loss = self.output_fn(*d).sum()
+            loss = self.function(*d).sum()
             torch.autograd.grad(loss, [inputs])
             self.start += inputs.size(0)
         vTg = self._vTg
