@@ -1,4 +1,6 @@
 import torch
+import torch.nn.functional as F
+
 from ..utils import get_individual_modules, per_example_grad_conv, get_n_parameters
 
 class M2Gradients:
@@ -175,6 +177,26 @@ class M2Gradients:
             elif mod_class == 'Conv2d':
                 indiv_gw_inner = per_example_grad_conv(mod, x_inner, gy_inner).view(bs_inner, -1)
                 indiv_gw_outer = per_example_grad_conv(mod, x_outer, gy_outer).view(bs_outer, -1)
+                self.G[self.e_inner:self.e_inner+bs_inner, self.e_outer:self.e_outer+bs_outer] += \
+                        torch.mm(indiv_gw_inner, indiv_gw_outer.t())
+                if mod.bias is not None:
+                    self.G[self.e_inner:self.e_inner+bs_inner, self.e_outer:self.e_outer+bs_outer] += \
+                            torch.mm(gy_inner.sum(dim=(2,3)), gy_outer.sum(dim=(2,3)).t())
+            elif mod_class == 'BatchNorm1d':
+                x_norm_inner = F.batch_norm(x_inner, None, None, None, None, True)
+                x_norm_outer = F.batch_norm(x_outer, None, None, None, None, True)
+                indiv_gw_inner = x_norm_inner * gy_inner
+                indiv_gw_outer = x_norm_outer * gy_outer
+                self.G[self.e_inner:self.e_inner+bs_inner, self.e_outer:self.e_outer+bs_outer] += \
+                        torch.mm(indiv_gw_inner, indiv_gw_outer.t())
+                if mod.bias is not None:
+                    self.G[self.e_inner:self.e_inner+bs_inner, self.e_outer:self.e_outer+bs_outer] += \
+                            torch.mm(gy_inner, gy_outer.t())
+            elif mod_class == 'BatchNorm2d':
+                x_norm_inner = F.batch_norm(x_inner, None, None, None, None, True)
+                x_norm_outer = F.batch_norm(x_outer, None, None, None, None, True)
+                indiv_gw_inner = (x_norm_inner * gy_inner).sum(dim=(2,3))
+                indiv_gw_outer = (x_norm_outer * gy_outer).sum(dim=(2,3))
                 self.G[self.e_inner:self.e_inner+bs_inner, self.e_outer:self.e_outer+bs_outer] += \
                         torch.mm(indiv_gw_inner, indiv_gw_outer.t())
                 if mod.bias is not None:
