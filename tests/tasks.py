@@ -61,13 +61,6 @@ class LinearNet(nn.Module):
             fc_out.sum(dim=(1))
 
 
-def get_mnist():
-    return datasets.MNIST(root=default_datapath,
-                          train=True,
-                          download=True,
-                          transform=transforms.ToTensor())
-
-
 def get_linear_task():
     train_set = get_mnist()
     train_set = Subset(train_set, range(1000))
@@ -82,6 +75,43 @@ def get_linear_task():
         return net(input.to('cuda'))
 
     return train_loader, net, output_fn
+
+
+class BatchNormLinearNet(nn.Module):
+    def __init__(self):
+        super(BatchNormLinearNet, self).__init__()
+        # TODO use a dataset with 3 channels (e.g. cifar10)
+        self.conv1 = nn.BatchNorm2d(1)
+        self.fc1 = nn.BatchNorm1d(28*28)
+
+    def forward(self, x):
+        conv_out = self.conv1(x)
+        fc_out = self.fc1(x.view(x.size(0), -1))
+        return conv_out.sum(dim=(1, 2, 3)) + \
+            fc_out.sum(dim=(1))
+
+
+def get_batchnorm_linear_task():
+    train_set = get_mnist()
+    train_set = Subset(train_set, range(1000))
+    train_loader = DataLoader(
+        dataset=train_set,
+        batch_size=1000,
+        shuffle=False)
+    net = BatchNormLinearNet()
+    net.to('cuda')
+
+    def output_fn(input, target):
+        return net(input.to('cuda'))
+
+    return train_loader, net, output_fn
+
+
+def get_mnist():
+    return datasets.MNIST(root=default_datapath,
+                          train=True,
+                          download=True,
+                          transform=transforms.ToTensor())
 
 
 def get_fullyconnect_task(batch_norm=False):

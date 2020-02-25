@@ -1,5 +1,5 @@
 import torch
-from tasks import get_linear_task
+from tasks import get_linear_task, get_batchnorm_linear_task
 from nngeometry.object.map import (DensePushForward, ImplicitPushForward,
                                    DensePullBack)
 from nngeometry.generator import Jacobian
@@ -15,38 +15,40 @@ def update_model(model, dw):
         i = j
 
 
-def get_output_vector(loader, output_fn):
+def get_output_vector(loader, function):
     with torch.no_grad():
         outputs = []
         for inputs, targets in loader:
             inputs, targets = inputs.to('cuda'), targets.to('cuda')
-            outputs.append(output_fn(inputs, targets))
+            outputs.append(function(inputs, targets))
         return torch.cat(outputs)
 
 
 def test_jacobian_pushforward_dense():
-    loader, model, output_fn = get_linear_task()
-    generator = Jacobian(model=model,
-                         loader=loader,
-                         output_fn=output_fn)
-    push_forward = DensePushForward(generator)
-    dw = random_pvector(model)
+    for get_task in [get_linear_task, get_batchnorm_linear_task]:
+        loader, model, function = get_task()
+        model.train()
+        generator = Jacobian(model=model,
+                             loader=loader,
+                             function=function)
+        push_forward = DensePushForward(generator)
+        dw = random_pvector(model)
 
-    doutput_lin = push_forward.mv(dw)
+        doutput_lin = push_forward.mv(dw)
 
-    output_before = get_output_vector(loader, output_fn)
-    update_model(model, dw.get_flat_representation())
-    output_after = get_output_vector(loader, output_fn)
+        output_before = get_output_vector(loader, function)
+        update_model(model, dw.get_flat_representation())
+        output_after = get_output_vector(loader, function)
 
-    check_tensors(output_after - output_before,
-                  doutput_lin.get_flat_representation())
+        check_tensors(output_after - output_before,
+                      doutput_lin.get_flat_representation())
 
 
 def test_jacobian_pushforward_implicit():
-    loader, model, output_fn = get_linear_task()
+    loader, model, function = get_linear_task()
     generator = Jacobian(model=model,
                          loader=loader,
-                         output_fn=output_fn)
+                         function=function)
     dense_push_forward = DensePushForward(generator)
     implicit_push_forward = ImplicitPushForward(generator)
     dw = random_pvector(model)
@@ -59,10 +61,10 @@ def test_jacobian_pushforward_implicit():
 
 
 def test_jacobian_pullback_dense():
-    loader, model, output_fn = get_linear_task()
+    loader, model, function = get_linear_task()
     generator = Jacobian(model=model,
                          loader=loader,
-                         output_fn=output_fn)
+                         function=function)
     pull_back = DensePullBack(generator)
     push_forward = DensePushForward(generator)
     dw = random_pvector(model)
