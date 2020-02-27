@@ -62,11 +62,11 @@ class Jacobian:
         self.grads = torch.zeros((self.n_output, n_examples, n_parameters),
                                  device=device)
         self.start = 0
-        for (inputs, targets) in self.loader:
-            inputs, targets = inputs.to(device), targets.to(device)
+        for d in self.loader:
+            inputs = d[0]
             inputs.requires_grad = True
             bs = inputs.size(0)
-            output = self.function(inputs, targets).view(bs, self.n_output) \
+            output = self.function(*d).view(bs, self.n_output) \
                 .sum(dim=0)
             for self.i_output in range(self.n_output):
                 torch.autograd.grad(output[self.i_output], [inputs],
@@ -345,7 +345,7 @@ class Jacobian:
     def implicit_Jv(self, v):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex,
-                                        self._hook_compute_vTg)
+                                        self._hook_compute_Jv)
 
         i = 0
         self._v = dict()
@@ -356,26 +356,30 @@ class Jacobian:
         device = next(self.model.parameters()).device
         n_examples = len(self.loader.sampler)
         self.compute_switch = True
-        self._vTg = torch.zeros(n_examples, device=device)
+        self._Jv = torch.zeros((self.n_output, n_examples), device=device)
         self.start = 0
         for d in self.loader:
             inputs = d[0]
             inputs.requires_grad = True
-            loss = self.function(*d).sum()
-            torch.autograd.grad(loss, [inputs])
+            bs = inputs.size(0)
+            output = self.function(*d).view(bs, self.n_output) \
+                .sum(dim=0)
+            for self.i_output in range(self.n_output):
+                torch.autograd.grad(output[self.i_output], [inputs],
+                                    retain_graph=True)
             self.start += inputs.size(0)
-        vTg = self._vTg
+        Jv = self._Jv
 
         # remove hooks
         self.xs = dict()
-        del self._vTg
+        del self._Jv
         del self._v
         del self.start
         del self.compute_switch
         for h in self.handles:
             h.remove()
 
-        return FVector(self.model, vector_repr=vTg)
+        return FVector(self.model, vector_repr=Jv)
 
     def _add_hooks(self, hook_x, hook_gy):
         handles = []
@@ -571,25 +575,25 @@ class Jacobian:
             else:
                 raise NotImplementedError
 
-    def _hook_compute_vTg(self, mod, grad_input, grad_output):
+    def _hook_compute_Jv(self, mod, grad_input, grad_output):
         if self.compute_switch:
             mod_class = mod.__class__.__name__
             gy = grad_output[0]
             x = self.xs[mod]
             bs = x.size(0)
             if mod_class == 'Linear':
-                self._vTg[self.start:self.start+bs].add_(
+                self._Jv[self.i_output, self.start:self.start+bs].add_(
                     (torch.mm(x, self._v[mod.weight].t()) * gy).sum(dim=1))
                 if mod.bias is not None:
-                    self._vTg[self.start:self.start+bs].add_(
+                    self._Jv[self.i_output, self.start:self.start+bs].add_(
                         torch.mv(gy, self._v[mod.bias]))
             elif mod_class == 'Conv2d':
                 gy2 = F.conv2d(x, self._v[mod.weight], stride=mod.stride,
                                padding=mod.padding, dilation=mod.dilation)
-                self._vTg[self.start:self.start+bs].add_(
+                self._Jv[self.i_output, self.start:self.start+bs].add_(
                     (gy * gy2).view(bs, -1).sum(dim=1))
                 if mod.bias is not None:
-                    self._vTg[self.start:self.start+bs].add_(
+                    self._Jv[self.i_output, self.start:self.start+bs].add_(
                         torch.mv(gy.sum(dim=(2, 3)), self._v[mod.bias]))
             else:
                 raise NotImplementedError
