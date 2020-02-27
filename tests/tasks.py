@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as tF
 from torch.utils.data import DataLoader, Subset
@@ -57,8 +58,9 @@ class LinearNet(nn.Module):
     def forward(self, x):
         conv_out = self.conv1(x)
         fc_out = self.fc1(x.view(x.size(0), -1))
-        return conv_out.sum(dim=(1, 2, 3)) + \
-            fc_out.sum(dim=(1))
+        output = torch.stack([conv_out.sum(dim=(1, 2, 3)),
+                              fc_out.sum(dim=(1))], dim=1)
+        return output
 
 
 def get_linear_task():
@@ -74,7 +76,7 @@ def get_linear_task():
     def output_fn(input, target):
         return net(input.to('cuda'))
 
-    return train_loader, net, output_fn
+    return train_loader, net, output_fn, 2
 
 
 class BatchNormLinearNet(nn.Module):
@@ -87,8 +89,9 @@ class BatchNormLinearNet(nn.Module):
     def forward(self, x):
         conv_out = self.conv1(x)
         fc_out = self.fc1(x.view(x.size(0), -1))
-        return conv_out.sum(dim=(1, 2, 3)) + \
-            fc_out.sum(dim=(1))
+        output = torch.stack([conv_out.sum(dim=(1, 2, 3)),
+                              fc_out.sum(dim=(1))], dim=1)
+        return output
 
 
 def get_batchnorm_linear_task():
@@ -104,7 +107,7 @@ def get_batchnorm_linear_task():
     def output_fn(input, target):
         return net(input.to('cuda'))
 
-    return train_loader, net, output_fn
+    return train_loader, net, output_fn, 2
 
 
 def get_mnist():

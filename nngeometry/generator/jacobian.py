@@ -6,11 +6,12 @@ from ..object.vector import PVector, FVector
 
 
 class Jacobian:
-    def __init__(self, model, loader, function):
+    def __init__(self, model, loader, function, n_output=1):
         self.model = model
         self.loader = loader
         self.handles = []
         self.xs = dict()
+        self.n_output = n_output
         # maps parameters to their position in flattened representation
         self.mods, self.p_pos = get_individual_modules(model)
         self.function = function
@@ -58,18 +59,25 @@ class Jacobian:
         device = next(self.model.parameters()).device
         n_examples = len(self.loader.sampler)
         n_parameters = sum([p.numel() for p in self.model.parameters()])
-        self.grads = torch.zeros((n_examples, n_parameters), device=device)
+        self.grads = torch.zeros((self.n_output, n_examples, n_parameters),
+                                 device=device)
         self.start = 0
         for (inputs, targets) in self.loader:
             inputs, targets = inputs.to(device), targets.to(device)
             inputs.requires_grad = True
-            loss = self.function(inputs, targets).sum()
-            torch.autograd.grad(loss, [inputs])
+            bs = inputs.size(0)
+            output = self.function(inputs, targets).view(bs, self.n_output) \
+                .sum(dim=0)
+            for self.i_output in range(self.n_output):
+                torch.autograd.grad(output[self.i_output], [inputs],
+                                    retain_graph=True)
             self.start += inputs.size(0)
         grads = self.grads
 
         # remove hooks
         del self.grads
+        del self.start
+        del self.i_output
         self.xs = dict()
         for h in self.handles:
             h.remove()
@@ -386,46 +394,46 @@ class Jacobian:
         bs = x.size(0)
         start_p = self.p_pos[mod]
         if mod_class == 'Linear':
-            self.grads[self.start:self.start+bs,
+            self.grads[self.i_output, self.start:self.start+bs,
                        start_p:start_p+mod.weight.numel()] \
                 .add_(torch.bmm(gy.unsqueeze(2), x.unsqueeze(1)).view(bs, -1))
             if mod.bias is not None:
                 start_p += mod.weight.numel()
-                self.grads[self.start:self.start+bs,
+                self.grads[self.i_output, self.start:self.start+bs,
                            start_p:start_p+mod.bias.numel()] \
                     .add_(gy)
         elif mod_class == 'Conv2d':
             indiv_gw = per_example_grad_conv(mod, x, gy)
-            self.grads[self.start:self.start+bs,
+            self.grads[self.i_output, self.start:self.start+bs,
                        start_p:start_p+mod.weight.numel()] \
                 .add_(indiv_gw.view(bs, -1))
             if mod.bias is not None:
                 start_p += mod.weight.numel()
-                self.grads[self.start:self.start+bs,
+                self.grads[self.i_output, self.start:self.start+bs,
                            start_p:start_p+mod.bias.numel()] \
                     .add_(gy.sum(dim=(2, 3)))
         elif mod_class == 'BatchNorm1d':
             x_normalized = F.batch_norm(x, mod.running_mean,
                                         mod.running_var,
                                         None, None, mod.training)
-            self.grads[self.start:self.start+bs,
+            self.grads[self.i_output, self.start:self.start+bs,
                        start_p:start_p+mod.weight.numel()] \
                 .add_(gy * x_normalized)
             if mod.bias is not None:
                 start_p += mod.weight.numel()
-                self.grads[self.start:self.start+bs,
+                self.grads[self.i_output, self.start:self.start+bs,
                            start_p:start_p+mod.bias.numel()] \
                     .add_(gy)
         elif mod_class == 'BatchNorm2d':
             x_normalized = F.batch_norm(x, mod.running_mean,
                                         mod.running_var,
                                         None, None, mod.training)
-            self.grads[self.start:self.start+bs,
+            self.grads[self.i_output, self.start:self.start+bs,
                        start_p:start_p+mod.weight.numel()] \
                 .add_((gy * x_normalized).sum(dim=(2, 3)))
             if mod.bias is not None:
                 start_p += mod.weight.numel()
-                self.grads[self.start:self.start+bs,
+                self.grads[self.i_output, self.start:self.start+bs,
                            start_p:start_p+mod.bias.numel()] \
                     .add_(gy.sum(dim=(2, 3)))
         else:
