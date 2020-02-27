@@ -46,34 +46,36 @@ def test_jacobian_pushforward_dense():
 
 
 def test_jacobian_pushforward_implicit():
-    loader, model, function, n_output = get_linear_task()
-    generator = Jacobian(model=model,
-                         loader=loader,
-                         function=function,
-                         n_output=n_output)
-    dense_push_forward = DensePushForward(generator)
-    implicit_push_forward = ImplicitPushForward(generator)
-    dw = random_pvector(model)
+    for get_task in [get_linear_task, get_batchnorm_linear_task]:
+        loader, model, function, n_output = get_task()
+        generator = Jacobian(model=model,
+                             loader=loader,
+                             function=function,
+                             n_output=n_output)
+        dense_push_forward = DensePushForward(generator)
+        implicit_push_forward = ImplicitPushForward(generator)
+        dw = random_pvector(model)
 
-    doutput_lin_dense = dense_push_forward.mv(dw)
-    doutput_lin_implicit = implicit_push_forward.mv(dw)
+        doutput_lin_dense = dense_push_forward.mv(dw)
+        doutput_lin_implicit = implicit_push_forward.mv(dw)
 
-    check_tensors(doutput_lin_dense.get_flat_representation(),
-                  doutput_lin_implicit.get_flat_representation())
+        check_tensors(doutput_lin_dense.get_flat_representation(),
+                      doutput_lin_implicit.get_flat_representation())
 
 
 def test_jacobian_pullback_dense():
-    loader, model, function, n_output = get_linear_task()
-    generator = Jacobian(model=model,
-                         loader=loader,
-                         function=function,
-                         n_output=n_output)
-    pull_back = DensePullBack(generator)
-    push_forward = DensePushForward(generator)
-    dw = random_pvector(model)
+    for get_task in [get_linear_task, get_batchnorm_linear_task]:
+        loader, model, function, n_output = get_task()
+        generator = Jacobian(model=model,
+                             loader=loader,
+                             function=function,
+                             n_output=n_output)
+        pull_back = DensePullBack(generator)
+        push_forward = DensePushForward(generator)
+        dw = random_pvector(model)
 
-    doutput_lin = push_forward.mv(dw)
-    dinput_lin = pull_back.mv(doutput_lin)
-    check_ratio(torch.dot(dw.get_flat_representation(),
-                          dinput_lin.get_flat_representation()),
-                torch.norm(doutput_lin.get_flat_representation())**2)
+        doutput_lin = push_forward.mv(dw)
+        dinput_lin = pull_back.mv(doutput_lin)
+        check_ratio(torch.dot(dw.get_flat_representation(),
+                              dinput_lin.get_flat_representation()),
+                    torch.norm(doutput_lin.get_flat_representation())**2)

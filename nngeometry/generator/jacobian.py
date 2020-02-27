@@ -355,7 +355,6 @@ class Jacobian:
 
         device = next(self.model.parameters()).device
         n_examples = len(self.loader.sampler)
-        self.compute_switch = True
         self._Jv = torch.zeros((self.n_output, n_examples), device=device)
         self.start = 0
         for d in self.loader:
@@ -375,7 +374,6 @@ class Jacobian:
         del self._Jv
         del self._v
         del self.start
-        del self.compute_switch
         for h in self.handles:
             h.remove()
 
@@ -576,27 +574,45 @@ class Jacobian:
                 raise NotImplementedError
 
     def _hook_compute_Jv(self, mod, grad_input, grad_output):
-        if self.compute_switch:
-            mod_class = mod.__class__.__name__
-            gy = grad_output[0]
-            x = self.xs[mod]
-            bs = x.size(0)
-            if mod_class == 'Linear':
+        mod_class = mod.__class__.__name__
+        gy = grad_output[0]
+        x = self.xs[mod]
+        bs = x.size(0)
+        if mod_class == 'Linear':
+            self._Jv[self.i_output, self.start:self.start+bs].add_(
+                (torch.mm(x, self._v[mod.weight].t()) * gy).sum(dim=1))
+            if mod.bias is not None:
                 self._Jv[self.i_output, self.start:self.start+bs].add_(
-                    (torch.mm(x, self._v[mod.weight].t()) * gy).sum(dim=1))
-                if mod.bias is not None:
-                    self._Jv[self.i_output, self.start:self.start+bs].add_(
-                        torch.mv(gy, self._v[mod.bias]))
-            elif mod_class == 'Conv2d':
-                gy2 = F.conv2d(x, self._v[mod.weight], stride=mod.stride,
-                               padding=mod.padding, dilation=mod.dilation)
+                    torch.mv(gy, self._v[mod.bias]))
+        elif mod_class == 'Conv2d':
+            gy2 = F.conv2d(x, self._v[mod.weight], stride=mod.stride,
+                           padding=mod.padding, dilation=mod.dilation)
+            self._Jv[self.i_output, self.start:self.start+bs].add_(
+                (gy * gy2).view(bs, -1).sum(dim=1))
+            if mod.bias is not None:
                 self._Jv[self.i_output, self.start:self.start+bs].add_(
-                    (gy * gy2).view(bs, -1).sum(dim=1))
-                if mod.bias is not None:
-                    self._Jv[self.i_output, self.start:self.start+bs].add_(
-                        torch.mv(gy.sum(dim=(2, 3)), self._v[mod.bias]))
-            else:
-                raise NotImplementedError
+                    torch.mv(gy.sum(dim=(2, 3)), self._v[mod.bias]))
+        elif mod_class == 'BatchNorm1d':
+            x_normalized = F.batch_norm(x, mod.running_mean,
+                                        mod.running_var,
+                                        None, None, mod.training)
+            self._Jv[self.i_output, self.start:self.start+bs].add_(
+                torch.mv(gy * x_normalized, self._v[mod.weight]))
+            if mod.bias is not None:
+                self._Jv[self.i_output, self.start:self.start+bs].add_(
+                    torch.mv(gy, self._v[mod.bias]))
+        elif mod_class == 'BatchNorm2d':
+            x_normalized = F.batch_norm(x, mod.running_mean,
+                                        mod.running_var,
+                                        None, None, mod.training)
+            self._Jv[self.i_output, self.start:self.start+bs].add_(
+                torch.mv((gy * x_normalized).sum(dim=(2, 3)),
+                         self._v[mod.weight]))
+            if mod.bias is not None:
+                self._Jv[self.i_output, self.start:self.start+bs].add_(
+                    torch.mv(gy.sum(dim=(2, 3)), self._v[mod.bias]))
+        else:
+            raise NotImplementedError
 
     def _hook_compute_trace(self, mod, grad_input, grad_output):
         mod_class = mod.__class__.__name__
