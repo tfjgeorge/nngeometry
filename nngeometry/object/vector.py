@@ -1,5 +1,5 @@
 import torch
-from ..utils import get_individual_modules, get_n_parameters
+from ..utils import get_individual_modules
 
 
 def random_pvector_dict(model):
@@ -13,11 +13,11 @@ def random_pvector_dict(model):
     return PVector(model=model, dict_repr=v_dict)
 
 
-def random_pvector(model):
-    n_parameters = get_n_parameters(model)
+def random_pvector(layer_collection, device=None):
+    n_parameters = layer_collection.numel()
     random_v_flat = torch.rand((n_parameters,),
-                               device=next(model.parameters()).device)
-    return PVector(model=model,
+                               device=device)
+    return PVector(layer_collection=layer_collection,
                    vector_repr=random_v_flat)
 
 
@@ -25,11 +25,11 @@ class PVector:
     """
     A vector in parameter space
     """
-    def __init__(self, model, vector_repr=None, dict_repr=None):
-        self.model = model
+    def __init__(self, layer_collection, vector_repr=None,
+                 dict_repr=None):
+        self.layer_collection = layer_collection
         self.vector_repr = vector_repr
         self.dict_repr = dict_repr
-        self.mods, self.p_pos = get_individual_modules(model)
 
     def from_model(model):
         dict_repr = dict()
@@ -155,8 +155,7 @@ class FVector:
     """
     A vector in function space
     """
-    def __init__(self, model, vector_repr=None):
-        self.model = model
+    def __init__(self, vector_repr=None):
         self.vector_repr = vector_repr
 
     def get_flat_representation(self):

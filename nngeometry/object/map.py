@@ -25,7 +25,7 @@ class DensePushForward(AbstractPushForward):
         v_flat = torch.mv(self.data.view(-1, self.data.size(-1)),
                           v.get_flat_representation())
         v_flat = v_flat.view(self.data.size(0), self.data.size(1))
-        return FVector(v.model, vector_repr=v_flat)
+        return FVector(vector_repr=v_flat)
 
 
 class ImplicitPushForward(AbstractPushForward):

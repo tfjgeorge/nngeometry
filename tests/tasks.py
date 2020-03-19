@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as tF
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
+from nngeometry.layercollection import LayerCollection
 import os
 
 default_datapath = 'tmp'
@@ -76,7 +77,9 @@ def get_linear_task():
     def output_fn(input, target):
         return net(input.to('cuda'))
 
-    return train_loader, net, output_fn, 2
+    layer_collection = LayerCollection.from_model(net)
+    return (train_loader, layer_collection, net.parameters(),
+            net, output_fn, 2)
 
 
 class BatchNormLinearNet(nn.Module):
@@ -107,7 +110,9 @@ def get_batchnorm_linear_task():
     def output_fn(input, target):
         return net(input.to('cuda'))
 
-    return train_loader, net, output_fn, 2
+    layer_collection = LayerCollection.from_model(net)
+    return (train_loader, layer_collection, net.parameters(),
+            net, output_fn, 2)
 
 
 def get_mnist():
@@ -124,10 +129,23 @@ def get_fullyconnect_task(batch_norm=False):
         dataset=train_set,
         batch_size=300,
         shuffle=False)
-    net = FCNet(in_size=10, batch_norm=batch_norm)
+    net = FCNet(in_size=784, batch_norm=batch_norm)
     net.to('cuda')
 
     def output_fn(input, target):
-        return net(input)
+        return net(input.to('cuda'))
 
-    return train_loader, net, output_fn
+    layer_collection = LayerCollection.from_model(net)
+    return (train_loader, layer_collection, net.parameters(),
+            net, output_fn, 10)
+
+
+def get_fullyconnect_onlylast_task():
+    train_loader, lc_full, _, net, output_fn, n_output = \
+        get_fullyconnect_task()
+    layer_collection = LayerCollection()
+    # only keep last layer parameters
+    layer_collection.add_layer(*lc_full.layers.popitem())
+    parameters = net.net[-1].parameters()
+
+    return train_loader, layer_collection, parameters, net, output_fn, n_output

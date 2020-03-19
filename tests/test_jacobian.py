@@ -1,5 +1,6 @@
 import torch
-from tasks import get_linear_task, get_batchnorm_linear_task
+from tasks import (get_linear_task, get_batchnorm_linear_task,
+                   get_fullyconnect_onlylast_task)
 from nngeometry.object.map import (DensePushForward, ImplicitPushForward,
                                    DensePullBack)
 from nngeometry.generator import Jacobian
@@ -7,9 +8,13 @@ from nngeometry.object.vector import random_pvector
 from utils import check_ratio, check_tensors
 
 
-def update_model(model, dw):
+linear_tasks = [get_linear_task, get_batchnorm_linear_task,
+                get_fullyconnect_onlylast_task]
+
+
+def update_model(parameters, dw):
     i = 0
-    for p in model.parameters():
+    for p in parameters:
         j = i + p.numel()
         p.data += dw[i:j].view(*p.size())
         i = j
@@ -25,20 +30,21 @@ def get_output_vector(loader, function):
 
 
 def test_jacobian_pushforward_dense():
-    for get_task in [get_linear_task, get_batchnorm_linear_task]:
-        loader, model, function, n_output = get_task()
+    for get_task in linear_tasks:
+        loader, lc, parameters, model, function, n_output = get_task()
         model.train()
-        generator = Jacobian(model=model,
+        generator = Jacobian(layer_collection=lc,
+                             model=model,
                              loader=loader,
                              function=function,
                              n_output=n_output)
         push_forward = DensePushForward(generator)
-        dw = random_pvector(model)
+        dw = random_pvector(lc, device='cuda')
 
         doutput_lin = push_forward.mv(dw)
 
         output_before = get_output_vector(loader, function)
-        update_model(model, dw.get_flat_representation())
+        update_model(parameters, dw.get_flat_representation())
         output_after = get_output_vector(loader, function)
 
         check_tensors(output_after - output_before,

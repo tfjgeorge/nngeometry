@@ -6,8 +6,9 @@ from ..object.vector import PVector, FVector
 
 
 class Jacobian:
-    def __init__(self, model, loader, function, n_output=1):
+    def __init__(self, layer_collection, model, loader, function, n_output=1):
         self.model = model
+        self.layer_collection = layer_collection
         self.loader = loader
         self.handles = []
         self.xs = dict()
@@ -15,6 +16,9 @@ class Jacobian:
         # maps parameters to their position in flattened representation
         self.mods, self.p_pos = get_individual_modules(model)
         self.function = function
+        self.layer_collection = layer_collection
+        self.l_to_m, self.m_to_l = \
+            layer_collection.get_layerid_module_maps(model)
 
     def get_n_parameters(self):
         return get_n_parameters(self.model)
@@ -54,11 +58,12 @@ class Jacobian:
     def get_jacobian(self):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex,
-                                        self._hook_compute_flat_grad)
+                                        self._hook_compute_flat_grad,
+                                        self.l_to_m.values())
 
         device = next(self.model.parameters()).device
         n_examples = len(self.loader.sampler)
-        n_parameters = sum([p.numel() for p in self.model.parameters()])
+        n_parameters = self.layer_collection.numel()
         self.grads = torch.zeros((self.n_output, n_examples, n_parameters),
                                  device=device)
         self.start = 0
@@ -379,9 +384,9 @@ class Jacobian:
 
         return FVector(self.model, vector_repr=Jv)
 
-    def _add_hooks(self, hook_x, hook_gy):
+    def _add_hooks(self, hook_x, hook_gy, mods):
         handles = []
-        for m in self.mods:
+        for m in mods:
             handles.append(m.register_forward_pre_hook(hook_x))
             handles.append(m.register_backward_hook(hook_gy))
         return handles
@@ -394,12 +399,13 @@ class Jacobian:
         gy = grad_output[0]
         x = self.xs[mod]
         bs = x.size(0)
-        start_p = self.p_pos[mod]
+        layer_id = self.m_to_l[mod]
+        start_p = self.layer_collection.p_pos[layer_id]
         if mod_class == 'Linear':
             self.grads[self.i_output, self.start:self.start+bs,
                        start_p:start_p+mod.weight.numel()] \
                 .add_(torch.bmm(gy.unsqueeze(2), x.unsqueeze(1)).view(bs, -1))
-            if mod.bias is not None:
+            if self.layer_collection[layer_id].bias:
                 start_p += mod.weight.numel()
                 self.grads[self.i_output, self.start:self.start+bs,
                            start_p:start_p+mod.bias.numel()] \
@@ -409,7 +415,7 @@ class Jacobian:
             self.grads[self.i_output, self.start:self.start+bs,
                        start_p:start_p+mod.weight.numel()] \
                 .add_(indiv_gw.view(bs, -1))
-            if mod.bias is not None:
+            if self.layer_collection[layer_id].bias:
                 start_p += mod.weight.numel()
                 self.grads[self.i_output, self.start:self.start+bs,
                            start_p:start_p+mod.bias.numel()] \
@@ -421,11 +427,10 @@ class Jacobian:
             self.grads[self.i_output, self.start:self.start+bs,
                        start_p:start_p+mod.weight.numel()] \
                 .add_(gy * x_normalized)
-            if mod.bias is not None:
-                start_p += mod.weight.numel()
-                self.grads[self.i_output, self.start:self.start+bs,
-                           start_p:start_p+mod.bias.numel()] \
-                    .add_(gy)
+            start_p += mod.weight.numel()
+            self.grads[self.i_output, self.start:self.start+bs,
+                       start_p:start_p+mod.bias.numel()] \
+                .add_(gy)
         elif mod_class == 'BatchNorm2d':
             x_normalized = F.batch_norm(x, mod.running_mean,
                                         mod.running_var,
@@ -433,11 +438,10 @@ class Jacobian:
             self.grads[self.i_output, self.start:self.start+bs,
                        start_p:start_p+mod.weight.numel()] \
                 .add_((gy * x_normalized).sum(dim=(2, 3)))
-            if mod.bias is not None:
-                start_p += mod.weight.numel()
-                self.grads[self.i_output, self.start:self.start+bs,
-                           start_p:start_p+mod.bias.numel()] \
-                    .add_(gy.sum(dim=(2, 3)))
+            start_p += mod.weight.numel()
+            self.grads[self.i_output, self.start:self.start+bs,
+                       start_p:start_p+mod.bias.numel()] \
+                .add_(gy.sum(dim=(2, 3)))
         else:
             raise NotImplementedError
 
