@@ -54,13 +54,19 @@ class LinearNet(nn.Module):
     def __init__(self):
         super(LinearNet, self).__init__()
         self.conv1 = nn.Conv2d(1, 5, 3, 1)
+        self.conv2 = nn.Conv2d(1, 3, 2, 1, bias=False)
         self.fc1 = nn.Linear(28*28, 10)
+        self.fc2 = nn.Linear(28*28, 7, bias=False)
 
     def forward(self, x):
-        conv_out = self.conv1(x)
-        fc_out = self.fc1(x.view(x.size(0), -1))
-        output = torch.stack([conv_out.sum(dim=(1, 2, 3)),
-                              fc_out.sum(dim=(1))], dim=1)
+        conv1_out = self.conv1(x)
+        conv2_out = self.conv2(x)
+        fc1_out = self.fc1(x.view(x.size(0), -1))
+        fc2_out = self.fc2(x.view(x.size(0), -1))
+        output = torch.stack([conv1_out.sum(dim=(1, 2, 3)),
+                              fc1_out.sum(dim=(1)),
+                              conv2_out.sum(dim=(1, 2, 3)),
+                              fc2_out.sum(dim=(1))], dim=1)
         return output
 
 
@@ -79,7 +85,7 @@ def get_linear_task():
 
     layer_collection = LayerCollection.from_model(net)
     return (train_loader, layer_collection, net.parameters(),
-            net, output_fn, 2)
+            net, output_fn, 4)
 
 
 class BatchNormLinearNet(nn.Module):
