@@ -1,6 +1,7 @@
 import torch
 from tasks import (get_linear_task, get_batchnorm_linear_task,
-                   get_fullyconnect_onlylast_task)
+                   get_fullyconnect_onlylast_task,
+                   get_fullyconnect_task)
 from nngeometry.object.map import (DensePushForward, ImplicitPushForward,
                                    DensePullBack)
 from nngeometry.generator import Jacobian
@@ -10,6 +11,8 @@ from utils import check_ratio, check_tensors
 
 linear_tasks = [get_linear_task, get_batchnorm_linear_task,
                 get_fullyconnect_onlylast_task]
+
+nonlinear_tasks = [get_fullyconnect_task]
 
 
 def update_model(parameters, dw):
@@ -29,7 +32,7 @@ def get_output_vector(loader, function):
         return torch.cat(outputs)
 
 
-def test_jacobian_pushforward_dense():
+def test_jacobian_pushforward_dense_linear():
     for get_task in linear_tasks:
         loader, lc, parameters, model, function, n_output = get_task()
         model.train()
@@ -49,6 +52,29 @@ def test_jacobian_pushforward_dense():
 
         check_tensors(output_after - output_before,
                       doutput_lin.get_flat_representation().t())
+
+
+def test_jacobian_pushforward_dense_nonlinear():
+    for get_task in nonlinear_tasks:
+        loader, lc, parameters, model, function, n_output = get_task()
+        model.train()
+        generator = Jacobian(layer_collection=lc,
+                             model=model,
+                             loader=loader,
+                             function=function,
+                             n_output=n_output)
+        push_forward = DensePushForward(generator)
+        dw = 1e-4 * random_pvector(lc, device='cuda')
+
+        doutput_lin = push_forward.mv(dw)
+
+        output_before = get_output_vector(loader, function)
+        update_model(parameters, dw.get_flat_representation())
+        output_after = get_output_vector(loader, function)
+
+        check_tensors(output_after - output_before,
+                      doutput_lin.get_flat_representation().t(),
+                      1e-2)
 
 
 def test_jacobian_pushforward_implicit():

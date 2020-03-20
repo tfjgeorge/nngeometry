@@ -15,8 +15,9 @@ def random_pvector_dict(model):
 
 def random_pvector(layer_collection, device=None):
     n_parameters = layer_collection.numel()
-    random_v_flat = torch.rand((n_parameters,),
-                               device=device)
+    random_v_flat = torch.randn((n_parameters,),
+                                device=device)
+    random_v_flat /= torch.norm(random_v_flat)
     return PVector(layer_collection=layer_collection,
                    vector_repr=random_v_flat)
 
@@ -113,6 +114,21 @@ class PVector:
             else:
                 dict_repr[mod] = (w,)
         return dict_repr
+
+    def __rmul__(self, x):
+        # scalar multiplication
+        if self.dict_repr is not None:
+            v_dict = dict()
+            for l_id, l in self.layer_collection.layers.items():
+                if l.bias:
+                    v_dict[l_id] = (x * self.dict_repr[l_id][0],
+                                    x * self.dict_repr[l_id][1])
+                else:
+                    v_dict[l_id] = (x * self.dict_repr[l_id][0])
+            return PVector(self.layer_collection, dict_repr=v_dict)
+        else:
+            return PVector(self.layer_collection,
+                           vector_repr=x * self.vector_repr)
 
     def __add__(self, other):
         if self.dict_repr is not None and other.dict_repr is not None:
