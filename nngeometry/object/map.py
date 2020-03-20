@@ -57,4 +57,4 @@ class DensePullBack(AbstractPullBack):
     def mv(self, v):
         v_flat = torch.mv(self.data.view(-1, self.data.size(-1)).t(),
                           v.get_flat_representation().view(-1))
-        return PVector(v.model, vector_repr=v_flat)
+        return PVector(self.generator.layer_collection, vector_repr=v_flat)

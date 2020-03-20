@@ -58,6 +58,16 @@ class LayerCollection:
     def __getitem__(self, layer_id):
         return self.layers[layer_id]
 
+    def parameters(self, layerid_to_module):
+        for layer_id, layer in self.layers.items():
+            yield layerid_to_module[layer_id].weight
+            if (isinstance(layer, BatchNorm1dLayer) or
+                    isinstance(layer, BatchNorm2dLayer)):
+                yield layerid_to_module[layer_id].bias
+            # otherwise it is a Linear or Conv2d with optional bias
+            elif layer.bias:
+                yield layerid_to_module[layer_id].bias
+
 
 class AbstractLayer(ABC):
     pass

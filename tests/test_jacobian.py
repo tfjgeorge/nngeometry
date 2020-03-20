@@ -52,15 +52,16 @@ def test_jacobian_pushforward_dense():
 
 
 def test_jacobian_pushforward_implicit():
-    for get_task in [get_linear_task, get_batchnorm_linear_task]:
-        loader, model, function, n_output = get_task()
-        generator = Jacobian(model=model,
+    for get_task in linear_tasks:
+        loader, lc, parameters, model, function, n_output = get_task()
+        generator = Jacobian(layer_collection=lc,
+                             model=model,
                              loader=loader,
                              function=function,
                              n_output=n_output)
         dense_push_forward = DensePushForward(generator)
         implicit_push_forward = ImplicitPushForward(generator)
-        dw = random_pvector(model)
+        dw = random_pvector(lc, device='cuda')
 
         doutput_lin_dense = dense_push_forward.mv(dw)
         doutput_lin_implicit = implicit_push_forward.mv(dw)
@@ -70,15 +71,16 @@ def test_jacobian_pushforward_implicit():
 
 
 def test_jacobian_pullback_dense():
-    for get_task in [get_linear_task, get_batchnorm_linear_task]:
-        loader, model, function, n_output = get_task()
-        generator = Jacobian(model=model,
+    for get_task in linear_tasks:
+        loader, lc, parameters, model, function, n_output = get_task()
+        generator = Jacobian(layer_collection=lc,
+                             model=model,
                              loader=loader,
                              function=function,
                              n_output=n_output)
         pull_back = DensePullBack(generator)
         push_forward = DensePushForward(generator)
-        dw = random_pvector(model)
+        dw = random_pvector(lc, device='cuda')
 
         doutput_lin = push_forward.mv(dw)
         dinput_lin = pull_back.mv(doutput_lin)

@@ -8,7 +8,6 @@ from ..object.vector import PVector, FVector
 class Jacobian:
     def __init__(self, layer_collection, model, loader, function, n_output=1):
         self.model = model
-        self.layer_collection = layer_collection
         self.loader = loader
         self.handles = []
         self.xs = dict()
@@ -350,11 +349,12 @@ class Jacobian:
     def implicit_Jv(self, v):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex,
-                                        self._hook_compute_Jv)
+                                        self._hook_compute_Jv,
+                                        self.l_to_m.values())
 
         i = 0
         self._v = dict()
-        for p in self.model.parameters():
+        for p in self.layer_collection.parameters(self.l_to_m):
             self._v[p] = v[i:i+p.numel()].view(*p.size())
             i += p.numel()
 
@@ -379,10 +379,11 @@ class Jacobian:
         del self._Jv
         del self._v
         del self.start
+        del self.i_output
         for h in self.handles:
             h.remove()
 
-        return FVector(self.model, vector_repr=Jv)
+        return FVector(vector_repr=Jv)
 
     def _add_hooks(self, hook_x, hook_gy, mods):
         handles = []
@@ -582,18 +583,20 @@ class Jacobian:
         gy = grad_output[0]
         x = self.xs[mod]
         bs = x.size(0)
+        layer_id = self.m_to_l[mod]
+
         if mod_class == 'Linear':
             self._Jv[self.i_output, self.start:self.start+bs].add_(
                 (torch.mm(x, self._v[mod.weight].t()) * gy).sum(dim=1))
-            if mod.bias is not None:
+            if self.layer_collection[layer_id].bias:
                 self._Jv[self.i_output, self.start:self.start+bs].add_(
-                    torch.mv(gy, self._v[mod.bias]))
+                    torch.mv(gy.contiguous(), self._v[mod.bias]))
         elif mod_class == 'Conv2d':
             gy2 = F.conv2d(x, self._v[mod.weight], stride=mod.stride,
                            padding=mod.padding, dilation=mod.dilation)
             self._Jv[self.i_output, self.start:self.start+bs].add_(
                 (gy * gy2).view(bs, -1).sum(dim=1))
-            if mod.bias is not None:
+            if self.layer_collection[layer_id].bias:
                 self._Jv[self.i_output, self.start:self.start+bs].add_(
                     torch.mv(gy.sum(dim=(2, 3)), self._v[mod.bias]))
         elif mod_class == 'BatchNorm1d':
@@ -602,9 +605,8 @@ class Jacobian:
                                         None, None, mod.training)
             self._Jv[self.i_output, self.start:self.start+bs].add_(
                 torch.mv(gy * x_normalized, self._v[mod.weight]))
-            if mod.bias is not None:
-                self._Jv[self.i_output, self.start:self.start+bs].add_(
-                    torch.mv(gy, self._v[mod.bias]))
+            self._Jv[self.i_output, self.start:self.start+bs].add_(
+                torch.mv(gy, self._v[mod.bias]))
         elif mod_class == 'BatchNorm2d':
             x_normalized = F.batch_norm(x, mod.running_mean,
                                         mod.running_var,
@@ -612,9 +614,8 @@ class Jacobian:
             self._Jv[self.i_output, self.start:self.start+bs].add_(
                 torch.mv((gy * x_normalized).sum(dim=(2, 3)),
                          self._v[mod.weight]))
-            if mod.bias is not None:
-                self._Jv[self.i_output, self.start:self.start+bs].add_(
-                    torch.mv(gy.sum(dim=(2, 3)), self._v[mod.bias]))
+            self._Jv[self.i_output, self.start:self.start+bs].add_(
+                torch.mv(gy.sum(dim=(2, 3)), self._v[mod.bias]))
         else:
             raise NotImplementedError
 
