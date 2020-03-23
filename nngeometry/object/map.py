@@ -10,7 +10,7 @@ class AbstractPushForward(ABC):
         return NotImplementedError
 
 
-class DensePushForward(AbstractPushForward):
+class PushForwardDense(AbstractPushForward):
     def __init__(self, generator, data=None):
         self.generator = generator
         if data is not None:
@@ -18,7 +18,7 @@ class DensePushForward(AbstractPushForward):
         else:
             self.data = generator.get_jacobian()
 
-    def get_matrix(self):
+    def get_tensor(self):
         return self.data
 
     def mv(self, v):
@@ -28,7 +28,7 @@ class DensePushForward(AbstractPushForward):
         return FVector(vector_repr=v_flat)
 
 
-class ImplicitPushForward(AbstractPushForward):
+class PushForwardImplicit(AbstractPushForward):
     def __init__(self, generator):
         self.generator = generator
 
@@ -36,14 +36,14 @@ class ImplicitPushForward(AbstractPushForward):
         return self.generator.implicit_Jv(v.get_flat_representation())
 
 
-class AbstractPullBack(ABC):
+class PullBackAbstract(ABC):
 
     @abstractmethod
     def __init__(self, generator):
         return NotImplementedError
 
 
-class DensePullBack(AbstractPullBack):
+class PullBackDense(PullBackAbstract):
     def __init__(self, generator, data=None):
         self.generator = generator
         if data is not None:
@@ -51,7 +51,7 @@ class DensePullBack(AbstractPullBack):
         else:
             self.data = generator.get_jacobian()
 
-    def get_matrix(self):
+    def get_tensor(self):
         return self.data.t()
 
     def mv(self, v):

@@ -88,6 +88,73 @@ class Jacobian:
 
         return grads
 
+    def get_gram_matrix(self):
+        # add hooks
+        self.handles += self._add_hooks(self._hook_savex_io, self._hook_kxy,
+                                        self.l_to_m.values())
+
+        device = next(self.model.parameters()).device
+        n_examples = len(self.loader.sampler)
+        self.G = torch.zeros((self.n_output, n_examples,
+                              self.n_output, n_examples), device=device)
+        self.x_outer = dict()
+        self.x_inner = dict()
+        self.gy_outer = dict()
+        self.e_outer = 0
+        for i_outer, d in enumerate(self.loader):
+            # used in hooks to switch between store/compute
+            inputs_outer = d[0]
+            inputs_outer.requires_grad = True
+            bs_outer = inputs_outer.size(0)
+            self.outerloop_switch = True
+            output_outer = self.function(*d).view(bs_outer, self.n_output) \
+                .sum(dim=0)
+            for self.i_output_outer in range(self.n_output):
+                self.outerloop_switch = True
+                torch.autograd.grad(output_outer[self.i_output_outer],
+                                    [inputs_outer], retain_graph=True)
+                self.outerloop_switch = False
+
+                self.e_inner = 0
+                for i_inner, d in enumerate(self.loader):
+                    if i_inner > i_outer:
+                        break
+                    inputs_inner = d[0]
+                    inputs_inner.requires_grad = True
+                    bs_inner = inputs_inner.size(0)
+                    output_inner = self.function(*d).view(bs_inner,
+                                                          self.n_output) \
+                        .sum(dim=0)
+                    for self.i_output_inner in range(self.n_output):
+                        torch.autograd.grad(output_inner[self.i_output_inner],
+                                            [inputs_inner], retain_graph=True)
+
+                    # since self.G is a symmetric matrix we only need to
+                    # compute the upper or lower triangle
+                    # => copy block and exclude diagonal
+                    if (i_inner < i_outer and
+                            self.i_output_outer == self.n_output - 1):
+                        self.G[:, self.e_outer:self.e_outer+bs_outer, :,
+                               self.e_inner:self.e_inner+bs_inner] += \
+                            self.G[:, self.e_inner:self.e_inner+bs_inner, :,
+                                   self.e_outer:self.e_outer+bs_outer] \
+                                .permute(2, 3, 0, 1)
+                    self.e_inner += inputs_inner.size(0)
+
+            self.e_outer += inputs_outer.size(0)
+        G = self.G
+
+        # remove hooks
+        del self.e_inner, self.e_outer
+        del self.G
+        del self.x_inner
+        del self.x_outer
+        del self.gy_outer
+        for h in self.handles:
+            h.remove()
+
+        return G
+
     def get_layer_blocks(self):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex,
@@ -395,6 +462,12 @@ class Jacobian:
     def _hook_savex(self, mod, i):
         self.xs[mod] = i[0]
 
+    def _hook_savex_io(self, mod, i):
+        if self.outerloop_switch:
+            self.x_outer[mod] = i[0]
+        else:
+            self.x_inner[mod] = i[0]
+
     def _hook_compute_flat_grad(self, mod, grad_input, grad_output):
         mod_class = mod.__class__.__name__
         gy = grad_output[0]
@@ -445,6 +518,85 @@ class Jacobian:
                 .add_(gy.sum(dim=(2, 3)))
         else:
             raise NotImplementedError
+
+    def _hook_kxy(self, mod, grad_input, grad_output):
+        if self.outerloop_switch:
+            self.gy_outer[mod] = grad_output[0]
+        else:
+            mod_class = mod.__class__.__name__
+            layer_id = self.m_to_l[mod]
+            gy_inner = grad_output[0]
+            gy_outer = self.gy_outer[mod]
+            x_outer = self.x_outer[mod]
+            x_inner = self.x_inner[mod]
+            bs_inner = x_inner.size(0)
+            bs_outer = x_outer.size(0)
+            if mod_class == 'Linear':
+                self.G[self.i_output_inner,
+                       self.e_inner:self.e_inner+bs_inner,
+                       self.i_output_outer,
+                       self.e_outer:self.e_outer+bs_outer] += \
+                    torch.mm(x_inner, x_outer.t()) * \
+                    torch.mm(gy_inner, gy_outer.t())
+                if self.layer_collection[layer_id].bias:
+                    self.G[self.i_output_inner,
+                           self.e_inner:self.e_inner+bs_inner,
+                           self.i_output_outer,
+                           self.e_outer:self.e_outer+bs_outer] += \
+                        torch.mm(gy_inner, gy_outer.t())
+            elif mod_class == 'Conv2d':
+                indiv_gw_inner = per_example_grad_conv(mod, x_inner, gy_inner)
+                indiv_gw_outer = per_example_grad_conv(mod, x_outer, gy_outer)
+                self.G[self.i_output_inner,
+                       self.e_inner:self.e_inner+bs_inner,
+                       self.i_output_outer,
+                       self.e_outer:self.e_outer+bs_outer] += \
+                    torch.mm(indiv_gw_inner.view(bs_inner, -1),
+                             indiv_gw_outer.view(bs_outer, -1).t())
+                if self.layer_collection[layer_id].bias:
+                    self.G[self.i_output_inner,
+                           self.e_inner:self.e_inner+bs_inner,
+                           self.i_output_outer,
+                           self.e_outer:self.e_outer+bs_outer] += \
+                        torch.mm(gy_inner.sum(dim=(2, 3)),
+                                 gy_outer.sum(dim=(2, 3)).t())
+            elif mod_class == 'BatchNorm1d':
+                x_norm_inner = F.batch_norm(x_inner, None, None, None,
+                                            None, True)
+                x_norm_outer = F.batch_norm(x_outer, None, None, None,
+                                            None, True)
+                indiv_gw_inner = x_norm_inner * gy_inner
+                indiv_gw_outer = x_norm_outer * gy_outer
+                self.G[self.i_output_inner,
+                       self.e_inner:self.e_inner+bs_inner,
+                       self.i_output_outer,
+                       self.e_outer:self.e_outer+bs_outer] += \
+                    torch.mm(indiv_gw_inner, indiv_gw_outer.t())
+                self.G[self.i_output_inner,
+                       self.e_inner:self.e_inner+bs_inner,
+                       self.i_output_outer,
+                       self.e_outer:self.e_outer+bs_outer] += \
+                    torch.mm(gy_inner, gy_outer.t())
+            elif mod_class == 'BatchNorm2d':
+                x_norm_inner = F.batch_norm(x_inner, None, None, None,
+                                            None, True)
+                x_norm_outer = F.batch_norm(x_outer, None, None, None,
+                                            None, True)
+                indiv_gw_inner = (x_norm_inner * gy_inner).sum(dim=(2, 3))
+                indiv_gw_outer = (x_norm_outer * gy_outer).sum(dim=(2, 3))
+                self.G[self.i_output_inner,
+                       self.e_inner:self.e_inner+bs_inner,
+                       self.i_output_outer,
+                       self.e_outer:self.e_outer+bs_outer] += \
+                    torch.mm(indiv_gw_inner, indiv_gw_outer.t())
+                self.G[self.i_output_inner,
+                       self.e_inner:self.e_inner+bs_inner,
+                       self.i_output_outer,
+                       self.e_outer:self.e_outer+bs_outer] += \
+                    torch.mm(gy_inner.sum(dim=(2, 3)),
+                             gy_outer.sum(dim=(2, 3)).t())
+            else:
+                raise NotImplementedError
 
     def _hook_compute_layer_blocks(self, mod, grad_input, grad_output):
         mod_class = mod.__class__.__name__
