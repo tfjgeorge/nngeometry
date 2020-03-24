@@ -6,7 +6,7 @@ from nngeometry.object.map import (PushForwardDense, PushForwardImplicit,
                                    PullBackDense)
 from nngeometry.object.fspace import FSpaceDense
 from nngeometry.generator import Jacobian
-from nngeometry.object.vector import random_pvector
+from nngeometry.object.vector import random_pvector, random_fvector
 from utils import check_ratio, check_tensors
 
 
@@ -126,12 +126,20 @@ def test_jacobian_fdense_vs_pushforward():
                              function=function,
                              n_output=n_output)
         push_forward = PushForwardDense(generator)
+        pull_back = PullBackDense(generator)
         fspace_dense = FSpaceDense(generator)
-        # dw = random_pvector(lc, device='cuda')
+        df = random_fvector(len(loader.sampler), n_output, device='cuda')
 
+        # Test get_tensor
         jacobian = push_forward.get_tensor()
         sj = jacobian.size()
         fspace_computed = torch.mm(jacobian.view(-1, sj[2]),
                                    jacobian.view(-1, sj[2]).t())
         check_tensors(fspace_computed.view(sj[0], sj[1], sj[0], sj[1]),
                       fspace_dense.get_tensor())
+
+        # Test vTMv
+        vTMv_fspace = fspace_dense.vTMv(df)
+        Jv_pullback = pull_back.mv(df).get_flat_representation()
+        vTMv_pullforward = torch.dot(Jv_pullback, Jv_pullback)
+        check_ratio(vTMv_pullforward, vTMv_fspace)

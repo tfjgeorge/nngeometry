@@ -22,6 +22,13 @@ def random_pvector(layer_collection, device=None):
                    vector_repr=random_v_flat)
 
 
+def random_fvector(n_samples, n_output=1, device=None):
+    random_v_flat = torch.randn((n_output, n_samples,),
+                                device=device)
+    random_v_flat /= torch.norm(random_v_flat)
+    return FVector(vector_repr=random_v_flat)
+
+
 class PVector:
     """
     A vector in parameter space
