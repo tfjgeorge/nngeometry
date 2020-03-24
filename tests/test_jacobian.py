@@ -118,28 +118,35 @@ def test_jacobian_pullback_dense():
 
 def test_jacobian_fdense_vs_pushforward():
     for get_task in linear_tasks + nonlinear_tasks:
-        loader, lc, parameters, model, function, n_output = get_task()
-        model.train()
-        generator = Jacobian(layer_collection=lc,
-                             model=model,
-                             loader=loader,
-                             function=function,
-                             n_output=n_output)
-        push_forward = PushForwardDense(generator)
-        pull_back = PullBackDense(generator)
-        fspace_dense = FSpaceDense(generator)
-        df = random_fvector(len(loader.sampler), n_output, device='cuda')
+        for centering in [True, False]:
+            loader, lc, parameters, model, function, n_output = get_task()
+            model.train()
+            generator = Jacobian(layer_collection=lc,
+                                 model=model,
+                                 loader=loader,
+                                 function=function,
+                                 n_output=n_output,
+                                 centering=centering)
+            push_forward = PushForwardDense(generator)
+            pull_back = PullBackDense(generator)
+            fspace_dense = FSpaceDense(generator)
+            df = random_fvector(len(loader.sampler), n_output, device='cuda')
 
-        # Test get_tensor
-        jacobian = push_forward.get_tensor()
-        sj = jacobian.size()
-        fspace_computed = torch.mm(jacobian.view(-1, sj[2]),
-                                   jacobian.view(-1, sj[2]).t())
-        check_tensors(fspace_computed.view(sj[0], sj[1], sj[0], sj[1]),
-                      fspace_dense.get_tensor())
+            # Test get_tensor
+            jacobian = push_forward.get_tensor()
+            sj = jacobian.size()
+            fspace_computed = torch.mm(jacobian.view(-1, sj[2]),
+                                       jacobian.view(-1, sj[2]).t())
+            check_tensors(fspace_computed.view(sj[0], sj[1], sj[0], sj[1]),
+                          fspace_dense.get_tensor(), eps=1e-4)
 
-        # Test vTMv
-        vTMv_fspace = fspace_dense.vTMv(df)
-        Jv_pullback = pull_back.mv(df).get_flat_representation()
-        vTMv_pullforward = torch.dot(Jv_pullback, Jv_pullback)
-        check_ratio(vTMv_pullforward, vTMv_fspace)
+            # Test vTMv
+            vTMv_fspace = fspace_dense.vTMv(df)
+            Jv_pullback = pull_back.mv(df).get_flat_representation()
+            vTMv_pullforward = torch.dot(Jv_pullback, Jv_pullback)
+            check_ratio(vTMv_pullforward, vTMv_fspace)
+
+            # Test frobenius
+            frob_fspace = fspace_dense.frobenius_norm()
+            frob_direct = (fspace_dense.get_tensor()**2).sum()**.5
+            check_ratio(frob_direct, frob_fspace)

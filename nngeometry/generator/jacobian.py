@@ -6,12 +6,14 @@ from ..object.vector import PVector, FVector
 
 
 class Jacobian:
-    def __init__(self, layer_collection, model, loader, function, n_output=1):
+    def __init__(self, layer_collection, model, loader, function, n_output=1,
+                 centering=False):
         self.model = model
         self.loader = loader
         self.handles = []
         self.xs = dict()
         self.n_output = n_output
+        self.centering = centering
         # maps parameters to their position in flattened representation
         self.mods, self.p_pos = get_individual_modules(model)
         self.function = function
@@ -77,6 +79,8 @@ class Jacobian:
                                     retain_graph=True)
             self.start += inputs.size(0)
         grads = self.grads
+        if self.centering:
+            grads -= grads.mean(dim=1, keepdim=True)
 
         # remove hooks
         del self.grads
@@ -143,6 +147,15 @@ class Jacobian:
 
             self.e_outer += inputs_outer.size(0)
         G = self.G
+        if self.centering:
+            C = torch.eye(n_examples, device=G.device) - \
+                torch.ones((n_examples, n_examples), device=G.device) / \
+                n_examples
+            sG = G.size()
+            G = torch.mm(G.view(-1, n_examples), C)
+            G = torch.mm(C, G.view(sG[0], sG[1], -1).permute(1, 0, 2)
+                         .contiguous().view(n_examples, -1)) \
+                .view(sG[1], sG[0], -1).permute(1, 0, 2).contiguous().view(*sG)
 
         # remove hooks
         del self.e_inner, self.e_outer
