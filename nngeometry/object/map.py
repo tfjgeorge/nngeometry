@@ -52,7 +52,7 @@ class PullBackDense(PullBackAbstract):
             self.data = generator.get_jacobian()
 
     def get_tensor(self):
-        return self.data.t()
+        return self.data
 
     def mv(self, v):
         v_flat = torch.mv(self.data.view(-1, self.data.size(-1)).t(),

@@ -5,6 +5,7 @@ from tasks import (get_linear_task, get_batchnorm_linear_task,
 from nngeometry.object.map import (PushForwardDense, PushForwardImplicit,
                                    PullBackDense)
 from nngeometry.object.fspace import FSpaceDense
+from nngeometry.object.pspace import PSpaceDense
 from nngeometry.generator import Jacobian
 from nngeometry.object.vector import random_pvector, random_fvector
 from utils import check_ratio, check_tensors
@@ -116,7 +117,7 @@ def test_jacobian_pullback_dense():
                     torch.norm(doutput_lin.get_flat_representation())**2)
 
 
-def test_jacobian_fdense_vs_pushforward():
+def test_jacobian_fdense_vs_pullback():
     for get_task in linear_tasks + nonlinear_tasks:
         for centering in [True, False]:
             loader, lc, parameters, model, function, n_output = get_task()
@@ -127,13 +128,12 @@ def test_jacobian_fdense_vs_pushforward():
                                  function=function,
                                  n_output=n_output,
                                  centering=centering)
-            push_forward = PushForwardDense(generator)
             pull_back = PullBackDense(generator)
             fspace_dense = FSpaceDense(generator)
             df = random_fvector(len(loader.sampler), n_output, device='cuda')
 
             # Test get_tensor
-            jacobian = push_forward.get_tensor()
+            jacobian = pull_back.get_tensor()
             sj = jacobian.size()
             fspace_computed = torch.mm(jacobian.view(-1, sj[2]),
                                        jacobian.view(-1, sj[2]).t())
@@ -149,4 +149,41 @@ def test_jacobian_fdense_vs_pushforward():
             # Test frobenius
             frob_fspace = fspace_dense.frobenius_norm()
             frob_direct = (fspace_dense.get_tensor()**2).sum()**.5
+            check_ratio(frob_direct, frob_fspace)
+
+
+def test_jacobian_pdense_vs_pushforward():
+    for get_task in linear_tasks + nonlinear_tasks:
+        for centering in [True, False]:
+            loader, lc, parameters, model, function, n_output = get_task()
+            model.train()
+            generator = Jacobian(layer_collection=lc,
+                                 model=model,
+                                 loader=loader,
+                                 function=function,
+                                 n_output=n_output,
+                                 centering=centering)
+            push_forward = PushForwardDense(generator)
+            pspace_dense = PSpaceDense(generator)
+            dw = random_pvector(lc, device='cuda')
+            n = len(loader.sampler)
+
+            # Test get_tensor
+            jacobian = push_forward.get_tensor()
+            sj = jacobian.size()
+            pspace_computed = torch.mm(jacobian.view(-1, sj[2]).t(),
+                                       jacobian.view(-1, sj[2])) / n
+            check_tensors(pspace_computed,
+                          pspace_dense.get_tensor(), eps=1e-4)
+
+            # Test vTMv
+            vTMv_pspace = pspace_dense.vTMv(dw)
+            Jv_pushforward = push_forward.mv(dw).get_flat_representation()
+            vTMv_pushforward = torch.dot(Jv_pushforward.view(-1),
+                                         Jv_pushforward.view(-1)) / n
+            check_ratio(vTMv_pushforward, vTMv_pspace)
+
+            # Test frobenius
+            frob_fspace = pspace_dense.frobenius_norm()
+            frob_direct = (pspace_dense.get_tensor()**2).sum()**.5
             check_ratio(frob_direct, frob_fspace)

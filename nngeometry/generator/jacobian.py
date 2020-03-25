@@ -27,26 +27,41 @@ class Jacobian:
     def get_device(self):
         return next(self.model.parameters()).device
 
-    def get_matrix(self):
+    def get_covariance_matrix(self):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex,
-                                        self._hook_compute_flat_grad)
+                                        self._hook_compute_flat_grad,
+                                        self.l_to_m.values())
 
         device = next(self.model.parameters()).device
         n_examples = len(self.loader.sampler)
-        n_parameters = sum([p.numel() for p in self.model.parameters()])
+        n_parameters = self.layer_collection.numel()
         bs = self.loader.batch_size
         G = torch.zeros((n_parameters, n_parameters), device=device)
-        self.grads = torch.zeros((bs, n_parameters), device=device)
+        self.grads = torch.zeros((1, bs, n_parameters), device=device)
+        if self.centering:
+            grad_mean = torch.zeros((self.n_output, n_parameters),
+                                    device=device)
+
         self.start = 0
-        for (inputs, targets) in self.loader:
-            self.grads.zero_()
-            inputs, targets = inputs.to(device), targets.to(device)
+        self.i_output = 0
+        for d in self.loader:
+            inputs = d[0]
             inputs.requires_grad = True
-            loss = self.function(inputs, targets).sum()
-            torch.autograd.grad(loss, [inputs])
-            G += torch.mm(self.grads.t(), self.grads)
+            bs = inputs.size(0)
+            output = self.function(*d).view(bs, self.n_output) \
+                .sum(dim=0)
+            for i in range(self.n_output):
+                self.grads.zero_()
+                torch.autograd.grad(output[i], [inputs],
+                                    retain_graph=True)
+                G += torch.mm(self.grads[0].t(), self.grads[0])
+                if self.centering:
+                    grad_mean[i].add_(self.grads[0].sum(dim=0))
         G /= n_examples
+        if self.centering:
+            grad_mean /= n_examples
+            G -= torch.mm(grad_mean.t(), grad_mean)
 
         # remove hooks
         del self.grads
