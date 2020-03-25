@@ -79,32 +79,37 @@ class PSpaceDense(PSpaceAbstract):
                            data=sub_data)
 
 
-class DiagMatrix(PSpaceAbstract):
+class PSpaceDiag(PSpaceAbstract):
     def __init__(self, generator=None, data=None):
         self.generator = generator
         if data is not None:
             self.data = data
         else:
-            self.data = generator.get_diag()
+            self.data = generator.get_covariance_diag()
 
     def mv(self, v):
+        # TODO: test
         v_flat = v.get_flat_representation() * self.data
         return PVector(v.model, vector_repr=v_flat)
 
     def trace(self):
+        # TODO: test
         return self.data.sum()
 
     def vTMv(self, v):
+        # TODO: test
         v_flat = v.get_flat_representation()
         return torch.dot(v_flat, self.data * v_flat)
 
     def frobenius_norm(self):
+        # TODO: test
         return torch.norm(self.data)
 
-    def get_matrix(self):
+    def get_tensor(self):
         return torch.diag(self.data)
 
     def size(self, dim=None):
+        # TODO: test
         s = self.data.size(0)
         if dim == 0 or dim == 1:
             return s
@@ -114,13 +119,15 @@ class DiagMatrix(PSpaceAbstract):
             raise IndexError
 
     def __add__(self, other):
+        # TODO: test
         sum_diags = self.data + other.data
-        return DiagMatrix(generator=self.generator,
+        return PSpaceDiag(generator=self.generator,
                           data=sum_diags)
 
     def __sub__(self, other):
+        # TODO: test
         sub_diags = self.data - other.data
-        return DiagMatrix(generator=self.generator,
+        return PSpaceDiag(generator=self.generator,
                           data=sub_diags)
 
 

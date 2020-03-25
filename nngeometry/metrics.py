@@ -1,8 +1,11 @@
 import torch
-from .pspace.m2gradients import M2Gradients
+from .generator.jacobian import Jacobian
 
 
-def FIM_MonteCarlo1(representation, loader, model,
+def FIM_MonteCarlo1(layer_collection,
+                    model,
+                    loader,
+                    representation,
                     variant='classif_logsoftmax'):
     """
     Helper to create a matrix computing the Fisher Information
@@ -11,15 +14,17 @@ def FIM_MonteCarlo1(representation, loader, model,
 
     if variant == 'classif_logsoftmax':
 
-        def loss(input, target):
+        def function(input, target):
             log_softmax = model(input)
             probabilities = torch.exp(log_softmax)
             sampled_targets = torch.multinomial(probabilities, 1)
             return torch.gather(log_softmax, 1, sampled_targets)
 
-        generator = M2Gradients(model=model,
-                                dataloader=loader,
-                                loss_function=loss)
+        generator = Jacobian(layer_collection=layer_collection,
+                             model=model,
+                             loader=loader,
+                             function=function,
+                             n_output=1)
         return representation(generator)
     else:
         raise NotImplementedError

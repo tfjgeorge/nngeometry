@@ -5,7 +5,7 @@ from tasks import (get_linear_task, get_batchnorm_linear_task,
 from nngeometry.object.map import (PushForwardDense, PushForwardImplicit,
                                    PullBackDense)
 from nngeometry.object.fspace import FSpaceDense
-from nngeometry.object.pspace import PSpaceDense
+from nngeometry.object.pspace import PSpaceDense, PSpaceDiag
 from nngeometry.generator import Jacobian
 from nngeometry.object.vector import random_pvector, random_fvector
 from utils import check_ratio, check_tensors
@@ -187,3 +187,24 @@ def test_jacobian_pdense_vs_pushforward():
             frob_fspace = pspace_dense.frobenius_norm()
             frob_direct = (pspace_dense.get_tensor()**2).sum()**.5
             check_ratio(frob_direct, frob_fspace)
+
+
+def test_jacobian_pdense_vs_pdiag():
+    for get_task in linear_tasks + nonlinear_tasks:
+        loader, lc, parameters, model, function, n_output = get_task()
+        model.train()
+        generator = Jacobian(layer_collection=lc,
+                             model=model,
+                             loader=loader,
+                             function=function,
+                             n_output=n_output)
+        pspace_diag = PSpaceDiag(generator)
+        pspace_dense = PSpaceDense(generator)
+
+        # Test get_tensor
+        matrix_diag = pspace_diag.get_tensor()
+        matrix_dense = pspace_dense.get_tensor()
+        check_tensors(torch.diag(matrix_diag),
+                      torch.diag(matrix_dense))
+        assert torch.norm(matrix_diag -
+                          torch.diag(torch.diag(matrix_diag))) < 1e-5

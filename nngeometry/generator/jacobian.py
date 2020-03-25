@@ -71,6 +71,38 @@ class Jacobian:
 
         return G
 
+    def get_covariance_diag(self):
+        if self.centering:
+            raise NotImplementedError
+        # add hooks
+        self.handles += self._add_hooks(self._hook_savex,
+                                        self._hook_compute_diag,
+                                        self.l_to_m.values())
+
+        device = next(self.model.parameters()).device
+        n_examples = len(self.loader.sampler)
+        n_parameters = self.layer_collection.numel()
+        self.diag_m = torch.zeros((n_parameters,), device=device)
+        self.start = 0
+        for d in self.loader:
+            inputs = d[0]
+            inputs.requires_grad = True
+            bs = inputs.size(0)
+            output = self.function(*d).view(bs, self.n_output) \
+                .sum(dim=0)
+            for i in range(self.n_output):
+                torch.autograd.grad(output[i], [inputs],
+                                    retain_graph=True)
+        diag_m = self.diag_m / n_examples
+
+        # remove hooks
+        del self.diag_m
+        self.xs = dict()
+        for h in self.handles:
+            h.remove()
+
+        return diag_m
+
     def get_jacobian(self):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex,
@@ -284,31 +316,6 @@ class Jacobian:
             h.remove()
 
         return diags
-
-    def get_diag(self):
-        # add hooks
-        self.handles += self._add_hooks(self._hook_savex,
-                                        self._hook_compute_diag)
-
-        device = next(self.model.parameters()).device
-        n_examples = len(self.loader.sampler)
-        n_parameters = sum([p.numel() for p in self.model.parameters()])
-        self.diag_m = torch.zeros((n_parameters,), device=device)
-        self.start = 0
-        for (inputs, targets) in self.loader:
-            inputs, targets = inputs.to(device), targets.to(device)
-            inputs.requires_grad = True
-            loss = self.function(inputs, targets).sum()
-            torch.autograd.grad(loss, [inputs])
-        diag_m = self.diag_m / n_examples
-
-        # remove hooks
-        del self.diag_m
-        self.xs = dict()
-        for h in self.handles:
-            h.remove()
-
-        return diag_m
 
     def get_lowrank_matrix(self):
         # add hooks
@@ -547,6 +554,49 @@ class Jacobian:
         else:
             raise NotImplementedError
 
+    def _hook_compute_diag(self, mod, grad_input, grad_output):
+        mod_class = mod.__class__.__name__
+        gy = grad_output[0]
+        x = self.xs[mod]
+        layer_id = self.m_to_l[mod]
+        start_p = self.layer_collection.p_pos[layer_id]
+        if mod_class == 'Linear':
+            self.diag_m[start_p:start_p+mod.weight.numel()] \
+                .add_(torch.mm(gy.t()**2, x**2).view(-1))
+            if self.layer_collection[layer_id].bias:
+                start_p += mod.weight.numel()
+                self.diag_m[start_p: start_p+mod.bias.numel()] \
+                    .add_((gy**2).sum(dim=0))
+        elif mod_class == 'Conv2d':
+            indiv_gw = per_example_grad_conv(mod, x, gy)
+            self.diag_m[start_p:start_p+mod.weight.numel()] \
+                .add_((indiv_gw**2).sum(dim=0).view(-1))
+            if self.layer_collection[layer_id].bias:
+                start_p += mod.weight.numel()
+                self.diag_m[start_p:start_p+mod.bias.numel()] \
+                    .add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
+        elif mod_class == 'BatchNorm1d':
+            x_normalized = F.batch_norm(x, mod.running_mean,
+                                        mod.running_var,
+                                        None, None, mod.training)
+            self.diag_m[start_p:start_p+mod.weight.numel()] \
+                .add_((gy**2 * x_normalized**2).sum(dim=0).view(-1))
+            start_p += mod.weight.numel()
+            self.diag_m[start_p: start_p+mod.bias.numel()] \
+                .add_((gy**2).sum(dim=0))
+        elif mod_class == 'BatchNorm2d':
+            x_normalized = F.batch_norm(x, mod.running_mean,
+                                        mod.running_var,
+                                        None, None, mod.training)
+            self.diag_m[start_p:start_p+mod.weight.numel()] \
+                .add_(((gy * x_normalized).sum(dim=(2, 3))**2).sum(dim=0)
+                      .view(-1))
+            start_p += mod.weight.numel()
+            self.diag_m[start_p: start_p+mod.bias.numel()] \
+                .add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
+        else:
+            raise NotImplementedError
+
     def _hook_kxy(self, mod, grad_input, grad_output):
         if self.outerloop_switch:
             self.gy_outer[mod] = grad_output[0]
@@ -711,29 +761,6 @@ class Jacobian:
             # DS_tilda in KFC
             DS_tilda = gy.permute(0, 2, 3, 1).contiguous().view(-1, os)
             block[1].add_(torch.mm(DS_tilda.t(), DS_tilda) / spatial_locations)
-        else:
-            raise NotImplementedError
-
-    def _hook_compute_diag(self, mod, grad_input, grad_output):
-        mod_class = mod.__class__.__name__
-        gy = grad_output[0]
-        x = self.xs[mod]
-        start_p = self.p_pos[mod]
-        if mod_class == 'Linear':
-            self.diag_m[start_p:start_p+mod.weight.numel()] \
-                .add_(torch.mm(gy.t()**2, x**2).view(-1))
-            if mod.bias is not None:
-                start_p += mod.weight.numel()
-                self.diag_m[start_p: start_p+mod.bias.numel()] \
-                    .add_((gy**2).sum(dim=0))
-        elif mod_class == 'Conv2d':
-            indiv_gw = per_example_grad_conv(mod, x, gy)
-            self.diag_m[start_p:start_p+mod.weight.numel()] \
-                .add_((indiv_gw**2).sum(dim=0).view(-1))
-            if mod.bias is not None:
-                start_p += mod.weight.numel()
-                self.diag_m[start_p:start_p+mod.bias.numel()] \
-                    .add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
         else:
             raise NotImplementedError
 
