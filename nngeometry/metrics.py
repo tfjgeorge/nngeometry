@@ -1,4 +1,5 @@
 import torch
+from torch.nn.functional import softmax
 from .generator.jacobian import Jacobian
 
 
@@ -25,6 +26,38 @@ def FIM_MonteCarlo1(layer_collection,
                              loader=loader,
                              function=function,
                              n_output=1)
+        return representation(generator)
+    else:
+        raise NotImplementedError
+
+
+def FIM(layer_collection,
+        model,
+        loader,
+        representation,
+        n_output,
+        variant='classif_logits',
+        device='cpu'):
+    """
+    Helper to create a matrix computing the Fisher Information
+    Matrix using closed form expressions for the expectation y|x
+    as described in (Pascanu and Bengio, 2013)
+    """
+    # TODO: test
+
+    if variant == 'classif_logits':
+
+        def function(*d):
+            inputs = d[0].to(device)
+            logits = model(inputs)
+            probs = softmax(logits, dim=1).detach()
+            return (logits * probs**.5 * (1 - probs))
+
+        generator = Jacobian(layer_collection=layer_collection,
+                             model=model,
+                             loader=loader,
+                             function=function,
+                             n_output=n_output)
         return representation(generator)
     else:
         raise NotImplementedError
