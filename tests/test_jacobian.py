@@ -7,7 +7,7 @@ from nngeometry.object.map import (PushForwardDense, PushForwardImplicit,
 from nngeometry.object.fspace import FSpaceDense
 from nngeometry.object.pspace import PSpaceDense, PSpaceDiag
 from nngeometry.generator import Jacobian
-from nngeometry.object.vector import random_pvector, random_fvector
+from nngeometry.object.vector import random_pvector, random_fvector, PVector
 from utils import check_ratio, check_tensors
 
 
@@ -164,6 +164,7 @@ def test_jacobian_pdense_vs_pushforward():
                                  n_output=n_output,
                                  centering=centering)
             push_forward = PushForwardDense(generator)
+            pull_back = PullBackDense(generator, data=push_forward.data)
             pspace_dense = PSpaceDense(generator)
             dw = random_pvector(lc, device='cuda')
             n = len(loader.sampler)
@@ -178,15 +179,36 @@ def test_jacobian_pdense_vs_pushforward():
 
             # Test vTMv
             vTMv_pspace = pspace_dense.vTMv(dw)
-            Jv_pushforward = push_forward.mv(dw).get_flat_representation()
-            vTMv_pushforward = torch.dot(Jv_pushforward.view(-1),
-                                         Jv_pushforward.view(-1)) / n
+            Jv_pushforward = push_forward.mv(dw)
+            Jv_pushforward_flat = Jv_pushforward.get_flat_representation()
+            vTMv_pushforward = torch.dot(Jv_pushforward_flat.view(-1),
+                                         Jv_pushforward_flat.view(-1)) / n
             check_ratio(vTMv_pushforward, vTMv_pspace)
+
+            # Test Mv
+            Mv_pspace = pspace_dense.mv(dw)
+            Mv_pf_pb = pull_back.mv(Jv_pushforward)
+            check_tensors(Mv_pf_pb.get_flat_representation() / n,
+                          Mv_pspace.get_flat_representation(), eps=1e-4)
 
             # Test frobenius
             frob_fspace = pspace_dense.frobenius_norm()
             frob_direct = (pspace_dense.get_tensor()**2).sum()**.5
             check_ratio(frob_direct, frob_fspace)
+
+            # Test solve
+            # NB: regul is very high since the conditioning of pspace_dense
+            # is very bad
+            regul = 1e0
+            Mv_regul = torch.mv(pspace_dense.get_tensor() +
+                                regul * torch.eye(pspace_dense.size(0),
+                                                  device='cuda'),
+                                dw.get_flat_representation())
+            Mv_regul = PVector(layer_collection=lc,
+                               vector_repr=Mv_regul)
+            dw_using_inv = pspace_dense.solve(Mv_regul, regul=1e0)
+            check_tensors(dw.get_flat_representation(),
+                          dw_using_inv.get_flat_representation(), eps=5e-3)
 
 
 def test_jacobian_pdense_vs_pdiag():

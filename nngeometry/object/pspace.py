@@ -26,11 +26,32 @@ class PSpaceDense(PSpaceAbstract):
             self.evals, self.evecs = torch.symeig(self.data, eigenvectors=True)
         elif impl == 'svd':
             _, self.evals, self.evecs = torch.svd(self.data, some=False)
+        else:
+            raise NotImplementedError
+
+    def solve(self, v, regul=1e-8, impl='solve'):
+        """
+        solves v = Ax in x
+        """
+        # TODO: test
+        if impl == 'solve':
+            # TODO: reuse LU decomposition once it is computed
+            inv_v, _ = torch.solve(v.get_flat_representation().view(-1, 1),
+                                   self.data +
+                                   regul * torch.eye(self.size(0),
+                                                     device=self.data.device))
+            return PVector(v.layer_collection, vector_repr=inv_v[:, 0])
+        elif impl == 'eigendecomposition':
+            v_eigenbasis = self.project_to_diag(v)
+            inv_v_eigenbasis = v_eigenbasis / (self.evals + regul)
+            return self.project_from_diag(inv_v_eigenbasis)
+        else:
+            raise NotImplementedError
 
     def mv(self, v):
         # TODO: test
         v_flat = torch.mv(self.data, v.get_flat_representation())
-        return PVector(v.model, vector_repr=v_flat)
+        return PVector(v.layer_collection, vector_repr=v_flat)
 
     def vTMv(self, v):
         v_flat = v.get_flat_representation()
@@ -41,15 +62,12 @@ class PSpaceDense(PSpaceAbstract):
 
     def project_to_diag(self, v):
         # TODO: test
-        return PVector(model=v.model,
-                       vector_repr=torch.mv(self.evecs.t(),
-                                            v.get_flat_representation()))
+        return torch.mv(self.evecs.t(), v.get_flat_representation())
 
     def project_from_diag(self, v):
         # TODO: test
-        return PVector(model=v.model,
-                       vector_repr=torch.mv(self.evecs,
-                                            v.get_flat_representation()))
+        return PVector(layer_collection=self.generator.layer_collection,
+                       vector_repr=torch.mv(self.evecs, v))
 
     def get_eigendecomposition(self):
         # TODO: test
