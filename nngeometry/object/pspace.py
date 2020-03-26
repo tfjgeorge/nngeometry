@@ -112,10 +112,15 @@ class PSpaceDiag(PSpaceAbstract):
         else:
             self.data = generator.get_covariance_diag()
 
+    def inverse(self, regul=1e-8):
+        inv_tensor = 1. / (self.data + regul)
+        return PSpaceDiag(generator=self.generator,
+                          data=inv_tensor)
+
     def mv(self, v):
         # TODO: test
         v_flat = v.get_flat_representation() * self.data
-        return PVector(v.model, vector_repr=v_flat)
+        return PVector(v.layer_collection, vector_repr=v_flat)
 
     def trace(self):
         # TODO: test
