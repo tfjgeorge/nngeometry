@@ -48,6 +48,13 @@ class PSpaceDense(PSpaceAbstract):
         else:
             raise NotImplementedError
 
+    def inverse(self, regul=1e-8):
+        inv_tensor = torch.inverse(self.data +
+                                   regul * torch.eye(self.size(0),
+                                                     device=self.data.device))
+        return PSpaceDense(generator=self.generator,
+                           data=inv_tensor)
+
     def mv(self, v):
         # TODO: test
         v_flat = torch.mv(self.data, v.get_flat_representation())

@@ -148,7 +148,7 @@ class PVector:
                     v_dict[m] = (self.dict_repr[m][0] + other.dict_repr[m][0])
             return PVector(self.model, dict_repr=v_dict)
         elif self.vector_repr is not None and other.vector_repr is not None:
-            return PVector(self.model,
+            return PVector(self.layer_collection,
                            vector_repr=self.vector_repr+other.vector_repr)
         else:
             return PVector(self.model,

@@ -210,6 +210,12 @@ def test_jacobian_pdense_vs_pushforward():
             check_tensors(dw.get_flat_representation(),
                           dw_using_inv.get_flat_representation(), eps=5e-3)
 
+            # Test inv
+            pspace_inv = pspace_dense.inverse(regul=regul)
+            check_tensors(dw.get_flat_representation(),
+                          pspace_inv.mv(pspace_dense.mv(dw) + regul * dw)
+                          .get_flat_representation(), eps=5e-3)
+
 
 def test_jacobian_pdense_vs_pdiag():
     for get_task in linear_tasks + nonlinear_tasks:
