@@ -15,8 +15,8 @@ def random_pvector_dict(model):
 
 def random_pvector(layer_collection, device=None):
     n_parameters = layer_collection.numel()
-    random_v_flat = torch.randn((n_parameters,),
-                                device=device)
+    random_v_flat = torch.rand((n_parameters,),
+                               device=device) - .5
     random_v_flat /= torch.norm(random_v_flat)
     return PVector(layer_collection=layer_collection,
                    vector_repr=random_v_flat)

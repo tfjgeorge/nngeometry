@@ -1,11 +1,11 @@
 import torch
 from tasks import (get_linear_task, get_batchnorm_linear_task,
                    get_fullyconnect_onlylast_task,
-                   get_fullyconnect_task)
+                   get_fullyconnect_task, get_batchnorm_nonlinear_task)
 from nngeometry.object.map import (PushForwardDense, PushForwardImplicit,
                                    PullBackDense)
 from nngeometry.object.fspace import FSpaceDense
-from nngeometry.object.pspace import PSpaceDense, PSpaceDiag
+from nngeometry.object.pspace import PSpaceDense, PSpaceDiag, PSpaceBlockDiag
 from nngeometry.generator import Jacobian
 from nngeometry.object.vector import random_pvector, random_fvector, PVector
 from utils import check_ratio, check_tensors
@@ -14,7 +14,7 @@ from utils import check_ratio, check_tensors
 linear_tasks = [get_linear_task, get_batchnorm_linear_task,
                 get_fullyconnect_onlylast_task]
 
-nonlinear_tasks = [get_fullyconnect_task]
+nonlinear_tasks = [get_fullyconnect_task, get_batchnorm_nonlinear_task]
 
 
 def update_model(parameters, dw):
@@ -59,7 +59,6 @@ def test_jacobian_pushforward_dense_linear():
 def test_jacobian_pushforward_dense_nonlinear():
     for get_task in nonlinear_tasks:
         loader, lc, parameters, model, function, n_output = get_task()
-        model.train()
         generator = Jacobian(layer_collection=lc,
                              model=model,
                              loader=loader,
@@ -217,7 +216,7 @@ def test_jacobian_pdense_vs_pushforward():
                           .get_flat_representation(), eps=5e-3)
 
 
-def test_jacobian_pdense_vs_pdiag():
+def test_jacobian_pdiag_vs_pdense():
     for get_task in linear_tasks + nonlinear_tasks:
         loader, lc, parameters, model, function, n_output = get_task()
         model.train()
@@ -236,3 +235,33 @@ def test_jacobian_pdense_vs_pdiag():
                       torch.diag(matrix_dense))
         assert torch.norm(matrix_diag -
                           torch.diag(torch.diag(matrix_diag))) < 1e-5
+
+
+def test_jacobian_pblockdiag_vs_pdense():
+    for get_task in linear_tasks + nonlinear_tasks:
+        loader, lc, parameters, model, function, n_output = get_task()
+        model.train()
+        generator = Jacobian(layer_collection=lc,
+                             model=model,
+                             loader=loader,
+                             function=function,
+                             n_output=n_output)
+        pspace_blockdiag = PSpaceBlockDiag(generator)
+        pspace_dense = PSpaceDense(generator)
+
+        # Test get_dense_tensor
+        matrix_blockdiag = pspace_blockdiag.get_dense_tensor()
+        matrix_dense = pspace_dense.get_dense_tensor()
+        for layer_id, layer in lc.layers.items():
+            start = lc.p_pos[layer_id]
+            # compare blocks
+            check_tensors(matrix_dense[start:start+layer.numel(),
+                                       start:start+layer.numel()],
+                          matrix_blockdiag[start:start+layer.numel(),
+                                           start:start+layer.numel()])
+            # verify that the rest is 0
+            assert torch.norm(matrix_blockdiag[start:start+layer.numel(),
+                                               start+layer.numel():]) < 1e-5
+            assert torch.norm(matrix_blockdiag[start+layer.numel():,
+                                               start:start+layer.numel()]) \
+                < 1e-5

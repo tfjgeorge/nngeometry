@@ -103,6 +103,40 @@ class Jacobian:
 
         return diag_m
 
+    def get_covariance_layer_blocks(self):
+        if self.centering:
+            raise NotImplementedError
+        # add hooks
+        self.handles += self._add_hooks(self._hook_savex,
+                                        self._hook_compute_layer_blocks,
+                                        self.l_to_m.values())
+
+        device = next(self.model.parameters()).device
+        n_examples = len(self.loader.sampler)
+        self._blocks = dict()
+        for layer_id, layer in self.layer_collection.layers.items():
+            s = layer.numel()
+            self._blocks[layer_id] = torch.zeros((s, s), device=device)
+
+        for d in self.loader:
+            inputs = d[0]
+            inputs.requires_grad = True
+            bs = inputs.size(0)
+            output = self.function(*d).view(bs, self.n_output) \
+                .sum(dim=0)
+            for i in range(self.n_output):
+                torch.autograd.grad(output[i], [inputs],
+                                    retain_graph=True)
+        blocks = {m: self._blocks[m] / n_examples for m in self._blocks.keys()}
+
+        # remove hooks
+        del self._blocks
+        self.xs = dict()
+        for h in self.handles:
+            h.remove()
+
+        return blocks
+
     def get_jacobian(self):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex,
@@ -214,35 +248,6 @@ class Jacobian:
             h.remove()
 
         return G
-
-    def get_layer_blocks(self):
-        # add hooks
-        self.handles += self._add_hooks(self._hook_savex,
-                                        self._hook_compute_layer_blocks)
-
-        device = next(self.model.parameters()).device
-        n_examples = len(self.loader.sampler)
-        self._blocks = dict()
-        for m in self.mods:
-            s = m.weight.numel()
-            if m.bias is not None:
-                s += m.bias.numel()
-            self._blocks[m] = torch.zeros((s, s), device=device)
-
-        for (inputs, targets) in self.loader:
-            inputs, targets = inputs.to(device), targets.to(device)
-            inputs.requires_grad = True
-            loss = self.function(inputs, targets).sum()
-            torch.autograd.grad(loss, [inputs])
-        blocks = {m: self._blocks[m] / n_examples for m in self.mods}
-
-        # remove hooks
-        del self._blocks
-        self.xs = dict()
-        for h in self.handles:
-            h.remove()
-
-        return blocks
 
     def get_kfac_blocks(self):
         # add hooks
@@ -532,7 +537,8 @@ class Jacobian:
         elif mod_class == 'BatchNorm1d':
             x_normalized = F.batch_norm(x, mod.running_mean,
                                         mod.running_var,
-                                        None, None, mod.training)
+                                        None, None, mod.training,
+                                        momentum=0.)
             self.grads[self.i_output, self.start:self.start+bs,
                        start_p:start_p+mod.weight.numel()] \
                 .add_(gy * x_normalized)
@@ -543,7 +549,8 @@ class Jacobian:
         elif mod_class == 'BatchNorm2d':
             x_normalized = F.batch_norm(x, mod.running_mean,
                                         mod.running_var,
-                                        None, None, mod.training)
+                                        None, None, mod.training,
+                                        momentum=0.)
             self.grads[self.i_output, self.start:self.start+bs,
                        start_p:start_p+mod.weight.numel()] \
                 .add_((gy * x_normalized).sum(dim=(2, 3)))
@@ -594,6 +601,40 @@ class Jacobian:
             start_p += mod.weight.numel()
             self.diag_m[start_p: start_p+mod.bias.numel()] \
                 .add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
+        else:
+            raise NotImplementedError
+
+    def _hook_compute_layer_blocks(self, mod, grad_input, grad_output):
+        mod_class = mod.__class__.__name__
+        gy = grad_output[0]
+        x = self.xs[mod]
+        bs = x.size(0)
+        layer_id = self.m_to_l[mod]
+        block = self._blocks[layer_id]
+        if mod_class == 'Linear':
+            gw = torch.bmm(gy.unsqueeze(2), x.unsqueeze(1)).view(bs, -1)
+            if self.layer_collection[layer_id].bias:
+                gw = torch.cat([gw.view(bs, -1), gy.view(bs, -1)], dim=1)
+            block.add_(torch.mm(gw.t(), gw))
+        elif mod_class == 'Conv2d':
+            gw = per_example_grad_conv(mod, x, gy).view(bs, -1)
+            if self.layer_collection[layer_id].bias:
+                gw = torch.cat([gw, gy.sum(dim=(2, 3)).view(bs, -1)], dim=1)
+            block.add_(torch.mm(gw.t(), gw))
+        elif mod_class == 'BatchNorm1d':
+            x_normalized = F.batch_norm(x, mod.running_mean,
+                                        mod.running_var,
+                                        None, None, mod.training)
+            gw = gy * x_normalized
+            gw = torch.cat([gw, gy], dim=1)
+            block.add_(torch.mm(gw.t(), gw))
+        elif mod_class == 'BatchNorm2d':
+            x_normalized = F.batch_norm(x, mod.running_mean,
+                                        mod.running_var,
+                                        None, None, mod.training)
+            gw = (gy * x_normalized).sum(dim=(2, 3))
+            gw = torch.cat([gw, gy.sum(dim=(2, 3))], dim=1)
+            block.add_(torch.mm(gw.t(), gw))
         else:
             raise NotImplementedError
 
@@ -675,26 +716,6 @@ class Jacobian:
                              gy_outer.sum(dim=(2, 3)).t())
             else:
                 raise NotImplementedError
-
-    def _hook_compute_layer_blocks(self, mod, grad_input, grad_output):
-        mod_class = mod.__class__.__name__
-        gy = grad_output[0]
-        x = self.xs[mod]
-        bs = x.size(0)
-        block = self._blocks[mod]
-        if mod_class == 'Linear':
-            gw = torch.bmm(gy.unsqueeze(2), x.unsqueeze(1)).view(bs, -1)
-            if mod.bias is not None:
-                gw = torch.cat([gw.view(bs, -1), gy.view(bs, -1)], dim=1)
-            block.add_(torch.mm(gw.t(), gw))
-        elif mod_class == 'Conv2d':
-            gw = per_example_grad_conv(mod, x, gy)
-            if mod.bias is not None:
-                gw = torch.cat([gw.view(bs, -1),
-                                gy.sum(dim=(2, 3)).view(bs, -1)], dim=1)
-            block.add_(torch.mm(gw.t(), gw))
-        else:
-            raise NotImplementedError
 
     def _hook_compute_kfe_diag(self, mod, grad_input, grad_output):
         mod_class = mod.__class__.__name__

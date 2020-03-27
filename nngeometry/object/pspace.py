@@ -161,25 +161,27 @@ class PSpaceDiag(PSpaceAbstract):
                           data=sub_diags)
 
 
-class BlockDiagMatrix(PSpaceAbstract):
+class PSpaceBlockDiag(PSpaceAbstract):
     def __init__(self, generator):
         self.generator = generator
-        self.data = generator.get_layer_blocks()
+        self.data = generator.get_covariance_layer_blocks()
 
     def trace(self):
+        # TODO test
         return sum([torch.trace(b) for b in self.data.values()])
 
     def get_dense_tensor(self):
         s = self.generator.get_n_parameters()
         M = torch.zeros((s, s), device=self.generator.get_device())
         mods, p_pos = get_individual_modules(self.generator.model)
-        for mod in mods:
-            b = self.data[mod]
-            start = p_pos[mod]
+        for layer_id in self.generator.layer_collection.layers.keys():
+            b = self.data[layer_id]
+            start = self.generator.layer_collection.p_pos[layer_id]
             M[start:start+b.size(0), start:start+b.size(0)].add_(b)
         return M
 
     def mv(self, vs):
+        # TODO test
         vs_dict = vs.get_dict_representation()
         out_dict = dict()
         for m in vs_dict.keys():
@@ -195,9 +197,11 @@ class BlockDiagMatrix(PSpaceAbstract):
         return PVector(model=vs.model, dict_repr=out_dict)
 
     def frobenius_norm(self):
+        # TODO test
         return sum([torch.norm(b)**2 for b in self.data.values()])**.5
 
     def vTMv(self, vector):
+        # TODO test
         vector_dict = vector.get_dict_representation()
         norm2 = 0
         for mod in vector_dict.keys():
