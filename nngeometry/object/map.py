@@ -18,7 +18,7 @@ class PushForwardDense(AbstractPushForward):
         else:
             self.data = generator.get_jacobian()
 
-    def get_tensor(self):
+    def get_dense_tensor(self):
         return self.data
 
     def mv(self, v):
@@ -51,7 +51,7 @@ class PullBackDense(PullBackAbstract):
         else:
             self.data = generator.get_jacobian()
 
-    def get_tensor(self):
+    def get_dense_tensor(self):
         return self.data
 
     def mv(self, v):

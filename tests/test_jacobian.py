@@ -132,13 +132,13 @@ def test_jacobian_fdense_vs_pullback():
             fspace_dense = FSpaceDense(generator)
             df = random_fvector(len(loader.sampler), n_output, device='cuda')
 
-            # Test get_tensor
-            jacobian = pull_back.get_tensor()
+            # Test get_dense_tensor
+            jacobian = pull_back.get_dense_tensor()
             sj = jacobian.size()
             fspace_computed = torch.mm(jacobian.view(-1, sj[2]),
                                        jacobian.view(-1, sj[2]).t())
             check_tensors(fspace_computed.view(sj[0], sj[1], sj[0], sj[1]),
-                          fspace_dense.get_tensor(), eps=1e-4)
+                          fspace_dense.get_dense_tensor(), eps=1e-4)
 
             # Test vTMv
             vTMv_fspace = fspace_dense.vTMv(df)
@@ -148,7 +148,7 @@ def test_jacobian_fdense_vs_pullback():
 
             # Test frobenius
             frob_fspace = fspace_dense.frobenius_norm()
-            frob_direct = (fspace_dense.get_tensor()**2).sum()**.5
+            frob_direct = (fspace_dense.get_dense_tensor()**2).sum()**.5
             check_ratio(frob_direct, frob_fspace)
 
 
@@ -169,13 +169,13 @@ def test_jacobian_pdense_vs_pushforward():
             dw = random_pvector(lc, device='cuda')
             n = len(loader.sampler)
 
-            # Test get_tensor
-            jacobian = push_forward.get_tensor()
+            # Test get_dense_tensor
+            jacobian = push_forward.get_dense_tensor()
             sj = jacobian.size()
             pspace_computed = torch.mm(jacobian.view(-1, sj[2]).t(),
                                        jacobian.view(-1, sj[2])) / n
             check_tensors(pspace_computed,
-                          pspace_dense.get_tensor(), eps=1e-4)
+                          pspace_dense.get_dense_tensor(), eps=1e-4)
 
             # Test vTMv
             vTMv_pspace = pspace_dense.vTMv(dw)
@@ -193,14 +193,14 @@ def test_jacobian_pdense_vs_pushforward():
 
             # Test frobenius
             frob_fspace = pspace_dense.frobenius_norm()
-            frob_direct = (pspace_dense.get_tensor()**2).sum()**.5
+            frob_direct = (pspace_dense.get_dense_tensor()**2).sum()**.5
             check_ratio(frob_direct, frob_fspace)
 
             # Test solve
             # NB: regul is very high since the conditioning of pspace_dense
             # is very bad
             regul = 1e0
-            Mv_regul = torch.mv(pspace_dense.get_tensor() +
+            Mv_regul = torch.mv(pspace_dense.get_dense_tensor() +
                                 regul * torch.eye(pspace_dense.size(0),
                                                   device='cuda'),
                                 dw.get_flat_representation())
@@ -229,9 +229,9 @@ def test_jacobian_pdense_vs_pdiag():
         pspace_diag = PSpaceDiag(generator)
         pspace_dense = PSpaceDense(generator)
 
-        # Test get_tensor
-        matrix_diag = pspace_diag.get_tensor()
-        matrix_dense = pspace_dense.get_tensor()
+        # Test get_dense_tensor
+        matrix_diag = pspace_diag.get_dense_tensor()
+        matrix_dense = pspace_dense.get_dense_tensor()
         check_tensors(torch.diag(matrix_diag),
                       torch.diag(matrix_dense))
         assert torch.norm(matrix_diag -

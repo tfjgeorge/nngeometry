@@ -64,7 +64,7 @@ class FSpaceDense(FSpaceAbstract):
         # TODO: test
         return torch.trace(self.data)
 
-    def get_tensor(self):
+    def get_dense_tensor(self):
         return self.data
 
     def __add__(self, other):

@@ -88,7 +88,7 @@ class PSpaceDense(PSpaceAbstract):
         # TODO: test
         return torch.trace(self.data)
 
-    def get_tensor(self):
+    def get_dense_tensor(self):
         return self.data
 
     def __add__(self, other):
@@ -135,7 +135,7 @@ class PSpaceDiag(PSpaceAbstract):
         # TODO: test
         return torch.norm(self.data)
 
-    def get_tensor(self):
+    def get_dense_tensor(self):
         return torch.diag(self.data)
 
     def size(self, dim=None):
@@ -169,7 +169,7 @@ class BlockDiagMatrix(PSpaceAbstract):
     def trace(self):
         return sum([torch.trace(b) for b in self.data.values()])
 
-    def get_matrix(self):
+    def get_dense_tensor(self):
         s = self.generator.get_n_parameters()
         M = torch.zeros((s, s), device=self.generator.get_device())
         mods, p_pos = get_individual_modules(self.generator.model)
@@ -217,7 +217,7 @@ class KFACMatrix(PSpaceAbstract):
         return sum([torch.trace(a) * torch.trace(g)
                     for a, g in self.data.values()])
 
-    def get_matrix(self, split_weight_bias=True):
+    def get_dense_tensor(self, split_weight_bias=True):
         """
         - split_weight_bias (bool): if True then the parameters are ordered in
         the same way as in the dense or blockdiag representation, but it
@@ -308,7 +308,7 @@ class EKFACMatrix:
             self.diags[mod] = kronecker(evals_g.view(-1, 1),
                                         evals_a.view(-1, 1))
 
-    def get_matrix(self, split_weight_bias=True):
+    def get_dense_tensor(self, split_weight_bias=True):
         """
         - split_weight_bias (bool): if True then the parameters are ordered in
         the same way as in the dense or blockdiag representation, but it
@@ -413,7 +413,7 @@ class LowRankMatrix(PSpaceAbstract):
         Av = torch.mv(self.data, v.get_flat_representation())
         return torch.dot(Av, Av)
 
-    def get_matrix(self):
+    def get_dense_tensor(self):
         # you probably don't want to do that: you are
         # loosing the benefit of having a low rank representation
         # of your matrix but instead compute the potentially
