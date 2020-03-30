@@ -214,13 +214,34 @@ class PSpaceBlockDiag(PSpaceAbstract):
 
 
 class PSpaceKFAC(PSpaceAbstract):
-    def __init__(self, generator):
+    def __init__(self, generator, data=None):
         self.generator = generator
-        self.data = generator.get_kfac_blocks()
+        if data is None:
+            self.data = generator.get_kfac_blocks()
+        else:
+            self.data = data
 
     def trace(self):
         return sum([torch.trace(a) * torch.trace(g)
                     for a, g in self.data.values()])
+
+    def inverse(self, regul=1e-8, use_pi=True):
+        inv_data = dict()
+        for layer_id, layer in self.generator.layer_collection.layers.items():
+            a, g = self.data[layer_id]
+            if use_pi:
+                pi = (torch.trace(a) / torch.trace(g))**.5
+                inv_a = torch.inverse(a +
+                                      pi * regul * torch.eye(a.size(0),
+                                                             device=a.device))
+                inv_g = torch.inverse(g +
+                                      regul / pi * torch.eye(g.size(0),
+                                                             device=g.device))
+                inv_data[layer_id] = (inv_a, inv_g)
+            else:
+                raise NotImplementedError
+        return PSpaceKFAC(generator=self.generator,
+                          data=inv_data)
 
     def get_dense_tensor(self, split_weight_bias=True):
         """
@@ -245,6 +266,25 @@ class PSpaceKFAC(PSpaceAbstract):
             else:
                 M[start:start+sAG, start:start+sAG].add_(kronecker(g, a))
         return M
+
+    def get_diag(self, split_weight_bias=True):
+        """
+        - split_weight_bias (bool): if True then the parameters are ordered in
+        the same way as in the dense or blockdiag representation, but it
+        involves more operations. Otherwise the coefficients corresponding
+        to the bias are mixed between coefficients of the weight matrix
+        """
+        diags = []
+        for layer_id, layer in self.generator.layer_collection.layers.items():
+            a, g = self.data[layer_id]
+            diag_of_block = (torch.diag(g).view(-1, 1) *
+                             torch.diag(a).view(1, -1))
+            if split_weight_bias:
+                diags.append(diag_of_block[:, :-1].contiguous().view(-1))
+                diags.append(diag_of_block[:, -1:].view(-1))
+            else:
+                diags.append(diag_of_block.view(-1))
+        return torch.cat(diags)
 
     def mv(self, vs):
         vs_dict = vs.get_dict_representation()

@@ -121,6 +121,7 @@ def test_jacobian_kfac_vs_pblockdiag():
     Compares blockdiag and kfac representation on datasets/architectures
     where they are the same
     """
+    # for get_task in [get_convnet_kfc_task, get_fullyconnect_kfac_task]:
     for get_task in [get_fullyconnect_kfac_task]:
         loader, lc, parameters, model, function, n_output = get_task()
 
@@ -135,6 +136,9 @@ def test_jacobian_kfac_vs_pblockdiag():
         G_kfac = M_kfac.get_dense_tensor(split_weight_bias=True)
         G_blockdiag = M_blockdiag.get_dense_tensor()
         check_tensors(G_blockdiag, G_kfac)
+
+        check_tensors(torch.diag(G_kfac),
+                      M_kfac.get_diag(split_weight_bias=True))
 
         trace_bd = M_blockdiag.trace()
         trace_kfac = M_kfac.trace()
