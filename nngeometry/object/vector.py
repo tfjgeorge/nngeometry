@@ -1,5 +1,6 @@
 import torch
 from ..utils import get_individual_modules
+from ..layercollection import LayerCollection
 
 
 def random_pvector_dict(model):
@@ -41,12 +42,15 @@ class PVector:
 
     def from_model(model):
         dict_repr = dict()
-        for mod in get_individual_modules(model)[0]:
-            if mod.bias is not None:
-                dict_repr[mod] = (mod.weight, mod.bias)
+        layer_collection = LayerCollection.from_model(model)
+        l_to_m, _ = layer_collection.get_layerid_module_maps(model)
+        for layer_id, layer in layer_collection.layers.items():
+            mod = l_to_m[layer_id]
+            if layer.bias is not None:
+                dict_repr[layer_id] = (mod.weight, mod.bias)
             else:
-                dict_repr[mod] = (mod.weight)
-        return PVector(model, dict_repr=dict_repr)
+                dict_repr[layer_id] = (mod.weight)
+        return PVector(layer_collection, dict_repr=dict_repr)
 
     @staticmethod
     def from_model_grad(model):
@@ -66,9 +70,10 @@ class PVector:
                     dict_clone[k] = (v[0].clone(), v[1].clone())
                 else:
                     dict_clone[k] = (v[0].clone(),)
-            return PVector(self.model, dict_repr=dict_clone)
+            return PVector(self.layer_collection, dict_repr=dict_clone)
         if self.vector_repr is not None:
-            return PVector(self.model,  vector_repr=self.vector_repr.clone())
+            return PVector(self.layer_collection,
+                           vector_repr=self.vector_repr.clone())
 
     def detach(self):
         if self.dict_repr is not None:
@@ -78,9 +83,10 @@ class PVector:
                     dict_detach[k] = (v[0].detach(), v[1].detach())
                 else:
                     dict_detach[k] = (v[0].detach(),)
-            return PVector(self.model, dict_repr=dict_detach)
+            return PVector(self.layer_collection, dict_repr=dict_detach)
         if self.vector_repr is not None:
-            return PVector(self.model,  vector_repr=self.vector_repr.detach())
+            return PVector(self.layer_collection,
+                           vector_repr=self.vector_repr.detach())
 
     def get_flat_representation(self):
         if self.vector_repr is not None:
@@ -158,18 +164,21 @@ class PVector:
     def __sub__(self, other):
         if self.dict_repr is not None and other.dict_repr is not None:
             v_dict = dict()
-            for m in self.mods:
-                if m.bias is not None:
-                    v_dict[m] = (self.dict_repr[m][0] - other.dict_repr[m][0],
-                                 self.dict_repr[m][1] - other.dict_repr[m][1])
+            for l_id, l in self.layer_collection.layers.items():
+                if l.bias is not None:
+                    v_dict[l_id] = (self.dict_repr[l_id][0] -
+                                    other.dict_repr[l_id][0],
+                                    self.dict_repr[l_id][1] -
+                                    other.dict_repr[l_id][1])
                 else:
-                    v_dict[m] = (self.dict_repr[m][0] - other.dict_repr[m][0])
-            return PVector(self.model, dict_repr=v_dict)
+                    v_dict[l_id] = (self.dict_repr[l_id][0] -
+                                    other.dict_repr[l_id][0])
+            return PVector(self.layer_collection, dict_repr=v_dict)
         elif self.vector_repr is not None and other.vector_repr is not None:
-            return PVector(self.model,
+            return PVector(self.layer_collection,
                            vector_repr=self.vector_repr-other.vector_repr)
         else:
-            return PVector(self.model,
+            return PVector(self.layer_collection,
                            vector_repr=(self.get_flat_representation() -
                                         other.get_flat_representation()))
 
