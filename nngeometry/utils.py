@@ -7,6 +7,7 @@ def get_n_parameters(model):
 
 
 def get_individual_modules(model):
+    raise Exception
     mods = []
     sizes_mods = []
     parameters = []

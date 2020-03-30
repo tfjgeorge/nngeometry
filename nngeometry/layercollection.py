@@ -1,5 +1,7 @@
 from abc import ABC
 from collections import OrderedDict
+from functools import reduce
+import operator
 
 
 class LayerCollection:
@@ -79,16 +81,18 @@ class Conv2dLayer(AbstractLayer):
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
-        self.bias = bias
+        self.weight = Parameter(out_channels, in_channels, kernel_size[0],
+                                kernel_size[1])
+        if bias:
+            self.bias = Parameter(out_channels)
+        else:
+            self.bias = None
 
     def numel(self):
-        if self.bias:
-            numel_bias = self.out_channels
+        if self.bias is not None:
+            return self.weight.numel() + self.bias.numel()
         else:
-            numel_bias = 0
-
-        return (self.in_channels * self.out_channels * self.kernel_size[0] *
-                self.kernel_size[1]) + numel_bias
+            return self.weight.numel()
 
 
 class LinearLayer(AbstractLayer):
@@ -96,30 +100,45 @@ class LinearLayer(AbstractLayer):
     def __init__(self, in_features, out_features, bias=True):
         self.in_features = in_features
         self.out_features = out_features
-        self.bias = bias
+        self.weight = Parameter(out_features, in_features)
+        if bias:
+            self.bias = Parameter(out_features)
+        else:
+            self.bias = None
 
     def numel(self):
-        if self.bias:
-            numel_bias = self.out_features
+        if self.bias is not None:
+            return self.weight.numel() + self.bias.numel()
         else:
-            numel_bias = 0
-
-        return self.in_features * self.out_features + numel_bias
+            return self.weight.numel()
 
 
 class BatchNorm1dLayer(AbstractLayer):
 
     def __init__(self, num_features):
         self.num_features = num_features
+        self.weight = Parameter(num_features)
+        self.bias = Parameter(num_features)
 
     def numel(self):
-        return 2 * self.num_features
+        return self.weight.numel() + self.bias.numel()
 
 
 class BatchNorm2dLayer(AbstractLayer):
 
     def __init__(self, num_features):
         self.num_features = num_features
+        self.weight = Parameter(num_features)
+        self.bias = Parameter(num_features)
 
     def numel(self):
-        return 2 * self.num_features
+        return self.weight.numel() + self.bias.numel()
+
+
+class Parameter(object):
+
+    def __init__(self, *size):
+        self.size = size
+
+    def numel(self):
+        return reduce(operator.mul, self.size, 1)

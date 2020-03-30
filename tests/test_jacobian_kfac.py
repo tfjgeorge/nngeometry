@@ -1,8 +1,9 @@
-from nngeometry.pspace import M2Gradients
-from nngeometry.representations import BlockDiagMatrix, KFACMatrix
-from nngeometry.vector import random_pvector, PVector
+from nngeometry.generator.jacobian import Jacobian
+from nngeometry.object.pspace import PSpaceBlockDiag, PSpaceKFAC
+from nngeometry.object.vector import random_pvector, PVector
 from nngeometry.utils import get_individual_modules
 from nngeometry.maths import kronecker
+from nngeometry.layercollection import LayerCollection
 from subsampled_mnist import get_dataset, default_datapath
 import torch
 import torch.nn as nn
@@ -10,7 +11,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 from utils import check_ratio, check_tensors, angle
-from test_m2gradients import get_fullyconnect_task
+from tasks import get_fullyconnect_task
 
 
 class Net(nn.Module):
@@ -29,7 +30,7 @@ class Net(nn.Module):
     def forward(self, x):
         x = x.view(x.size(0), -1)
         out = self.net(x)
-        return F.log_softmax(out, dim=1)
+        return out
 
 
 class ConvNet(nn.Module):
@@ -43,6 +44,7 @@ class ConvNet(nn.Module):
         self.fc1 = nn.Linear(1*1*7, 10)
 
     def forward(self, x):
+        # TODO fix this (backprop gradient is 0)
         x = torch.ones_like(x) * 0.1 + x - x
         x = F.relu(self.conv1(x))
         x = F.max_pool2d(x, 2, 2)
@@ -55,7 +57,7 @@ class ConvNet(nn.Module):
         x = x.view(-1, 1*1*7)
         x = x[0, :].repeat(x.size(0), 1)
         x = self.fc1(x)
-        return F.log_softmax(x, dim=1)
+        return x
 
 
 def get_fullyconnect_kfac_task(bs=1000, subs=None):
@@ -71,10 +73,13 @@ def get_fullyconnect_kfac_task(bs=1000, subs=None):
     net = Net(in_size=10)
     net.to('cuda')
 
-    def loss_function(input, target):
-        return F.nll_loss(net(input), target, reduction='none')
+    def output_fn(input, target):
+        input = input.to('cuda')
+        return net(input)
 
-    return train_loader, net, loss_function
+    layer_collection = LayerCollection.from_model(net)
+    return (train_loader, layer_collection, net.parameters(), net,
+            output_fn, 10)
 
 
 def get_convnet_kfc_task(bs=1000, subs=None):
@@ -92,10 +97,13 @@ def get_convnet_kfc_task(bs=1000, subs=None):
     net = ConvNet()
     net.to('cuda')
 
-    def loss_function(input, target):
-        return F.nll_loss(net(input), target, reduction='none')
+    def output_fn(input, target):
+        input = input.to('cuda')
+        return net(input)
 
-    return train_loader, net, loss_function
+    layer_collection = LayerCollection.from_model(net)
+    return (train_loader, layer_collection, net.parameters(), net,
+            output_fn, 10)
 
 
 def to_onexdataset(dataset, device):
@@ -108,22 +116,24 @@ def to_onexdataset(dataset, device):
     return torch.utils.data.TensorDataset(x.to(device), t.to(device))
 
 
-def test_pspace_blockdiag_vs_kfac():
+def test_jacobian_kfac_vs_pblockdiag():
     """
     Compares blockdiag and kfac representation on datasets/architectures
     where they are the same
     """
-    for get_task in [get_convnet_kfc_task, get_fullyconnect_kfac_task]:
-        train_loader, net, loss_function = get_task()
+    for get_task in [get_fullyconnect_kfac_task]:
+        loader, lc, parameters, model, function, n_output = get_task()
 
-        m2_generator = M2Gradients(model=net,
-                                   dataloader=train_loader,
-                                   loss_function=loss_function)
-        M_kfac = KFACMatrix(m2_generator)
-        M_blockdiag = BlockDiagMatrix(m2_generator)
+        generator = Jacobian(layer_collection=lc,
+                             model=model,
+                             loader=loader,
+                             function=function,
+                             n_output=n_output)
+        M_kfac = PSpaceKFAC(generator)
+        M_blockdiag = PSpaceBlockDiag(generator)
 
-        G_kfac = M_kfac.get_matrix(split_weight_bias=True)
-        G_blockdiag = M_blockdiag.get_matrix()
+        G_kfac = M_kfac.get_dense_tensor(split_weight_bias=True)
+        G_blockdiag = M_blockdiag.get_dense_tensor()
         check_tensors(G_blockdiag, G_kfac)
 
         trace_bd = M_blockdiag.trace()
@@ -131,7 +141,7 @@ def test_pspace_blockdiag_vs_kfac():
         check_ratio(trace_bd, trace_kfac)
 
         # sample random vector
-        random_v = random_pvector(net)
+        random_v = random_pvector(lc, 'cuda')
         m_norm_kfac = M_kfac.vTMv(random_v)
         m_norm_blockdiag = M_blockdiag.vTMv(random_v)
         check_ratio(m_norm_blockdiag, m_norm_kfac)
@@ -151,17 +161,19 @@ def test_pspace_kfac_eigendecomposition():
     more erratic because of numerical precision
     """
     eps = 1e-3
-    train_loader, net, loss_function = get_fullyconnect_task()
+    loader, lc, parameters, model, function, n_output = get_fullyconnect_task()
 
-    m2_generator = M2Gradients(model=net,
-                               dataloader=train_loader,
-                               loss_function=loss_function)
+    generator = Jacobian(layer_collection=lc,
+                         model=model,
+                         loader=loader,
+                         function=function,
+                         n_output=n_output)
 
-    M_kfac = KFACMatrix(m2_generator)
+    M_kfac = PSpaceKFAC(generator)
     M_kfac.compute_eigendecomposition()
     evals, evecs = M_kfac.get_eigendecomposition()
     # Loop through all vectors in KFE
-    mods, p_pos = get_individual_modules(net)
+    mods, p_pos = get_individual_modules(model)
     for m in mods:
         for i_a in range(-4, 0):
             for i_g in range(-4, 0):
@@ -177,7 +189,7 @@ def test_pspace_kfac_eigendecomposition():
                     else:
                         evec_v[m2] = (torch.zeros_like(m2.weight),
                                       torch.zeros_like(m2.bias))
-                evec_v = PVector(net, dict_repr=evec_v)
+                evec_v = PVector(lc, dict_repr=evec_v)
                 Mv = M_kfac.mv(evec_v)
                 angle_v_Mv = angle(Mv, evec_v)
                 assert angle_v_Mv < 1 + eps and angle_v_Mv > 1 - eps

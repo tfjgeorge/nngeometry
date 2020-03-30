@@ -1,7 +1,6 @@
 import torch
 import torch.nn.functional as F
-from ..utils import (get_individual_modules, per_example_grad_conv,
-                     get_n_parameters)
+from ..utils import (per_example_grad_conv, get_n_parameters)
 from ..object.vector import PVector, FVector
 
 
@@ -15,7 +14,6 @@ class Jacobian:
         self.n_output = n_output
         self.centering = centering
         # maps parameters to their position in flattened representation
-        self.mods, self.p_pos = get_individual_modules(model)
         self.function = function
         self.layer_collection = layer_collection
         self.l_to_m, self.m_to_l = \
@@ -137,6 +135,51 @@ class Jacobian:
 
         return blocks
 
+    def get_kfac_blocks(self):
+        # add hooks
+        self.handles += self._add_hooks(self._hook_savex,
+                                        self._hook_compute_kfac_blocks,
+                                        self.l_to_m.values())
+
+        device = next(self.model.parameters()).device
+        n_examples = len(self.loader.sampler)
+        self._blocks = dict()
+        for layer_id, layer in self.layer_collection.layers.items():
+            layer_class = layer.__class__.__name__
+            if layer_class == 'LinearLayer':
+                sG = layer.out_features
+                sA = layer.in_features
+            elif layer_class == 'Conv2dLayer':
+                sG = layer.out_channels
+                sA = layer.in_channels * layer.kernel_size[0] * \
+                    layer.kernel_size[1]
+            if layer.bias is not None:
+                sA += 1
+            self._blocks[layer_id] = (torch.zeros((sA, sA), device=device),
+                                      torch.zeros((sG, sG), device=device))
+
+        for d in self.loader:
+            inputs = d[0]
+            inputs.requires_grad = True
+            bs = inputs.size(0)
+            output = self.function(*d).view(bs, self.n_output) \
+                .sum(dim=0)
+            for i in range(self.n_output):
+                torch.autograd.grad(output[i], [inputs],
+                                    retain_graph=True)
+        blocks = {layer_id: (self._blocks[layer_id][0] / n_examples /
+                             self.n_output,
+                             self._blocks[layer_id][1] / n_examples)
+                  for layer_id in self.layer_collection.layers.keys()}
+
+        # remove hooks
+        del self._blocks
+        self.xs = dict()
+        for h in self.handles:
+            h.remove()
+
+        return blocks
+
     def get_jacobian(self):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex,
@@ -248,43 +291,6 @@ class Jacobian:
             h.remove()
 
         return G
-
-    def get_kfac_blocks(self):
-        # add hooks
-        self.handles += self._add_hooks(self._hook_savex,
-                                        self._hook_compute_kfac_blocks)
-
-        device = next(self.model.parameters()).device
-        n_examples = len(self.loader.sampler)
-        self._blocks = dict()
-        for m in self.mods:
-            sG = m.weight.size(0)
-            mod_class = m.__class__.__name__
-            if mod_class == 'Linear':
-                sA = m.weight.size(1)
-            elif mod_class == 'Conv2d':
-                sA = m.weight.size(1) * m.weight.size(2) * m.weight.size(3)
-            if m.bias is not None:
-                sA += 1
-            self._blocks[m] = (torch.zeros((sA, sA), device=device),
-                               torch.zeros((sG, sG), device=device))
-
-        for (inputs, targets) in self.loader:
-            inputs, targets = inputs.to(device), targets.to(device)
-            inputs.requires_grad = True
-            loss = self.function(inputs, targets).sum()
-            torch.autograd.grad(loss, [inputs])
-        blocks = {m: (self._blocks[m][0] / n_examples,
-                      self._blocks[m][1] / n_examples)
-                  for m in self.mods}
-
-        # remove hooks
-        del self._blocks
-        self.xs = dict()
-        for h in self.handles:
-            h.remove()
-
-        return blocks
 
     def get_kfe_diag(self, kfe):
         # add hooks
@@ -519,7 +525,7 @@ class Jacobian:
             self.grads[self.i_output, self.start:self.start+bs,
                        start_p:start_p+mod.weight.numel()] \
                 .add_(torch.bmm(gy.unsqueeze(2), x.unsqueeze(1)).view(bs, -1))
-            if self.layer_collection[layer_id].bias:
+            if self.layer_collection[layer_id].bias is not None:
                 start_p += mod.weight.numel()
                 self.grads[self.i_output, self.start:self.start+bs,
                            start_p:start_p+mod.bias.numel()] \
@@ -529,7 +535,7 @@ class Jacobian:
             self.grads[self.i_output, self.start:self.start+bs,
                        start_p:start_p+mod.weight.numel()] \
                 .add_(indiv_gw.view(bs, -1))
-            if self.layer_collection[layer_id].bias:
+            if self.layer_collection[layer_id].bias is not None:
                 start_p += mod.weight.numel()
                 self.grads[self.i_output, self.start:self.start+bs,
                            start_p:start_p+mod.bias.numel()] \
@@ -570,7 +576,7 @@ class Jacobian:
         if mod_class == 'Linear':
             self.diag_m[start_p:start_p+mod.weight.numel()] \
                 .add_(torch.mm(gy.t()**2, x**2).view(-1))
-            if self.layer_collection[layer_id].bias:
+            if self.layer_collection[layer_id].bias is not None:
                 start_p += mod.weight.numel()
                 self.diag_m[start_p: start_p+mod.bias.numel()] \
                     .add_((gy**2).sum(dim=0))
@@ -578,7 +584,7 @@ class Jacobian:
             indiv_gw = per_example_grad_conv(mod, x, gy)
             self.diag_m[start_p:start_p+mod.weight.numel()] \
                 .add_((indiv_gw**2).sum(dim=0).view(-1))
-            if self.layer_collection[layer_id].bias:
+            if self.layer_collection[layer_id].bias is not None:
                 start_p += mod.weight.numel()
                 self.diag_m[start_p:start_p+mod.bias.numel()] \
                     .add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
@@ -613,12 +619,12 @@ class Jacobian:
         block = self._blocks[layer_id]
         if mod_class == 'Linear':
             gw = torch.bmm(gy.unsqueeze(2), x.unsqueeze(1)).view(bs, -1)
-            if self.layer_collection[layer_id].bias:
+            if self.layer_collection[layer_id].bias is not None:
                 gw = torch.cat([gw.view(bs, -1), gy.view(bs, -1)], dim=1)
             block.add_(torch.mm(gw.t(), gw))
         elif mod_class == 'Conv2d':
             gw = per_example_grad_conv(mod, x, gy).view(bs, -1)
-            if self.layer_collection[layer_id].bias:
+            if self.layer_collection[layer_id].bias is not None:
                 gw = torch.cat([gw, gy.sum(dim=(2, 3)).view(bs, -1)], dim=1)
             block.add_(torch.mm(gw.t(), gw))
         elif mod_class == 'BatchNorm1d':
@@ -635,6 +641,38 @@ class Jacobian:
             gw = (gy * x_normalized).sum(dim=(2, 3))
             gw = torch.cat([gw, gy.sum(dim=(2, 3))], dim=1)
             block.add_(torch.mm(gw.t(), gw))
+        else:
+            raise NotImplementedError
+
+    def _hook_compute_kfac_blocks(self, mod, grad_input, grad_output):
+        mod_class = mod.__class__.__name__
+        gy = grad_output[0]
+        x = self.xs[mod]
+        layer_id = self.m_to_l[mod]
+        block = self._blocks[layer_id]
+        if mod_class == 'Linear':
+            block[1].add_(torch.mm(gy.t(), gy))
+            if self.layer_collection[layer_id].bias is not None:
+                x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
+            block[0].add_(torch.mm(x.t(), x))
+        elif mod_class == 'Conv2d':
+            ks = (mod.weight.size(2), mod.weight.size(3))
+            # A_tilda in KFC
+            A_tilda = F.unfold(x, kernel_size=ks, stride=mod.stride,
+                               padding=mod.padding, dilation=mod.dilation)
+            # A_tilda is bs * #locations x #parameters
+            A_tilda = A_tilda.permute(0, 2, 1).contiguous() \
+                .view(-1, A_tilda.size(1))
+            if self.layer_collection[layer_id].bias is not None:
+                A_tilda = torch.cat([A_tilda,
+                                     torch.ones_like(A_tilda[:, :1])], dim=1)
+            # Omega_hat in KFC
+            block[0].add_(torch.mm(A_tilda.t(), A_tilda))
+            spatial_locations = gy.size(2) * gy.size(3)
+            os = gy.size(1)
+            # DS_tilda in KFC
+            DS_tilda = gy.permute(0, 2, 3, 1).contiguous().view(-1, os)
+            block[1].add_(torch.mm(DS_tilda.t(), DS_tilda) / spatial_locations)
         else:
             raise NotImplementedError
 
@@ -657,7 +695,7 @@ class Jacobian:
                        self.e_outer:self.e_outer+bs_outer] += \
                     torch.mm(x_inner, x_outer.t()) * \
                     torch.mm(gy_inner, gy_outer.t())
-                if self.layer_collection[layer_id].bias:
+                if self.layer_collection[layer_id].bias is not None:
                     self.G[self.i_output_inner,
                            self.e_inner:self.e_inner+bs_inner,
                            self.i_output_outer,
@@ -672,7 +710,7 @@ class Jacobian:
                        self.e_outer:self.e_outer+bs_outer] += \
                     torch.mm(indiv_gw_inner.view(bs_inner, -1),
                              indiv_gw_outer.view(bs_outer, -1).t())
-                if self.layer_collection[layer_id].bias:
+                if self.layer_collection[layer_id].bias is not None:
                     self.G[self.i_output_inner,
                            self.e_inner:self.e_inner+bs_inner,
                            self.i_output_outer,
@@ -751,37 +789,6 @@ class Jacobian:
             indiv_gw = torch.bmm(gy_kfe.view(bs, gy_s[1], -1),
                                  x_kfe.view(bs, -1, x_kfe.size(1)))
             self._diags[mod].add_((indiv_gw**2).sum(dim=0).view(-1))
-        else:
-            raise NotImplementedError
-
-    def _hook_compute_kfac_blocks(self, mod, grad_input, grad_output):
-        mod_class = mod.__class__.__name__
-        gy = grad_output[0]
-        x = self.xs[mod]
-        block = self._blocks[mod]
-        if mod_class == 'Linear':
-            block[1].add_(torch.mm(gy.t(), gy))
-            if mod.bias is not None:
-                x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
-            block[0].add_(torch.mm(x.t(), x))
-        elif mod_class == 'Conv2d':
-            ks = (mod.weight.size(2), mod.weight.size(3))
-            # A_tilda in KFC
-            A_tilda = F.unfold(x, kernel_size=ks, stride=mod.stride,
-                               padding=mod.padding, dilation=mod.dilation)
-            # A_tilda is bs * #locations x #parameters
-            A_tilda = A_tilda.permute(0, 2, 1).contiguous() \
-                .view(-1, A_tilda.size(1))
-            if mod.bias is not None:
-                A_tilda = torch.cat([A_tilda,
-                                     torch.ones_like(A_tilda[:, :1])], dim=1)
-            # Omega_hat in KFC
-            block[0].add_(torch.mm(A_tilda.t(), A_tilda))
-            spatial_locations = gy.size(2) * gy.size(3)
-            os = gy.size(1)
-            # DS_tilda in KFC
-            DS_tilda = gy.permute(0, 2, 3, 1).contiguous().view(-1, os)
-            block[1].add_(torch.mm(DS_tilda.t(), DS_tilda) / spatial_locations)
         else:
             raise NotImplementedError
 

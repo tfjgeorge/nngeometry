@@ -113,6 +113,7 @@ class PSpaceDiag(PSpaceAbstract):
             self.data = generator.get_covariance_diag()
 
     def inverse(self, regul=1e-8):
+        # TODO: test
         inv_tensor = 1. / (self.data + regul)
         return PSpaceDiag(generator=self.generator,
                           data=inv_tensor)
@@ -173,7 +174,6 @@ class PSpaceBlockDiag(PSpaceAbstract):
     def get_dense_tensor(self):
         s = self.generator.get_n_parameters()
         M = torch.zeros((s, s), device=self.generator.get_device())
-        mods, p_pos = get_individual_modules(self.generator.model)
         for layer_id in self.generator.layer_collection.layers.keys():
             b = self.data[layer_id]
             start = self.generator.layer_collection.p_pos[layer_id]
@@ -184,17 +184,18 @@ class PSpaceBlockDiag(PSpaceAbstract):
         # TODO test
         vs_dict = vs.get_dict_representation()
         out_dict = dict()
-        for m in vs_dict.keys():
-            v = vs_dict[m][0].view(-1)
-            if m.bias is not None:
-                v = torch.cat([v, vs_dict[m][1].view(-1)])
-            mv = torch.mv(self.data[m], v)
-            mv_tuple = (mv[:m.weight.numel()].view(*m.weight.size()),)
-            if m.bias is not None:
+        for layer_id, layer in self.generator.layer_collection.layers.items():
+            v = vs_dict[layer_id][0].view(-1)
+            if layer.bias is not None:
+                v = torch.cat([v, vs_dict[layer_id][1].view(-1)])
+            mv = torch.mv(self.data[layer_id], v)
+            mv_tuple = (mv[:layer.weight.numel()].view(*layer.weight.size),)
+            if layer.bias is not None:
                 mv_tuple = (mv_tuple[0],
-                            mv[m.weight.numel():].view(*m.bias.size()),)
-            out_dict[m] = mv_tuple
-        return PVector(model=vs.model, dict_repr=out_dict)
+                            mv[layer.weight.numel():].view(*layer.bias.size),)
+            out_dict[layer_id] = mv_tuple
+        return PVector(layer_collection=vs.layer_collection,
+                       dict_repr=out_dict)
 
     def frobenius_norm(self):
         # TODO test
@@ -212,7 +213,7 @@ class PSpaceBlockDiag(PSpaceAbstract):
         return norm2
 
 
-class KFACMatrix(PSpaceAbstract):
+class PSpaceKFAC(PSpaceAbstract):
     def __init__(self, generator):
         self.generator = generator
         self.data = generator.get_kfac_blocks()
@@ -230,10 +231,9 @@ class KFACMatrix(PSpaceAbstract):
         """
         s = self.generator.get_n_parameters()
         M = torch.zeros((s, s), device=self.generator.get_device())
-        mods, p_pos = get_individual_modules(self.generator.model)
-        for mod in mods:
-            a, g = self.data[mod]
-            start = p_pos[mod]
+        for layer_id, layer in self.generator.layer_collection.layers.items():
+            a, g = self.data[layer_id]
+            start = self.generator.layer_collection.p_pos[layer_id]
             sAG = a.size(0) * g.size(0)
             if split_weight_bias:
                 reconstruct = torch.cat([
@@ -249,27 +249,30 @@ class KFACMatrix(PSpaceAbstract):
     def mv(self, vs):
         vs_dict = vs.get_dict_representation()
         out_dict = dict()
-        for m in vs_dict.keys():
-            v = vs_dict[m][0].view(vs_dict[m][0].size(0), -1)
-            if m.bias is not None:
-                v = torch.cat([v, vs_dict[m][1].unsqueeze(1)], dim=1)
-            a, g = self.data[m]
+        for layer_id, layer in self.generator.layer_collection.layers.items():
+            v = vs_dict[layer_id][0].view(vs_dict[layer_id][0].size(0), -1)
+            if layer.bias is not None:
+                v = torch.cat([v, vs_dict[layer_id][1].unsqueeze(1)], dim=1)
+            a, g = self.data[layer_id]
             mv = torch.mm(torch.mm(g, v), a)
-            if m.bias is None:
+            if layer.bias is None:
                 mv_tuple = (mv,)
             else:
                 mv_tuple = (mv[:, :-1].contiguous(), mv[:, -1].contiguous())
-            out_dict[m] = mv_tuple
-        return PVector(model=vs.model, dict_repr=out_dict)
+            out_dict[layer_id] = mv_tuple
+        return PVector(layer_collection=vs.layer_collection,
+                       dict_repr=out_dict)
 
     def vTMv(self, vector):
         vector_dict = vector.get_dict_representation()
         norm2 = 0
-        for mod in vector_dict.keys():
-            v = vector_dict[mod][0].view(vector_dict[mod][0].size(0), -1)
-            if len(vector_dict[mod]) > 1:
-                v = torch.cat([v, vector_dict[mod][1].unsqueeze(1)], dim=1)
-            a, g = self.data[mod]
+        for layer_id, layer in self.generator.layer_collection.layers.items():
+            v = vector_dict[layer_id][0].view(vector_dict[layer_id][0].size(0),
+                                              -1)
+            if len(vector_dict[layer_id]) > 1:
+                v = torch.cat([v, vector_dict[layer_id][1].unsqueeze(1)],
+                              dim=1)
+            a, g = self.data[layer_id]
             norm2 += torch.dot(torch.mm(torch.mm(g, v), a).view(-1),
                                v.view(-1))
         return norm2

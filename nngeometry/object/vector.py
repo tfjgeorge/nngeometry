@@ -100,26 +100,26 @@ class PVector:
 
     def _dict_to_flat(self):
         parts = []
-        for mod in get_individual_modules(self.model)[0]:
-            parts.append(self.dict_repr[mod][0].view(-1))
-            if len(self.dict_repr[mod]) > 1:
-                parts.append(self.dict_repr[mod][1].view(-1))
+        for layer_id, layer in self.layer_collection.layers.items():
+            parts.append(self.dict_repr[layer_id][0].view(-1))
+            if len(self.dict_repr[layer_id]) > 1:
+                parts.append(self.dict_repr[layer_id][1].view(-1))
         return torch.cat(parts)
 
     def _flat_to_dict(self):
-        start = 0
         dict_repr = dict()
-        for mod in get_individual_modules(self.model)[0]:
-            w = self.vector_repr[start:start+mod.weight.numel()] \
-                    .view(*mod.weight.size())
-            start += mod.weight.numel()
-            if mod.bias is not None:
-                b = self.vector_repr[start:start+mod.bias.numel()] \
-                        .view(*mod.bias.size())
-                start += mod.bias.numel()
-                dict_repr[mod] = (w, b)
+        for layer_id, layer in self.layer_collection.layers.items():
+            start = self.layer_collection.p_pos[layer_id]
+            w = self.vector_repr[start:start+layer.weight.numel()] \
+                    .view(*layer.weight.size)
+            start += layer.weight.numel()
+            if layer.bias is not None:
+                b = self.vector_repr[start:start+layer.bias.numel()] \
+                        .view(*layer.bias.size)
+                start += layer.bias.numel()
+                dict_repr[layer_id] = (w, b)
             else:
-                dict_repr[mod] = (w,)
+                dict_repr[layer_id] = (w,)
         return dict_repr
 
     def __rmul__(self, x):
