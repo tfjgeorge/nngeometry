@@ -1,7 +1,9 @@
 import torch
 from tasks import (get_linear_task, get_batchnorm_linear_task,
                    get_fullyconnect_onlylast_task,
-                   get_fullyconnect_task, get_batchnorm_nonlinear_task)
+                   get_fullyconnect_task, get_fullyconnect_bn_task,
+                   get_batchnorm_nonlinear_task,
+                   get_conv_bn_task)
 from nngeometry.object.map import (PushForwardDense, PushForwardImplicit,
                                    PullBackDense)
 from nngeometry.object.fspace import FSpaceDense
@@ -14,7 +16,8 @@ from utils import check_ratio, check_tensors
 linear_tasks = [get_linear_task, get_batchnorm_linear_task,
                 get_fullyconnect_onlylast_task]
 
-nonlinear_tasks = [get_fullyconnect_task, get_batchnorm_nonlinear_task]
+nonlinear_tasks = [get_fullyconnect_task, get_fullyconnect_bn_task,
+                   get_conv_bn_task]
 
 
 def update_model(parameters, dw):
@@ -57,7 +60,7 @@ def test_jacobian_pushforward_dense_linear():
 
 
 def test_jacobian_pushforward_dense_nonlinear():
-    for get_task in nonlinear_tasks:
+    for get_task in [get_fullyconnect_task, get_batchnorm_nonlinear_task]:
         loader, lc, parameters, model, function, n_output = get_task()
         generator = Jacobian(layer_collection=lc,
                              model=model,

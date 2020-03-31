@@ -32,15 +32,20 @@ class FCNet(nn.Module):
 
 
 class ConvNet(nn.Module):
-    def __init__(self):
+    def __init__(self, batch_norm=False):
         super(ConvNet, self).__init__()
+        self.batch_norm = batch_norm
         self.conv1 = nn.Conv2d(1, 5, 3, 1)
+        if batch_norm:
+            self.bn1 = nn.BatchNorm2d(5)
         self.conv2 = nn.Conv2d(5, 6, 4, 1)
         self.conv3 = nn.Conv2d(6, 7, 3, 1)
         self.fc1 = nn.Linear(1*1*7, 10)
 
     def forward(self, x):
         x = tF.relu(self.conv1(x))
+        if self.batch_norm:
+            x = self.bn1(x)
         x = tF.max_pool2d(x, 2, 2)
         x = tF.relu(self.conv2(x))
         x = tF.max_pool2d(x, 2, 2)
@@ -195,6 +200,28 @@ def get_fullyconnect_task(batch_norm=False):
 
 def get_fullyconnect_bn_task():
     return get_fullyconnect_task(batch_norm=True)
+
+
+def get_conv_task(batch_norm=False):
+    train_set = get_mnist()
+    train_set = Subset(train_set, range(1000))
+    train_loader = DataLoader(
+        dataset=train_set,
+        batch_size=300,
+        shuffle=False)
+    net = ConvNet(batch_norm=batch_norm)
+    net.to('cuda')
+
+    def output_fn(input, target):
+        return net(input.to('cuda'))
+
+    layer_collection = LayerCollection.from_model(net)
+    return (train_loader, layer_collection, net.parameters(),
+            net, output_fn, 10)
+
+
+def get_conv_bn_task():
+    return get_conv_task(batch_norm=True)
 
 
 def get_fullyconnect_onlylast_task():
