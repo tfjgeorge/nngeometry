@@ -129,6 +129,7 @@ class PVector:
         return dict_repr
 
     def __rmul__(self, x):
+        # TODO: test
         # scalar multiplication
         if self.dict_repr is not None:
             v_dict = dict()

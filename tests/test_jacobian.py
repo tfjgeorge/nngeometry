@@ -191,9 +191,14 @@ def test_jacobian_pdense_vs_pushforward():
                           Mv_pspace.get_flat_representation(), eps=1e-4)
 
             # Test frobenius
-            frob_fspace = pspace_dense.frobenius_norm()
+            frob_pspace = pspace_dense.frobenius_norm()
             frob_direct = (pspace_dense.get_dense_tensor()**2).sum()**.5
-            check_ratio(frob_direct, frob_fspace)
+            check_ratio(frob_direct, frob_pspace)
+
+            # Test trace
+            trace_pspace = pspace_dense.trace()
+            trace_direct = torch.trace(pspace_dense.get_dense_tensor())
+            check_ratio(trace_pspace, trace_direct)
 
             # Test solve
             # NB: regul is very high since the conditioning of pspace_dense
