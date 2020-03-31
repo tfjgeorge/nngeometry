@@ -264,7 +264,7 @@ def test_jacobian_pdense():
 
 
 def test_jacobian_pdiag_vs_pdense():
-    for get_task in linear_tasks + nonlinear_tasks:
+    for get_task in nonlinear_tasks:
         loader, lc, parameters, model, function, n_output = get_task()
         model.train()
         generator = Jacobian(layer_collection=lc,
@@ -274,6 +274,7 @@ def test_jacobian_pdiag_vs_pdense():
                              n_output=n_output)
         pspace_diag = PSpaceDiag(generator)
         pspace_dense = PSpaceDense(generator)
+        dw = random_pvector(lc, device='cuda')
 
         # Test get_dense_tensor
         matrix_diag = pspace_diag.get_dense_tensor()
@@ -282,6 +283,58 @@ def test_jacobian_pdiag_vs_pdense():
                       torch.diag(matrix_dense))
         assert torch.norm(matrix_diag -
                           torch.diag(torch.diag(matrix_diag))) < 1e-5
+
+        # Test trace
+        check_ratio(torch.trace(matrix_diag),
+                    pspace_diag.trace())
+
+        # Test frobenius
+        check_ratio(torch.norm(matrix_diag),
+                    pspace_diag.frobenius_norm())
+
+        # Test mv
+        mv_direct = torch.mv(matrix_diag, dw.get_flat_representation())
+        mv_pspace_diag = pspace_diag.mv(dw)
+        check_tensors(mv_direct,
+                      mv_pspace_diag.get_flat_representation())
+
+        # Test vTMv
+        vTMv_direct = torch.dot(mv_direct, dw.get_flat_representation())
+        vTMv_pspace_diag = pspace_diag.vTMv(dw)
+        check_ratio(vTMv_direct, vTMv_pspace_diag)
+
+        # Test inverse
+        regul = 1e-3
+        pspace_diag_inverse = pspace_diag.inverse(regul)
+        prod = torch.mm(matrix_diag + regul * torch.eye(lc.numel(),
+                                                        device='cuda'),
+                        pspace_diag_inverse.get_dense_tensor())
+        check_tensors(torch.eye(lc.numel(), device='cuda'),
+                      prod)
+
+        # Test get_diag
+        diag_direct = torch.diag(matrix_diag)
+        diag_pspace_diag = pspace_diag.get_diag()
+        check_tensors(diag_direct, diag_pspace_diag)
+
+        # Test add, sub, rmul
+        loader, lc, parameters, model, function, n_output = get_task()
+        model.train()
+        generator = Jacobian(layer_collection=lc,
+                             model=model,
+                             loader=loader,
+                             function=function,
+                             n_output=n_output)
+        pspace_diag2 = PSpaceDiag(generator)
+
+        check_tensors(pspace_diag.get_dense_tensor() +
+                      pspace_diag2.get_dense_tensor(),
+                      (pspace_diag + pspace_diag2).get_dense_tensor())
+        check_tensors(pspace_diag.get_dense_tensor() -
+                      pspace_diag2.get_dense_tensor(),
+                      (pspace_diag - pspace_diag2).get_dense_tensor())
+        check_tensors(1.23 * pspace_diag.get_dense_tensor(),
+                      (1.23 * pspace_diag).get_dense_tensor())
 
 
 def test_jacobian_pblockdiag_vs_pdense():

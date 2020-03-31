@@ -116,31 +116,29 @@ class PSpaceDiag(PSpaceAbstract):
             self.data = generator.get_covariance_diag()
 
     def inverse(self, regul=1e-8):
-        # TODO: test
         inv_tensor = 1. / (self.data + regul)
         return PSpaceDiag(generator=self.generator,
                           data=inv_tensor)
 
     def mv(self, v):
-        # TODO: test
         v_flat = v.get_flat_representation() * self.data
         return PVector(v.layer_collection, vector_repr=v_flat)
 
     def trace(self):
-        # TODO: test
         return self.data.sum()
 
     def vTMv(self, v):
-        # TODO: test
         v_flat = v.get_flat_representation()
         return torch.dot(v_flat, self.data * v_flat)
 
     def frobenius_norm(self):
-        # TODO: test
         return torch.norm(self.data)
 
     def get_dense_tensor(self):
         return torch.diag(self.data)
+
+    def get_diag(self):
+        return self.data
 
     def size(self, dim=None):
         # TODO: test
@@ -153,16 +151,18 @@ class PSpaceDiag(PSpaceAbstract):
             raise IndexError
 
     def __add__(self, other):
-        # TODO: test
         sum_diags = self.data + other.data
         return PSpaceDiag(generator=self.generator,
                           data=sum_diags)
 
     def __sub__(self, other):
-        # TODO: test
         sub_diags = self.data - other.data
         return PSpaceDiag(generator=self.generator,
                           data=sub_diags)
+
+    def __rmul__(self, x):
+        return PSpaceDiag(generator=self.generator,
+                          data=x * self.data)
 
 
 class PSpaceBlockDiag(PSpaceAbstract):
