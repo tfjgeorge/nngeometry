@@ -91,6 +91,9 @@ class PSpaceDense(PSpaceAbstract):
     def get_dense_tensor(self):
         return self.data
 
+    def get_diag(self):
+        return torch.diag(self.data)
+
     def __add__(self, other):
         # TODO: test
         sum_data = self.data + other.data

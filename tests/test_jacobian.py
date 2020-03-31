@@ -176,6 +176,10 @@ def test_jacobian_pdense_vs_pushforward():
             check_tensors(pspace_computed,
                           pspace_dense.get_dense_tensor(), eps=1e-4)
 
+            # Test get_diag
+            check_tensors(torch.diag(pspace_dense.get_dense_tensor()),
+                          pspace_dense.get_diag())
+
             # Test vTMv
             vTMv_pspace = pspace_dense.vTMv(dw)
             Jv_pushforward = push_forward.mv(dw)
