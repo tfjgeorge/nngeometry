@@ -176,10 +176,6 @@ def test_jacobian_pdense_vs_pushforward():
             check_tensors(pspace_computed,
                           pspace_dense.get_dense_tensor(), eps=1e-4)
 
-            # Test get_diag
-            check_tensors(torch.diag(pspace_dense.get_dense_tensor()),
-                          pspace_dense.get_diag())
-
             # Test vTMv
             vTMv_pspace = pspace_dense.vTMv(dw)
             Jv_pushforward = push_forward.mv(dw)
@@ -193,6 +189,25 @@ def test_jacobian_pdense_vs_pushforward():
             Mv_pf_pb = pull_back.mv(Jv_pushforward)
             check_tensors(Mv_pf_pb.get_flat_representation() / n,
                           Mv_pspace.get_flat_representation(), eps=1e-4)
+
+
+def test_jacobian_pdense():
+    for get_task in nonlinear_tasks:
+        for centering in [True, False]:
+            loader, lc, parameters, model, function, n_output = get_task()
+            model.train()
+            generator = Jacobian(layer_collection=lc,
+                                 model=model,
+                                 loader=loader,
+                                 function=function,
+                                 n_output=n_output,
+                                 centering=centering)
+            pspace_dense = PSpaceDense(generator)
+            dw = random_pvector(lc, device='cuda')
+
+            # Test get_diag
+            check_tensors(torch.diag(pspace_dense.get_dense_tensor()),
+                          pspace_dense.get_diag())
 
             # Test frobenius
             frob_pspace = pspace_dense.frobenius_norm()
@@ -223,6 +238,26 @@ def test_jacobian_pdense_vs_pushforward():
             check_tensors(dw.get_flat_representation(),
                           pspace_inv.mv(pspace_dense.mv(dw) + regul * dw)
                           .get_flat_representation(), eps=5e-3)
+
+            # Test add, sub, rmul
+            loader, lc, parameters, model, function, n_output = get_task()
+            model.train()
+            generator = Jacobian(layer_collection=lc,
+                                 model=model,
+                                 loader=loader,
+                                 function=function,
+                                 n_output=n_output,
+                                 centering=centering)
+            pspace_dense2 = PSpaceDense(generator)
+
+            check_tensors(pspace_dense.get_dense_tensor() +
+                          pspace_dense2.get_dense_tensor(),
+                          (pspace_dense + pspace_dense2).get_dense_tensor())
+            check_tensors(pspace_dense.get_dense_tensor() -
+                          pspace_dense2.get_dense_tensor(),
+                          (pspace_dense - pspace_dense2).get_dense_tensor())
+            check_tensors(1.23 * pspace_dense.get_dense_tensor(),
+                          (1.23 * pspace_dense).get_dense_tensor())
 
 
 def test_jacobian_pdiag_vs_pdense():

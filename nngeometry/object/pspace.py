@@ -56,7 +56,6 @@ class PSpaceDense(PSpaceAbstract):
                            data=inv_tensor)
 
     def mv(self, v):
-        # TODO: test
         v_flat = torch.mv(self.data, v.get_flat_representation())
         return PVector(v.layer_collection, vector_repr=v_flat)
 
@@ -85,7 +84,6 @@ class PSpaceDense(PSpaceAbstract):
         return self.data.size(*args)
 
     def trace(self):
-        # TODO: test
         return torch.trace(self.data)
 
     def get_dense_tensor(self):
@@ -95,16 +93,18 @@ class PSpaceDense(PSpaceAbstract):
         return torch.diag(self.data)
 
     def __add__(self, other):
-        # TODO: test
         sum_data = self.data + other.data
         return PSpaceDense(generator=self.generator,
                            data=sum_data)
 
     def __sub__(self, other):
-        # TODO: test
         sub_data = self.data - other.data
         return PSpaceDense(generator=self.generator,
                            data=sub_data)
+
+    def __rmul__(self, x):
+        return PSpaceDense(generator=self.generator,
+                           data=x * self.data)
 
 
 class PSpaceDiag(PSpaceAbstract):
