@@ -3,15 +3,15 @@ from ..utils import get_individual_modules
 from ..layercollection import LayerCollection
 
 
-def random_pvector_dict(model):
+def random_pvector_dict(layer_collection, device=None):
     v_dict = dict()
-    for m in get_individual_modules(model)[0]:
-        if m.bias is not None:
-            v_dict[m] = (torch.rand_like(m.weight),
-                         torch.rand_like(m.bias))
+    for layer_id, layer in layer_collection.layers.items():
+        if layer.bias is not None:
+            v_dict[layer_id] = (torch.rand(layer.weight.size, device=device),
+                                torch.rand(layer.bias.size, device=device))
         else:
-            v_dict[m] = (torch.rand_like(m.weight))
-    return PVector(model=model, dict_repr=v_dict)
+            v_dict[layer_id] = (torch.rand(layer.weight.size))
+    return PVector(layer_collection, dict_repr=v_dict)
 
 
 def random_pvector(layer_collection, device=None):
@@ -146,18 +146,21 @@ class PVector:
     def __add__(self, other):
         if self.dict_repr is not None and other.dict_repr is not None:
             v_dict = dict()
-            for m in self.mods:
-                if m.bias is not None:
-                    v_dict[m] = (self.dict_repr[m][0] + other.dict_repr[m][0],
-                                 self.dict_repr[m][1] + other.dict_repr[m][1])
+            for l_id, l in self.layer_collection.layers.items():
+                if l.bias is not None:
+                    v_dict[l_id] = (self.dict_repr[l_id][0] +
+                                    other.dict_repr[l_id][0],
+                                    self.dict_repr[l_id][1] +
+                                    other.dict_repr[l_id][1])
                 else:
-                    v_dict[m] = (self.dict_repr[m][0] + other.dict_repr[m][0])
-            return PVector(self.model, dict_repr=v_dict)
+                    v_dict[l_id] = (self.dict_repr[l_id][0] +
+                                    other.dict_repr[l_id][0])
+            return PVector(self.layer_collection, dict_repr=v_dict)
         elif self.vector_repr is not None and other.vector_repr is not None:
             return PVector(self.layer_collection,
                            vector_repr=self.vector_repr+other.vector_repr)
         else:
-            return PVector(self.model,
+            return PVector(self.layer_collection,
                            vector_repr=(self.get_flat_representation() +
                                         other.get_flat_representation()))
 
