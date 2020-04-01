@@ -233,16 +233,17 @@ class PSpaceKFAC(PSpaceAbstract):
         for layer_id, layer in self.generator.layer_collection.layers.items():
             a, g = self.data[layer_id]
             if use_pi:
-                pi = (torch.trace(a) / torch.trace(g))**.5
-                inv_a = torch.inverse(a +
-                                      pi * regul * torch.eye(a.size(0),
-                                                             device=a.device))
-                inv_g = torch.inverse(g +
-                                      regul / pi * torch.eye(g.size(0),
-                                                             device=g.device))
-                inv_data[layer_id] = (inv_a, inv_g)
+                pi = (torch.trace(a) / torch.trace(g) *
+                      g.size(0) / a.size(0))**.5
             else:
-                raise NotImplementedError
+                pi = 1
+            inv_a = torch.inverse(a +
+                                  pi * regul**.5 *
+                                  torch.eye(a.size(0), device=a.device))
+            inv_g = torch.inverse(g +
+                                  regul**.5 / pi *
+                                  torch.eye(g.size(0), device=g.device))
+            inv_data[layer_id] = (inv_a, inv_g)
         return PSpaceKFAC(generator=self.generator,
                           data=inv_data)
 

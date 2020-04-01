@@ -137,25 +137,58 @@ def test_jacobian_kfac_vs_pblockdiag():
         G_blockdiag = M_blockdiag.get_dense_tensor()
         check_tensors(G_blockdiag, G_kfac)
 
-        check_tensors(torch.diag(G_kfac),
-                      M_kfac.get_diag(split_weight_bias=True))
 
-        trace_bd = M_blockdiag.trace()
+def test_jacobian_kfac():
+    for get_task in [get_fullyconnect_kfac_task]:
+        loader, lc, parameters, model, function, n_output = get_task()
+
+        generator = Jacobian(layer_collection=lc,
+                             model=model,
+                             loader=loader,
+                             function=function,
+                             n_output=n_output)
+        M_kfac = PSpaceKFAC(generator)
+        G_kfac_split = M_kfac.get_dense_tensor(split_weight_bias=True)
+        G_kfac = M_kfac.get_dense_tensor(split_weight_bias=False)
+
+        # Test trace
+        trace_direct = torch.trace(G_kfac_split)
         trace_kfac = M_kfac.trace()
-        check_ratio(trace_bd, trace_kfac)
+        check_ratio(trace_direct, trace_kfac)
+
+        # Test frobenius norm
+        frob_direct = torch.norm(G_kfac)
+        frob_kfac = M_kfac.frobenius_norm()
+        check_ratio(frob_direct, frob_kfac)
+
+        # Test get_diag
+        check_tensors(torch.diag(G_kfac_split),
+                      M_kfac.get_diag(split_weight_bias=True))
 
         # sample random vector
         random_v = random_pvector(lc, 'cuda')
-        m_norm_kfac = M_kfac.vTMv(random_v)
-        m_norm_blockdiag = M_blockdiag.vTMv(random_v)
-        check_ratio(m_norm_blockdiag, m_norm_kfac)
 
-        frob_bd = M_blockdiag.frobenius_norm()
-        frob_kfac = M_kfac.frobenius_norm()
-        check_ratio(frob_bd, frob_kfac)
+        # Test mv
+        mv_direct = torch.mv(G_kfac_split, random_v.get_flat_representation())
+        mv_kfac = M_kfac.mv(random_v)
+        check_tensors(mv_direct,
+                      mv_kfac.get_flat_representation())
 
-        check_tensors(M_blockdiag.mv(random_v).get_flat_representation(),
-                      M_kfac.mv(random_v).get_flat_representation())
+        # Test vTMv
+        mnorm_kfac = M_kfac.vTMv(random_v)
+        mnorm_direct = torch.dot(mv_direct, random_v.get_flat_representation())
+        check_ratio(mnorm_direct, mnorm_kfac)
+
+        # Test inverse
+        # We start from a mv vector since it kills its components projected to
+        # the small eigenvalues of KFAC
+        regul = 1e-5
+        mv2 = M_kfac.mv(mv_kfac)
+        kfac_inverse = M_kfac.inverse(regul)
+        mv_back = kfac_inverse.mv(mv2 + regul * mv_kfac)
+        check_tensors(mv_kfac.get_flat_representation(),
+                      mv_back.get_flat_representation(),
+                      eps=1e-2)
 
 
 def test_pspace_kfac_eigendecomposition():

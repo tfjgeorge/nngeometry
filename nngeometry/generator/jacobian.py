@@ -164,16 +164,18 @@ class Jacobian:
             bs = inputs.size(0)
             output = self.function(*d).view(bs, self.n_output) \
                 .sum(dim=0)
-            for i in range(self.n_output):
-                torch.autograd.grad(output[i], [inputs],
+            for self.i_output in range(self.n_output):
+                torch.autograd.grad(output[self.i_output], [inputs],
                                     retain_graph=True)
-        blocks = {layer_id: (self._blocks[layer_id][0] / n_examples /
-                             self.n_output,
-                             self._blocks[layer_id][1] / n_examples)
+        blocks = {layer_id: (self._blocks[layer_id][0] / n_examples *
+                             self.n_output**.5,
+                             self._blocks[layer_id][1] / n_examples /
+                             self.n_output**.5)
                   for layer_id in self.layer_collection.layers.keys()}
 
         # remove hooks
         del self._blocks
+        del self.i_output
         self.xs = dict()
         for h in self.handles:
             h.remove()
@@ -654,20 +656,25 @@ class Jacobian:
             block[1].add_(torch.mm(gy.t(), gy))
             if self.layer_collection[layer_id].bias is not None:
                 x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
-            block[0].add_(torch.mm(x.t(), x))
+            if self.i_output == 0:
+                # do this only once if n_output > 1
+                block[0].add_(torch.mm(x.t(), x))
         elif mod_class == 'Conv2d':
             ks = (mod.weight.size(2), mod.weight.size(3))
-            # A_tilda in KFC
-            A_tilda = F.unfold(x, kernel_size=ks, stride=mod.stride,
-                               padding=mod.padding, dilation=mod.dilation)
-            # A_tilda is bs * #locations x #parameters
-            A_tilda = A_tilda.permute(0, 2, 1).contiguous() \
-                .view(-1, A_tilda.size(1))
-            if self.layer_collection[layer_id].bias is not None:
-                A_tilda = torch.cat([A_tilda,
-                                     torch.ones_like(A_tilda[:, :1])], dim=1)
-            # Omega_hat in KFC
-            block[0].add_(torch.mm(A_tilda.t(), A_tilda))
+            if self.i_output == 0:
+                # do this only once if n_output > 1
+                # A_tilda in KFC
+                A_tilda = F.unfold(x, kernel_size=ks, stride=mod.stride,
+                                   padding=mod.padding, dilation=mod.dilation)
+                # A_tilda is bs * #locations x #parameters
+                A_tilda = A_tilda.permute(0, 2, 1).contiguous() \
+                    .view(-1, A_tilda.size(1))
+                if self.layer_collection[layer_id].bias is not None:
+                    A_tilda = torch.cat([A_tilda,
+                                         torch.ones_like(A_tilda[:, :1])],
+                                        dim=1)
+                # Omega_hat in KFC
+                block[0].add_(torch.mm(A_tilda.t(), A_tilda))
             spatial_locations = gy.size(2) * gy.size(3)
             os = gy.size(1)
             # DS_tilda in KFC
