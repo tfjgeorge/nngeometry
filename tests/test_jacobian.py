@@ -1,5 +1,7 @@
 import torch
-from tasks import (get_linear_task, get_batchnorm_linear_task,
+from tasks import (get_linear_fc_task, get_linear_conv_task,
+                   get_batchnorm_fc_linear_task,
+                   get_batchnorm_conv_linear_task,
                    get_fullyconnect_onlylast_task,
                    get_fullyconnect_task, get_fullyconnect_bn_task,
                    get_batchnorm_nonlinear_task,
@@ -7,13 +9,16 @@ from tasks import (get_linear_task, get_batchnorm_linear_task,
 from nngeometry.object.map import (PushForwardDense, PushForwardImplicit,
                                    PullBackDense)
 from nngeometry.object.fspace import FSpaceDense
-from nngeometry.object.pspace import PSpaceDense, PSpaceDiag, PSpaceBlockDiag
+from nngeometry.object.pspace import (PSpaceDense, PSpaceDiag, PSpaceBlockDiag,
+                                      PSpaceImplicit)
 from nngeometry.generator import Jacobian
 from nngeometry.object.vector import random_pvector, random_fvector, PVector
 from utils import check_ratio, check_tensors
+import pytest
 
 
-linear_tasks = [get_linear_task, get_batchnorm_linear_task,
+linear_tasks = [get_linear_fc_task, get_linear_conv_task,
+                get_batchnorm_fc_linear_task, get_batchnorm_conv_linear_task,
                 get_fullyconnect_onlylast_task]
 
 nonlinear_tasks = [get_fullyconnect_task, get_fullyconnect_bn_task,
@@ -365,3 +370,121 @@ def test_jacobian_pblockdiag_vs_pdense():
             assert torch.norm(matrix_blockdiag[start+layer.numel():,
                                                start:start+layer.numel()]) \
                 < 1e-5
+
+
+def test_jacobian_pblockdiag():
+    for get_task in nonlinear_tasks:
+        loader, lc, parameters, model, function, n_output = get_task()
+        model.train()
+        generator = Jacobian(layer_collection=lc,
+                             model=model,
+                             loader=loader,
+                             function=function,
+                             n_output=n_output)
+        pspace_blockdiag = PSpaceBlockDiag(generator)
+        dw = random_pvector(lc, device='cuda')
+        dense_tensor = pspace_blockdiag.get_dense_tensor()
+
+        # Test get_diag
+        check_tensors(torch.diag(dense_tensor),
+                      pspace_blockdiag.get_diag())
+
+        # Test frobenius
+        frob_pspace = pspace_blockdiag.frobenius_norm()
+        frob_direct = (dense_tensor**2).sum()**.5
+        check_ratio(frob_direct, frob_pspace)
+
+        # Test trace
+        trace_pspace = pspace_blockdiag.trace()
+        trace_direct = torch.trace(dense_tensor)
+        check_ratio(trace_pspace, trace_direct)
+
+        # Test mv
+        mv_direct = torch.mv(dense_tensor, dw.get_flat_representation())
+        check_tensors(mv_direct,
+                      pspace_blockdiag.mv(dw).get_flat_representation())
+
+        # Test vTMV
+        check_ratio(torch.dot(mv_direct, dw.get_flat_representation()),
+                    pspace_blockdiag.vTMv(dw))
+
+        # Test solve
+        # NB: regul is very high since the conditioning of pspace_blockdiag
+        # is very bad
+        regul = 1e0
+        # Mv_regul = torch.mv(pspace_blockdiag.get_dense_tensor() +
+        #                     regul * torch.eye(pspace_blockdiag.size(0),
+        #                                       device='cuda'),
+        #                     dw.get_flat_representation())
+        # Mv_regul = PVector(layer_collection=lc,
+        #                    vector_repr=Mv_regul)
+        # dw_using_inv = pspace_blockdiag.solve(Mv_regul, regul=1e0)
+        # check_tensors(dw.get_flat_representation(),
+        #               dw_using_inv.get_flat_representation(), eps=5e-3)
+
+        # Test inv
+        pspace_inv = pspace_blockdiag.inverse(regul=regul)
+        check_tensors(dw.get_flat_representation(),
+                      pspace_inv.mv(pspace_blockdiag.mv(dw) + regul * dw)
+                      .get_flat_representation(), eps=5e-3)
+
+        # Test add, sub, rmul
+        loader, lc, parameters, model, function, n_output = get_task()
+        model.train()
+        generator = Jacobian(layer_collection=lc,
+                             model=model,
+                             loader=loader,
+                             function=function,
+                             n_output=n_output)
+        pspace_blockdiag2 = PSpaceBlockDiag(generator)
+
+        check_tensors(pspace_blockdiag.get_dense_tensor() +
+                      pspace_blockdiag2.get_dense_tensor(),
+                      (pspace_blockdiag + pspace_blockdiag2)
+                      .get_dense_tensor())
+        check_tensors(pspace_blockdiag.get_dense_tensor() -
+                      pspace_blockdiag2.get_dense_tensor(),
+                      (pspace_blockdiag - pspace_blockdiag2)
+                      .get_dense_tensor())
+        check_tensors(1.23 * pspace_blockdiag.get_dense_tensor(),
+                      (1.23 * pspace_blockdiag).get_dense_tensor())
+
+
+def test_jacobian_pimplicit_vs_pdense():
+    for get_task in linear_tasks + nonlinear_tasks:
+        loader, lc, parameters, model, function, n_output = get_task()
+        model.train()
+        generator = Jacobian(layer_collection=lc,
+                             model=model,
+                             loader=loader,
+                             function=function,
+                             n_output=n_output)
+        pspace_implicit = PSpaceImplicit(generator)
+        pspace_dense = PSpaceDense(generator)
+        dw = random_pvector(lc, device='cuda')
+
+        # Test trace
+        check_ratio(pspace_dense.trace(),
+                    pspace_implicit.trace())
+
+        # Test mv
+        if ('BatchNorm1dLayer' in [l.__class__.__name__
+                                   for l in lc.layers.values()] or
+            'BatchNorm2dLayer' in [l.__class__.__name__
+                                   for l in lc.layers.values()]):
+            with pytest.raises(NotImplementedError):
+                pspace_implicit.mv(dw)
+        else:
+            check_tensors(pspace_dense.mv(dw).get_flat_representation(),
+                          pspace_implicit.mv(dw).get_flat_representation())
+
+        # Test vTMv
+        if ('BatchNorm1dLayer' in [l.__class__.__name__
+                                   for l in lc.layers.values()] or
+            'BatchNorm2dLayer' in [l.__class__.__name__
+                                   for l in lc.layers.values()]):
+            with pytest.raises(NotImplementedError):
+                pspace_implicit.mv(dw)
+        else:
+            check_ratio(pspace_dense.vTMv(dw),
+                        pspace_implicit.vTMv(dw))

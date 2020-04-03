@@ -33,7 +33,7 @@ class PushForwardImplicit(AbstractPushForward):
         self.generator = generator
 
     def mv(self, v):
-        return self.generator.implicit_Jv(v.get_flat_representation())
+        return self.generator.implicit_Jv(v)
 
 
 class PullBackAbstract(ABC):

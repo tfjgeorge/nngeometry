@@ -35,7 +35,7 @@ class ConvNet(nn.Module):
     def __init__(self, batch_norm=False):
         super(ConvNet, self).__init__()
         self.batch_norm = batch_norm
-        self.conv1 = nn.Conv2d(1, 5, 3, 1)
+        self.conv1 = nn.Conv2d(1, 5, 3, 1, bias=not batch_norm)
         if batch_norm:
             self.bn1 = nn.BatchNorm2d(5)
         self.conv2 = nn.Conv2d(5, 6, 4, 1)
@@ -43,9 +43,10 @@ class ConvNet(nn.Module):
         self.fc1 = nn.Linear(1*1*7, 10)
 
     def forward(self, x):
-        x = tF.relu(self.conv1(x))
         if self.batch_norm:
-            x = self.bn1(x)
+            x = tF.relu(self.bn1(self.conv1(x)))
+        else:
+            x = tF.relu(self.conv1(x))
         x = tF.max_pool2d(x, 2, 2)
         x = tF.relu(self.conv2(x))
         x = tF.max_pool2d(x, 2, 2)
@@ -55,34 +56,28 @@ class ConvNet(nn.Module):
         return self.fc1(x)
 
 
-class LinearNet(nn.Module):
+class LinearFCNet(nn.Module):
     def __init__(self):
-        super(LinearNet, self).__init__()
-        self.conv1 = nn.Conv2d(1, 5, 3, 1)
-        self.conv2 = nn.Conv2d(1, 3, 2, 1, bias=False)
+        super(LinearFCNet, self).__init__()
         self.fc1 = nn.Linear(28*28, 10)
         self.fc2 = nn.Linear(28*28, 7, bias=False)
 
     def forward(self, x):
-        conv1_out = self.conv1(x)
-        conv2_out = self.conv2(x)
         fc1_out = self.fc1(x.view(x.size(0), -1))
         fc2_out = self.fc2(x.view(x.size(0), -1))
-        output = torch.stack([conv1_out.sum(dim=(1, 2, 3)),
-                              fc1_out.sum(dim=(1)),
-                              conv2_out.sum(dim=(1, 2, 3)),
+        output = torch.stack([fc1_out.sum(dim=(1)),
                               fc2_out.sum(dim=(1))], dim=1)
         return output
 
 
-def get_linear_task():
+def get_linear_fc_task():
     train_set = get_mnist()
     train_set = Subset(train_set, range(1000))
     train_loader = DataLoader(
         dataset=train_set,
         batch_size=300,
         shuffle=False)
-    net = LinearNet()
+    net = LinearFCNet()
     net.to('cuda')
 
     def output_fn(input, target):
@@ -90,34 +85,31 @@ def get_linear_task():
 
     layer_collection = LayerCollection.from_model(net)
     return (train_loader, layer_collection, net.parameters(),
-            net, output_fn, 4)
+            net, output_fn, 2)
 
 
-class BatchNormLinearNet(nn.Module):
+class LinearConvNet(nn.Module):
     def __init__(self):
-        super(BatchNormLinearNet, self).__init__()
-        self.conv1 = nn.BatchNorm2d(2)
-        self.fc1 = nn.BatchNorm1d(28*28)
+        super(LinearConvNet, self).__init__()
+        self.conv1 = nn.Conv2d(1, 5, 3, 1)
+        self.conv2 = nn.Conv2d(1, 3, 2, 1, bias=False)
 
     def forward(self, x):
-        # artificially create a dataset with 2 channels by appending
-        # transposed images as channel 2
-        two_channels = torch.cat([x, x.permute(0, 1, 3, 2)], dim=1)
-        conv_out = self.conv1(two_channels)
-        fc_out = self.fc1(x.view(x.size(0), -1))
-        output = torch.stack([conv_out.sum(dim=(1, 2, 3)),
-                              fc_out.sum(dim=(1))], dim=1)
+        conv1_out = self.conv1(x)
+        conv2_out = self.conv2(x)
+        output = torch.stack([conv1_out.sum(dim=(1, 2, 3)),
+                              conv2_out.sum(dim=(1, 2, 3))], dim=1)
         return output
 
 
-def get_batchnorm_linear_task():
+def get_linear_conv_task():
     train_set = get_mnist()
     train_set = Subset(train_set, range(1000))
     train_loader = DataLoader(
         dataset=train_set,
-        batch_size=1000,
+        batch_size=300,
         shuffle=False)
-    net = BatchNormLinearNet()
+    net = LinearConvNet()
     net.to('cuda')
 
     def output_fn(input, target):
@@ -125,6 +117,88 @@ def get_batchnorm_linear_task():
 
     layer_collection = LayerCollection.from_model(net)
     return (train_loader, layer_collection, net.parameters(),
+            net, output_fn, 2)
+
+
+class BatchNormFCLinearNet(nn.Module):
+    def __init__(self):
+        super(BatchNormFCLinearNet, self).__init__()
+        self.fc0 = nn.Linear(28*28, 100)
+        self.bn1 = nn.BatchNorm1d(100)
+        self.bn2 = nn.BatchNorm1d(100)
+
+    def forward(self, x):
+        x = self.fc0(x.view(x.size(0), -1))
+        bn1_out = self.bn1(x)
+        bn2_out = self.bn2(-x)
+        output = torch.stack([bn1_out.sum(dim=(1)),
+                              bn2_out.sum(dim=(1))], dim=1)
+        return output
+
+
+def get_batchnorm_fc_linear_task():
+    train_set = get_mnist()
+    train_set = Subset(train_set, range(1000))
+    train_loader = DataLoader(
+        dataset=train_set,
+        batch_size=300,
+        shuffle=False)
+    net = BatchNormFCLinearNet()
+    net.to('cuda')
+
+    def output_fn(input, target):
+        return net(input.to('cuda'))
+
+    lc_full = LayerCollection.from_model(net)
+    layer_collection = LayerCollection()
+    # only keep fc1 and fc2
+    layer_collection.add_layer(*lc_full.layers.popitem())
+    layer_collection.add_layer(*lc_full.layers.popitem())
+    parameters = list(net.bn2.parameters()) + \
+        list(net.bn1.parameters())
+
+    return (train_loader, layer_collection, parameters,
+            net, output_fn, 2)
+
+
+class BatchNormConvLinearNet(nn.Module):
+    def __init__(self):
+        super(BatchNormConvLinearNet, self).__init__()
+        self.conv0 = nn.Conv2d(1, 5, 3, 3)
+        self.conv1 = nn.BatchNorm2d(5)
+        self.conv2 = nn.BatchNorm2d(5)
+
+    def forward(self, x):
+        conv0_out = self.conv0(x)
+        conv1_out = self.conv1(conv0_out)
+        conv2_out = self.conv2(-conv0_out)
+        output = torch.stack([conv1_out.sum(dim=(1, 2, 3)),
+                              conv2_out.sum(dim=(1, 2, 3))], dim=1)
+        return output
+
+
+def get_batchnorm_conv_linear_task():
+    train_set = get_mnist()
+    train_set = Subset(train_set, range(1000))
+    train_loader = DataLoader(
+        dataset=train_set,
+        batch_size=300,
+        shuffle=False)
+    net = BatchNormConvLinearNet()
+    net.to('cuda')
+
+    def output_fn(input, target):
+        return net(input.to('cuda'))
+
+    lc_full = LayerCollection.from_model(net)
+    layer_collection = LayerCollection()
+    # only keep fc1 and fc2
+    layer_collection.add_layer(*lc_full.layers.popitem())
+    layer_collection.add_layer(*lc_full.layers.popitem())
+    parameters = list(net.conv2.parameters()) + \
+        list(net.conv1.parameters())
+
+    return (train_loader, layer_collection, parameters,
             net, output_fn, 2)
 
 

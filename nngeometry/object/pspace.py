@@ -9,7 +9,45 @@ class PSpaceAbstract(ABC):
 
     @abstractmethod
     def __init__(self, generator):
-        return NotImplementedError
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_dense_tensor(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def trace(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def frobenius_norm(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def mv(self, v):
+        raise NotImplementedError
+
+    @abstractmethod
+    def vTMv(self, v):
+        raise NotImplementedError
+
+    @abstractmethod
+    def inverse(self, regul):
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_diag(self):
+        raise NotImplementedError
+
+    def size(self, dim=None):
+        # TODO: test
+        s = self.generator.layer_collection.numel()
+        if dim == 0 or dim == 1:
+            return s
+        elif dim is None:
+            return (s, s)
+        else:
+            raise IndexError
 
 
 class PSpaceDense(PSpaceAbstract):
@@ -140,16 +178,6 @@ class PSpaceDiag(PSpaceAbstract):
     def get_diag(self):
         return self.data
 
-    def size(self, dim=None):
-        # TODO: test
-        s = self.data.size(0)
-        if dim == 0 or dim == 1:
-            return s
-        elif dim is None:
-            return (s, s)
-        else:
-            raise IndexError
-
     def __add__(self, other):
         sum_diags = self.data + other.data
         return PSpaceDiag(generator=self.generator,
@@ -166,22 +194,32 @@ class PSpaceDiag(PSpaceAbstract):
 
 
 class PSpaceBlockDiag(PSpaceAbstract):
-    def __init__(self, generator):
+    def __init__(self, generator, data=None):
         self.generator = generator
-        self.data = generator.get_covariance_layer_blocks()
+        if data is not None:
+            self.data = data
+        else:
+            self.data = generator.get_covariance_layer_blocks()
 
     def trace(self):
         # TODO test
         return sum([torch.trace(b) for b in self.data.values()])
 
     def get_dense_tensor(self):
-        s = self.generator.get_n_parameters()
+        s = self.generator.layer_collection.numel()
         M = torch.zeros((s, s), device=self.generator.get_device())
         for layer_id in self.generator.layer_collection.layers.keys():
             b = self.data[layer_id]
             start = self.generator.layer_collection.p_pos[layer_id]
             M[start:start+b.size(0), start:start+b.size(0)].add_(b)
         return M
+
+    def get_diag(self):
+        diag = []
+        for layer_id in self.generator.layer_collection.layers.keys():
+            b = self.data[layer_id]
+            diag.append(torch.diag(b))
+        return torch.cat(diag)
 
     def mv(self, vs):
         # TODO test
@@ -200,6 +238,17 @@ class PSpaceBlockDiag(PSpaceAbstract):
         return PVector(layer_collection=vs.layer_collection,
                        dict_repr=out_dict)
 
+    def inverse(self, regul=1e-8):
+        inv_data = dict()
+        for layer_id, layer in self.generator.layer_collection.layers.items():
+            b = self.data[layer_id]
+            inv_b = torch.inverse(b +
+                                  regul *
+                                  torch.eye(b.size(0), device=b.device))
+            inv_data[layer_id] = inv_b
+        return PSpaceBlockDiag(generator=self.generator,
+                               data=inv_data)
+
     def frobenius_norm(self):
         # TODO test
         return sum([torch.norm(b)**2 for b in self.data.values()])**.5
@@ -214,6 +263,23 @@ class PSpaceBlockDiag(PSpaceAbstract):
                 v = torch.cat([v, vector_dict[mod][1].view(-1)])
             norm2 += torch.dot(torch.mv(self.data[mod], v), v)
         return norm2
+
+    def __add__(self, other):
+        sum_data = {l_id: d + other.data[l_id]
+                    for l_id, d in self.data.items()}
+        return PSpaceBlockDiag(generator=self.generator,
+                               data=sum_data)
+
+    def __sub__(self, other):
+        sum_data = {l_id: d - other.data[l_id]
+                    for l_id, d in self.data.items()}
+        return PSpaceBlockDiag(generator=self.generator,
+                               data=sum_data)
+
+    def __rmul__(self, x):
+        sum_data = {l_id: x * d for l_id, d in self.data.items()}
+        return PSpaceBlockDiag(generator=self.generator,
+                               data=sum_data)
 
 
 class PSpaceKFAC(PSpaceAbstract):
@@ -254,7 +320,7 @@ class PSpaceKFAC(PSpaceAbstract):
         involves more operations. Otherwise the coefficients corresponding
         to the bias are mixed between coefficients of the weight matrix
         """
-        s = self.generator.get_n_parameters()
+        s = self.generator.layer_collection.numel()
         M = torch.zeros((s, s), device=self.generator.get_device())
         for layer_id, layer in self.generator.layer_collection.layers.items():
             a, g = self.data[layer_id]
@@ -366,7 +432,7 @@ class EKFACMatrix:
         involves more operations. Otherwise the coefficients corresponding
         to the bias are mixed between coefficients of the weight matrix
         """
-        s = self.generator.get_n_parameters()
+        s = self.generator.layer_collection.numel()
         M = torch.zeros((s, s), device=self.generator.get_device())
         mods, p_pos = get_individual_modules(self.generator.model)
         for mod in mods:
@@ -429,30 +495,39 @@ class EKFACMatrix:
         return sum([(d**2).sum() for d in self.diags.values()])**.5
 
 
-class ImplicitMatrix(PSpaceAbstract):
+class PSpaceImplicit(PSpaceAbstract):
     def __init__(self, generator):
         self.generator = generator
 
     def mv(self, v):
-        return self.generator.implicit_mv(v.get_flat_representation())
+        return self.generator.implicit_mv(v)
 
     def vTMv(self, v):
-        return self.generator.implicit_vTMv(v.get_flat_representation())
-
-    def frobenius_norm(self):
-        return self.generator.implicit_frobenius()
+        return self.generator.implicit_vTMv(v)
 
     def trace(self):
         return self.generator.implicit_trace()
 
     def size(self, dim=None):
-        s = self.generator.get_n_parameters()
+        s = self.generator.layer_collection.numel()
         if dim == 0 or dim == 1:
             return s
         elif dim is None:
             return (s, s)
         else:
             raise IndexError
+
+    def frobenius_norm(self):
+        raise NotImplementedError
+
+    def get_dense_tensor(self):
+        raise NotImplementedError
+
+    def inverse(self, regul):
+        raise NotImplementedError
+
+    def get_diag(self):
+        raise NotImplementedError
 
 
 class LowRankMatrix(PSpaceAbstract):

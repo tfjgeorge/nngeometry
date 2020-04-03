@@ -40,6 +40,7 @@ class PVector:
         self.vector_repr = vector_repr
         self.dict_repr = dict_repr
 
+    @staticmethod
     def from_model(model):
         dict_repr = dict()
         layer_collection = LayerCollection.from_model(model)
@@ -53,6 +54,7 @@ class PVector:
         return PVector(layer_collection, dict_repr=dict_repr)
 
     @staticmethod
+    # TODO: fix and test
     def from_model_grad(model):
         dict_repr = dict()
         for mod in get_individual_modules(model)[0]:
