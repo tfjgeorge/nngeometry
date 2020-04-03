@@ -530,13 +530,18 @@ class PSpaceImplicit(PSpaceAbstract):
         raise NotImplementedError
 
 
-class LowRankMatrix(PSpaceAbstract):
-    def __init__(self, generator):
+class PSpaceLowRank(PSpaceAbstract):
+    def __init__(self, generator, data=None):
         self.generator = generator
-        self.data = generator.get_lowrank_matrix()
+        if data is not None:
+            self.data = data
+        else:
+            self.data = generator.get_jacobian()
+            self.data /= self.data.size(1)**.5
 
     def vTMv(self, v):
-        Av = torch.mv(self.data, v.get_flat_representation())
+        data_mat = self.data.view(-1, self.data.size(2))
+        Av = torch.mv(data_mat, v.get_flat_representation())
         return torch.dot(Av, Av)
 
     def get_dense_tensor(self):
@@ -544,12 +549,14 @@ class LowRankMatrix(PSpaceAbstract):
         # loosing the benefit of having a low rank representation
         # of your matrix but instead compute the potentially
         # much larger dense matrix
-        return torch.mm(self.data.t(), self.data)
+        return torch.mm(self.data.view(-1, self.data.size(2)).t(),
+                        self.data.view(-1, self.data.size(2)))
 
     def mv(self, v):
-        v_flat = torch.mv(self.data.t(),
-                          torch.mv(self.data, v.get_flat_representation()))
-        return PVector(v.model, vector_repr=v_flat)
+        data_mat = self.data.view(-1, self.data.size(2))
+        v_flat = torch.mv(data_mat.t(),
+                          torch.mv(data_mat, v.get_flat_representation()))
+        return PVector(v.layer_collection, vector_repr=v_flat)
 
     def compute_eigendecomposition(self, impl='symeig'):
         if impl == 'symeig':
@@ -564,11 +571,24 @@ class LowRankMatrix(PSpaceAbstract):
         return self.evals, self.evecs
 
     def trace(self):
-        return torch.trace(torch.mm(self.data, self.data.t()))
+        A = torch.mm(self.data.view(-1, self.data.size(2)),
+                     self.data.view(-1, self.data.size(2)).t())
+        return torch.trace(A)
 
     def frobenius_norm(self):
-        A = torch.mm(self.data, self.data.t())
-        return torch.trace(torch.mm(A, A))**.5
+        A = torch.mm(self.data.view(-1, self.data.size(2)),
+                     self.data.view(-1, self.data.size(2)).t())
+        return torch.norm(A)
+
+    def inverse(self, regul):
+        raise NotImplementedError
+
+    def get_diag(self):
+        return (self.data**2).sum(dim=(0, 1))
+
+    def __rmul__(self, x):
+        return PSpaceLowRank(generator=self.generator,
+                             data=x**.5 * self.data)
 
 
 class KrylovLowRankMatrix(PSpaceAbstract):

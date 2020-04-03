@@ -10,7 +10,7 @@ from nngeometry.object.map import (PushForwardDense, PushForwardImplicit,
                                    PullBackDense)
 from nngeometry.object.fspace import FSpaceDense
 from nngeometry.object.pspace import (PSpaceDense, PSpaceDiag, PSpaceBlockDiag,
-                                      PSpaceImplicit)
+                                      PSpaceImplicit, PSpaceLowRank)
 from nngeometry.generator import Jacobian
 from nngeometry.object.vector import random_pvector, random_fvector, PVector
 from utils import check_ratio, check_tensors
@@ -488,3 +488,68 @@ def test_jacobian_pimplicit_vs_pdense():
         else:
             check_ratio(pspace_dense.vTMv(dw),
                         pspace_implicit.vTMv(dw))
+
+
+def test_jacobian_plowrank_vs_pdense():
+    for get_task in nonlinear_tasks:
+        loader, lc, parameters, model, function, n_output = get_task()
+        model.train()
+        generator = Jacobian(layer_collection=lc,
+                             model=model,
+                             loader=loader,
+                             function=function,
+                             n_output=n_output)
+        pspace_lowrank = PSpaceLowRank(generator)
+        pspace_dense = PSpaceDense(generator)
+
+        # Test get_dense_tensor
+        matrix_lowrank = pspace_lowrank.get_dense_tensor()
+        matrix_dense = pspace_dense.get_dense_tensor()
+        check_tensors(matrix_dense,
+                      matrix_lowrank)
+
+
+def test_jacobian_plowrank():
+    for get_task in nonlinear_tasks:
+        loader, lc, parameters, model, function, n_output = get_task()
+        model.train()
+        generator = Jacobian(layer_collection=lc,
+                             model=model,
+                             loader=loader,
+                             function=function,
+                             n_output=n_output)
+        pspace_lowrank = PSpaceLowRank(generator)
+        dw = random_pvector(lc, device='cuda')
+        dense_tensor = pspace_lowrank.get_dense_tensor()
+
+        # Test get_diag
+        check_tensors(torch.diag(dense_tensor),
+                      pspace_lowrank.get_diag(),
+                      eps=1e-4)
+
+        # Test frobenius
+        frob_pspace = pspace_lowrank.frobenius_norm()
+        frob_direct = (dense_tensor**2).sum()**.5
+        check_ratio(frob_direct, frob_pspace)
+
+        # Test trace
+        trace_pspace = pspace_lowrank.trace()
+        trace_direct = torch.trace(dense_tensor)
+        check_ratio(trace_pspace, trace_direct)
+
+        # Test mv
+        mv_direct = torch.mv(dense_tensor, dw.get_flat_representation())
+        check_tensors(mv_direct,
+                      pspace_lowrank.mv(dw).get_flat_representation())
+
+        # Test vTMV
+        check_ratio(torch.dot(mv_direct, dw.get_flat_representation()),
+                    pspace_lowrank.vTMv(dw))
+
+        # Test solve TODO
+        # Test inv TODO
+
+        # Test add, sub, rmul
+
+        check_tensors(1.23 * pspace_lowrank.get_dense_tensor(),
+                      (1.23 * pspace_lowrank).get_dense_tensor())

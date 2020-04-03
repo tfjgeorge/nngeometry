@@ -327,32 +327,6 @@ class Jacobian:
 
         return diags
 
-    def get_lowrank_matrix(self):
-        # add hooks
-        self.handles += self._add_hooks(self._hook_savex,
-                                        self._hook_compute_flat_grad)
-
-        device = next(self.model.parameters()).device
-        n_examples = len(self.loader.sampler)
-        n_parameters = sum([p.numel() for p in self.model.parameters()])
-        self.grads = torch.zeros((n_examples, n_parameters), device=device)
-        self.start = 0
-        for (inputs, targets) in self.loader:
-            inputs, targets = inputs.to(device), targets.to(device)
-            inputs.requires_grad = True
-            loss = self.function(inputs, targets).sum()
-            torch.autograd.grad(loss, [inputs])
-            self.start += inputs.size(0)
-        half_mat = self.grads / n_examples**.5
-
-        # remove hooks
-        del self.grads
-        self.xs = dict()
-        for h in self.handles:
-            h.remove()
-
-        return half_mat
-
     def implicit_mv(self, v):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex,
