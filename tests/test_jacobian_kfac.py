@@ -1,7 +1,6 @@
 from nngeometry.generator.jacobian import Jacobian
 from nngeometry.object.pspace import PSpaceBlockDiag, PSpaceKFAC
 from nngeometry.object.vector import random_pvector, PVector
-from nngeometry.utils import get_individual_modules
 from nngeometry.maths import kronecker
 from nngeometry.layercollection import LayerCollection
 from subsampled_mnist import get_dataset, default_datapath
@@ -210,25 +209,26 @@ def test_pspace_kfac_eigendecomposition():
     M_kfac.compute_eigendecomposition()
     evals, evecs = M_kfac.get_eigendecomposition()
     # Loop through all vectors in KFE
-    mods, p_pos = get_individual_modules(model)
-    for m in mods:
+    l_to_m, _ = lc.get_layerid_module_maps(model)
+    for l_id, layer in lc.layers.items():
         for i_a in range(-4, 0):
             for i_g in range(-4, 0):
                 evec_v = dict()
-                for m2 in mods:
-                    if m2 is m:
-                        v_a = evecs[m][0][:, i_a].unsqueeze(0)
-                        v_g = evecs[m][1][:, i_g].unsqueeze(1)
+                for l_id2, layer2 in lc.layers.items():
+                    m = l_to_m[l_id2]
+                    if l_id2 == l_id:
+                        v_a = evecs[l_id][0][:, i_a].unsqueeze(0)
+                        v_g = evecs[l_id][1][:, i_g].unsqueeze(1)
                         evec_block = kronecker(v_g, v_a)
                         evec_tuple = (evec_block[:, :-1].contiguous(),
                                       evec_block[:, -1].contiguous())
-                        evec_v[m2] = evec_tuple
+                        evec_v[l_id] = evec_tuple
                     else:
-                        evec_v[m2] = (torch.zeros_like(m2.weight),
-                                      torch.zeros_like(m2.bias))
+                        evec_v[l_id2] = (torch.zeros_like(m.weight),
+                                         torch.zeros_like(m.bias))
                 evec_v = PVector(lc, dict_repr=evec_v)
                 Mv = M_kfac.mv(evec_v)
                 angle_v_Mv = angle(Mv, evec_v)
                 assert angle_v_Mv < 1 + eps and angle_v_Mv > 1 - eps
                 norm_mv = torch.norm(Mv.get_flat_representation())
-                check_ratio(evals[m][0][i_a] * evals[m][1][i_g], norm_mv)
+                check_ratio(evals[l_id][0][i_a] * evals[l_id][1][i_g], norm_mv)
