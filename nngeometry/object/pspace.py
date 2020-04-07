@@ -409,21 +409,21 @@ class PSpaceKFAC(PSpaceAbstract):
         return self.evals, self.evecs
 
 
-class EKFACMatrix:
+class PSpaceEKFAC:
     def __init__(self, generator):
         self.generator = generator
-        self.diags = dict()
-        self.evecs = dict()
+        evecs = dict()
+        diags = dict()
 
-        mods, p_pos = get_individual_modules(generator.model)
-        self.data = generator.get_kfac_blocks()
-        for mod in mods:
-            a, g = self.data[mod]
+        kfac_blocks = generator.get_kfac_blocks()
+        for layer_id, layer in self.generator.layer_collection.layers.items():
+            a, g = kfac_blocks[layer_id]
             evals_a, evecs_a = torch.symeig(a, eigenvectors=True)
             evals_g, evecs_g = torch.symeig(g, eigenvectors=True)
-            self.evecs[mod] = (evecs_a, evecs_g)
-            self.diags[mod] = kronecker(evals_g.view(-1, 1),
+            evecs[layer_id] = (evecs_a, evecs_g)
+            diags[layer_id] = kronecker(evals_g.view(-1, 1),
                                         evals_a.view(-1, 1))
+        self.data = (evecs, diags)
 
     def get_dense_tensor(self, split_weight_bias=True):
         """
@@ -432,13 +432,13 @@ class EKFACMatrix:
         involves more operations. Otherwise the coefficients corresponding
         to the bias are mixed between coefficients of the weight matrix
         """
+        evecs, diags = self.data
         s = self.generator.layer_collection.numel()
         M = torch.zeros((s, s), device=self.generator.get_device())
-        mods, p_pos = get_individual_modules(self.generator.model)
-        for mod in mods:
-            evecs_a, evecs_g = self.evecs[mod]
-            diag = self.diags[mod]
-            start = p_pos[mod]
+        for layer_id, layer in self.generator.layer_collection.layers.items():
+            evecs_a, evecs_g = evecs[layer_id]
+            diag = diags[layer_id]
+            start = self.generator.layer_collection.p_pos[layer_id]
             sAG = diag.numel()
             if split_weight_bias:
                 kronecker(evecs_g, evecs_a[:-1, :])
@@ -453,46 +453,49 @@ class EKFACMatrix:
         return M
 
     def update_diag(self):
-        self.diags = self.generator.get_kfe_diag(self.evecs)
+        self.data = (self.data[0], self.generator.get_kfe_diag(self.data[0]))
 
     def mv(self, vs):
         vs_dict = vs.get_dict_representation()
         out_dict = dict()
-        for m in vs_dict.keys():
-            diag = self.diags[m]
-            v = vs_dict[m][0].view(vs_dict[m][0].size(0), -1)
-            if m.bias is not None:
-                v = torch.cat([v, vs_dict[m][1].unsqueeze(1)], dim=1)
-            evecs_a, evecs_g = self.evecs[m]
+        evecs, diags = self.data
+        for l_id, l in self.generator.layer_collection.layers.items():
+            diag = diags[l_id]
+            evecs_a, evecs_g = evecs[l_id]
+            v = vs_dict[l_id][0].view(vs_dict[l_id][0].size(0), -1)
+            if l.bias is not None:
+                v = torch.cat([v, vs_dict[l_id][1].unsqueeze(1)], dim=1)
             v_kfe = torch.mm(torch.mm(evecs_g.t(), v), evecs_a)
             mv_kfe = v_kfe * diag.view(*v_kfe.size())
             mv = torch.mm(torch.mm(evecs_g, mv_kfe), evecs_a.t())
-            if m.bias is None:
+            if l.bias is None:
                 mv_tuple = (mv,)
             else:
                 mv_tuple = (mv[:, :-1].contiguous(), mv[:, -1].contiguous())
-            out_dict[m] = mv_tuple
-        return PVector(model=vs.model, dict_repr=out_dict)
+            out_dict[l_id] = mv_tuple
+        return PVector(layer_collection=vs.layer_collection,
+                       dict_repr=out_dict)
 
     def vTMv(self, vector):
         vector_dict = vector.get_dict_representation()
+        evecs, diags = self.data
         norm2 = 0
-        for mod in vector_dict.keys():
-            evecs_a, evecs_g = self.evecs[mod]
-            diag = self.diags[mod]
-            v = vector_dict[mod][0].view(vector_dict[mod][0].size(0), -1)
-            if len(vector_dict[mod]) > 1:
-                v = torch.cat([v, vector_dict[mod][1].unsqueeze(1)], dim=1)
+        for l_id in vector_dict.keys():
+            evecs_a, evecs_g = evecs[l_id]
+            diag = diags[l_id]
+            v = vector_dict[l_id][0].view(vector_dict[l_id][0].size(0), -1)
+            if len(vector_dict[l_id]) > 1:
+                v = torch.cat([v, vector_dict[l_id][1].unsqueeze(1)], dim=1)
 
             v_kfe = torch.mm(torch.mm(evecs_g.t(), v), evecs_a)
             norm2 += torch.dot(v_kfe.view(-1)**2, diag.view(-1))
         return norm2
 
     def trace(self):
-        return sum([d.sum() for d in self.diags.values()])
+        return sum([d.sum() for d in self.data[1].values()])
 
     def frobenius_norm(self):
-        return sum([(d**2).sum() for d in self.diags.values()])**.5
+        return sum([(d**2).sum() for d in self.data[1].values()])**.5
 
 
 class PSpaceImplicit(PSpaceAbstract):

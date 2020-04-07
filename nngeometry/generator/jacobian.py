@@ -294,29 +294,37 @@ class Jacobian:
     def get_kfe_diag(self, kfe):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex,
-                                        self._hook_compute_kfe_diag)
+                                        self._hook_compute_kfe_diag,
+                                        self.l_to_m.values())
 
         device = next(self.model.parameters()).device
         n_examples = len(self.loader.sampler)
         self._diags = dict()
         self._kfe = kfe
-        for m in self.mods:
-            sG = m.weight.size(0)
-            mod_class = m.__class__.__name__
-            if mod_class == 'Linear':
-                sA = m.weight.size(1)
-            elif mod_class == 'Conv2d':
-                sA = m.weight.size(1) * m.weight.size(2) * m.weight.size(3)
-            if m.bias is not None:
+        for layer_id, layer in self.layer_collection.layers.items():
+            layer_class = layer.__class__.__name__
+            if layer_class == 'LinearLayer':
+                sG = layer.out_features
+                sA = layer.in_features
+            elif layer_class == 'Conv2dLayer':
+                sG = layer.out_channels
+                sA = layer.in_channels * layer.kernel_size[0] * \
+                    layer.kernel_size[1]
+            if layer.bias is not None:
                 sA += 1
-            self._diags[m] = torch.zeros((sG * sA), device=device)
+            self._diags[layer_id] = torch.zeros((sG * sA), device=device)
 
-        for (inputs, targets) in self.loader:
-            inputs, targets = inputs.to(device), targets.to(device)
+        for d in self.loader:
+            inputs = d[0]
             inputs.requires_grad = True
-            loss = self.function(inputs, targets).sum()
-            torch.autograd.grad(loss, [inputs])
-        diags = {m: self._diags[m] / n_examples for m in self.mods}
+            bs = inputs.size(0)
+            output = self.function(*d).view(bs, self.n_output) \
+                .sum(dim=0)
+            for self.i_output in range(self.n_output):
+                torch.autograd.grad(output[self.i_output], [inputs],
+                                    retain_graph=True)
+        diags = {l_id: self._diags[l_id] / n_examples
+                 for l_id in self.layer_collection.layers.keys()}
 
         # remove hooks
         del self._diags
@@ -769,14 +777,16 @@ class Jacobian:
     def _hook_compute_kfe_diag(self, mod, grad_input, grad_output):
         mod_class = mod.__class__.__name__
         gy = grad_output[0]
+        layer_id = self.m_to_l[mod]
         x = self.xs[mod]
-        evecs_a, evecs_g = self._kfe[mod]
+        evecs_a, evecs_g = self._kfe[layer_id]
         if mod_class == 'Linear':
             if mod.bias is not None:
                 x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
             gy_kfe = torch.mm(gy, evecs_g)
             x_kfe = torch.mm(x, evecs_a)
-            self._diags[mod].add_(torch.mm(gy_kfe.t()**2, x_kfe**2).view(-1))
+            self._diags[layer_id].add_(torch.mm(gy_kfe.t()**2, x_kfe**2)
+                                       .view(-1))
         elif mod_class == 'Conv2d':
             ks = (mod.weight.size(2), mod.weight.size(3))
             gy_s = gy.size()
@@ -799,7 +809,7 @@ class Jacobian:
 
             indiv_gw = torch.bmm(gy_kfe.view(bs, gy_s[1], -1),
                                  x_kfe.view(bs, -1, x_kfe.size(1)))
-            self._diags[mod].add_((indiv_gw**2).sum(dim=0).view(-1))
+            self._diags[layer_id].add_((indiv_gw**2).sum(dim=0).view(-1))
         else:
             raise NotImplementedError
 
