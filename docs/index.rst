@@ -6,11 +6,6 @@
 Welcome to NNGeometry's documentation!
 ======================================
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:
-
-
 NNGeometry is a library built on top of PyTorch aiming at giving tools
 to easily manipulate and study properties of matrices describing the geometry
 of the function spaces where these networks live.
@@ -26,6 +21,7 @@ In-depth
 ========
 
 .. toctree::
+   overview.rst
    :maxdepth: 1
 
    api/index.rst

@@ -1,0 +1,31 @@
+Overview
+========
+
+With NNGeometry, you can easily manipulate :math:`d \times d` matrices and :math:`d` vectors where :math:`d` is the number of parameter of your neural network, for modern neural networks where :math:`d` can be as big as :math:`10^8`. These matrices include for instance:
+
+ - The *Fisher Information Matrix* (FIM) used in statistics, in the natural gradient algorithm, or as an approximate of the Hessian matrix in some applications.
+ - *Posterior covariances* in Bayesian Deep Learning.
+
+You can also compute finite *tangent kernels*.
+
+A naive computation of the FIM would require storing :math:`d \times d` scalars in memory. This is prohibitively large for modern neural network architectures, and a line of research has focused at finding lower memory intensive approximations specific to neural networks, such as KFAC, EKFAC, low-rank approximations, etc. This library proposes a common interface for manipulating these different approximations, called *representations*.
+
+Let us now illustrate this by computing the FIM using the KFAC representation.
+
+.. code-block:: python
+
+   F_kfac = FIM(layer_collection=layer_collection,
+                 model=model,
+                 loader=loader,
+                 representation=PSpaceKFAC,
+                 n_output=10,
+                 variant='classif_logits',
+                 device='cuda')
+   print(F_kfac.trace())
+
+Let us now describe each component used in this simple example:
+
+ - The :class:`nngeometry.layercollection.LayerCollection` `layer_collection` object describes the structure of the parameters that we will be manipulating. If we are interested in computing the FIM for the last 2 layers for instance, it will describe the structure of these last 2 layers and the size of their parameters.
+ - The :class:`torch.nn.Module` `model` object is the PyTorch model used as our neural network.
+ - The :class:`torch.utils.data.DataLoader` `loader` object is the dataloader that contains examples used for computing the FIM.
+ - The :class:`nngeometry.object.pspace.PSpaceKFAC` argument specifies which representation to use in order to store the FIM.
