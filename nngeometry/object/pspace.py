@@ -428,20 +428,24 @@ class PSpaceKFAC(PSpaceAbstract):
 
 
 class PSpaceEKFAC:
-    def __init__(self, generator):
+    def __init__(self, generator, data=None):
         self.generator = generator
-        evecs = dict()
-        diags = dict()
+        if data is None:
+            evecs = dict()
+            diags = dict()
 
-        kfac_blocks = generator.get_kfac_blocks()
-        for layer_id, layer in self.generator.layer_collection.layers.items():
-            a, g = kfac_blocks[layer_id]
-            evals_a, evecs_a = torch.symeig(a, eigenvectors=True)
-            evals_g, evecs_g = torch.symeig(g, eigenvectors=True)
-            evecs[layer_id] = (evecs_a, evecs_g)
-            diags[layer_id] = kronecker(evals_g.view(-1, 1),
-                                        evals_a.view(-1, 1))
-        self.data = (evecs, diags)
+            kfac_blocks = generator.get_kfac_blocks()
+            for layer_id, layer in \
+                    self.generator.layer_collection.layers.items():
+                a, g = kfac_blocks[layer_id]
+                evals_a, evecs_a = torch.symeig(a, eigenvectors=True)
+                evals_g, evecs_g = torch.symeig(g, eigenvectors=True)
+                evecs[layer_id] = (evecs_a, evecs_g)
+                diags[layer_id] = kronecker(evals_g.view(-1, 1),
+                                            evals_a.view(-1, 1))
+            self.data = (evecs, diags)
+        else:
+            self.data = data
 
     def get_dense_tensor(self, split_weight_bias=True):
         """
@@ -514,6 +518,13 @@ class PSpaceEKFAC:
 
     def frobenius_norm(self):
         return sum([(d**2).sum() for d in self.data[1].values()])**.5
+
+    def inverse(self, regul=1e-8):
+        evecs, diags = self.data
+        inv_diags = {i: 1. / (d + regul)
+                     for i, d in diags.items()}
+        return PSpaceEKFAC(generator=self.generator,
+                           data=(evecs, inv_diags))
 
 
 class PSpaceImplicit(PSpaceAbstract):

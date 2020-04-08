@@ -79,3 +79,10 @@ def test_pspace_ekfac_vs_direct():
             check_tensors(mv_direct, mv_ekfac.get_flat_representation())
 
             M_ekfac.update_diag()
+
+            Mv2 = M_ekfac.mv(mv_ekfac)
+            regul = 1e-4
+            M_inv = M_ekfac.inverse(regul=regul)
+            mv_back = M_inv.mv(Mv2 + regul * mv_ekfac)
+            check_tensors(mv_ekfac.get_flat_representation(),
+                          mv_back.get_flat_representation())
