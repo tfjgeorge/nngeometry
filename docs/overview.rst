@@ -12,20 +12,28 @@ A naive computation of the FIM would require storing :math:`d \times d` scalars 
 
 Let us now illustrate this by computing the FIM using the KFAC representation.
 
-.. code-block:: python
+   >>> F_kfac = FIM(layer_collection=layer_collection,
+                    model=model,
+                    loader=loader,
+                    representation=PSpaceKFAC,
+                    n_output=10,
+                    variant='classif_logits',
+                    device='cuda')
+   >>> print(F_kfac.trace())
 
-   F_kfac = FIM(layer_collection=layer_collection,
-                 model=model,
-                 loader=loader,
-                 representation=PSpaceKFAC,
-                 n_output=10,
-                 variant='classif_logits',
-                 device='cuda')
-   print(F_kfac.trace())
+Computing the FIM requires the following arguments:
 
-Let us now describe each component used in this simple example:
+ - The :class:`.layercollection.LayerCollection` ``layer_collection`` object describes the structure of the parameters that we will be manipulating. If we are interested in computing the FIM for the last 2 layers for instance, it will describe the structure of these last 2 layers and the size of their parameters.
+ - The :class:`torch.nn.Module` ``model`` object is the PyTorch model used as our neural network.
+ - The :class:`torch.utils.data.DataLoader` ``loader`` object is the dataloader that contains examples used for computing the FIM.
+ - The :class:`.object.pspace.PSpaceKFAC` argument specifies which representation to use in order to store the FIM.
 
- - The :class:`nngeometry.layercollection.LayerCollection` `layer_collection` object describes the structure of the parameters that we will be manipulating. If we are interested in computing the FIM for the last 2 layers for instance, it will describe the structure of these last 2 layers and the size of their parameters.
- - The :class:`torch.nn.Module` `model` object is the PyTorch model used as our neural network.
- - The :class:`torch.utils.data.DataLoader` `loader` object is the dataloader that contains examples used for computing the FIM.
- - The :class:`nngeometry.object.pspace.PSpaceKFAC` argument specifies which representation to use in order to store the FIM.
+ We will next define a vector in parameter space, by using the current value given by our model:
+
+         >>> v = PVector.from_model(model)
+
+ We can now compute the matrix-vector product :math:`F v` by simply calling:
+
+        >>> Fv = F_kfac.mv(v)
+
+ Note that switching from the :class:`.object.pspace.PSpaceKFAC` representation to any other representation such as :class:`.object.pspace.PSpaceDense` is as simple as passing ``representation=PSpaceDense`` when building the ``F_kfac`` object.
