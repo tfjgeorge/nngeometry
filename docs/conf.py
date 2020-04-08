@@ -63,6 +63,7 @@ extensions = [
     'sphinx.ext.graphviz',
     'sphinx.ext.intersphinx',
     # 'sphinx.ext.linkcode'
+    'torch'
 ]
 
 master_doc = 'index'
