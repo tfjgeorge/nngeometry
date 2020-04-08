@@ -5,9 +5,17 @@ from .vector import PVector
 
 
 class PSpaceAbstract(ABC):
+    """
+    A :math:`d \\times d` matrix in parameter space. This abstract class
+    defines common methods used in concrete representations.
+
+    :param generator: The generator
+    :type generator: :class:`nngeometry.generator.jacobian.Jacobian`
+    :param data: if None, uses the generator to populate the matrix data.
+    """
 
     @abstractmethod
-    def __init__(self, generator):
+    def __init__(self, generator, data=None):
         raise NotImplementedError
 
     @abstractmethod
@@ -36,9 +44,25 @@ class PSpaceAbstract(ABC):
 
     @abstractmethod
     def get_diag(self):
+        """
+        Computes and returns the diagonal elements of this matrix.
+
+        :return: a Pytorch Tensor
+        """
         raise NotImplementedError
 
     def size(self, dim=None):
+        """
+        Size of the matrix as a tuple, regardless of the actual size in memory.
+
+        :param dim: dimension
+        :type dim: int or None
+
+        >>> M.size()
+        (1254, 1254)
+        >>> M.size(0)
+        1254
+        """
         # TODO: test
         s = self.generator.layer_collection.numel()
         if dim == 0 or dim == 1:
@@ -115,10 +139,6 @@ class PSpaceDense(PSpaceAbstract):
     def get_eigendecomposition(self):
         # TODO: test
         return self.evals, self.evecs
-
-    def size(self, *args):
-        # TODO: test
-        return self.data.size(*args)
 
     def trace(self):
         return torch.trace(self.data)
@@ -508,15 +528,6 @@ class PSpaceImplicit(PSpaceAbstract):
 
     def trace(self):
         return self.generator.implicit_trace()
-
-    def size(self, dim=None):
-        s = self.generator.layer_collection.numel()
-        if dim == 0 or dim == 1:
-            return s
-        elif dim is None:
-            return (s, s)
-        else:
-            raise IndexError
 
     def frobenius_norm(self):
         raise NotImplementedError
