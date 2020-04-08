@@ -64,3 +64,5 @@ extensions = [
     'sphinx.ext.intersphinx',
     # 'sphinx.ext.linkcode'
 ]
+
+master_doc = 'index'

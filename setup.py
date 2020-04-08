@@ -8,4 +8,5 @@ setup(name='nngeometry',
       author_email='tfjgeorge@gmail.com',
       license='MIT',
       packages=['nngeometry'],
+      install_requires=['torch'],
       zip_safe=False)
