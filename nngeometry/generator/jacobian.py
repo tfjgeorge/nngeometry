@@ -49,7 +49,8 @@ class Jacobian:
             for i in range(self.n_output):
                 self.grads.zero_()
                 torch.autograd.grad(output[i], [inputs],
-                                    retain_graph=True)
+                                    retain_graph=i < self.n_output - 1,
+                                    only_inputs=True)
                 G += torch.mm(self.grads[0].t(), self.grads[0])
                 if self.centering:
                     grad_mean[i].add_(self.grads[0].sum(dim=0))
@@ -87,7 +88,8 @@ class Jacobian:
                 .sum(dim=0)
             for i in range(self.n_output):
                 torch.autograd.grad(output[i], [inputs],
-                                    retain_graph=True)
+                                    retain_graph=i < self.n_output - 1,
+                                    only_inputs=True)
         diag_m = self.diag_m / n_examples
 
         # remove hooks
@@ -121,7 +123,8 @@ class Jacobian:
                 .sum(dim=0)
             for i in range(self.n_output):
                 torch.autograd.grad(output[i], [inputs],
-                                    retain_graph=True)
+                                    retain_graph=i < self.n_output - 1,
+                                    only_inputs=True)
         blocks = {m: self._blocks[m] / n_examples for m in self._blocks.keys()}
 
         # remove hooks
@@ -162,8 +165,10 @@ class Jacobian:
             output = self.function(*d).view(bs, self.n_output) \
                 .sum(dim=0)
             for self.i_output in range(self.n_output):
+                retain_graph = self.i_output < self.n_output - 1
                 torch.autograd.grad(output[self.i_output], [inputs],
-                                    retain_graph=True)
+                                    retain_graph=retain_graph,
+                                    only_inputs=True)
         blocks = {layer_id: (self._blocks[layer_id][0] / n_examples *
                              self.n_output**.5,
                              self._blocks[layer_id][1] / n_examples /
@@ -198,8 +203,10 @@ class Jacobian:
             output = self.function(*d).view(bs, self.n_output) \
                 .sum(dim=0)
             for self.i_output in range(self.n_output):
+                retain_graph = self.i_output < self.n_output - 1
                 torch.autograd.grad(output[self.i_output], [inputs],
-                                    retain_graph=True)
+                                    retain_graph=retain_graph,
+                                    only_inputs=True)
             self.start += inputs.size(0)
         grads = self.grads
         if self.centering:
@@ -239,7 +246,8 @@ class Jacobian:
             for self.i_output_outer in range(self.n_output):
                 self.outerloop_switch = True
                 torch.autograd.grad(output_outer[self.i_output_outer],
-                                    [inputs_outer], retain_graph=True)
+                                    [inputs_outer], retain_graph=True,
+                                    only_inputs=True)
                 self.outerloop_switch = False
 
                 self.e_inner = 0
@@ -254,7 +262,8 @@ class Jacobian:
                         .sum(dim=0)
                     for self.i_output_inner in range(self.n_output):
                         torch.autograd.grad(output_inner[self.i_output_inner],
-                                            [inputs_inner], retain_graph=True)
+                                            [inputs_inner], retain_graph=True,
+                                            only_inputs=True)
 
                     # since self.G is a symmetric matrix we only need to
                     # compute the upper or lower triangle
@@ -321,8 +330,10 @@ class Jacobian:
             output = self.function(*d).view(bs, self.n_output) \
                 .sum(dim=0)
             for self.i_output in range(self.n_output):
+                retain_graph = self.i_output < self.n_output - 1
                 torch.autograd.grad(output[self.i_output], [inputs],
-                                    retain_graph=True)
+                                    retain_graph=retain_graph,
+                                    only_inputs=True)
         diags = {l_id: self._diags[l_id] / n_examples
                  for l_id in self.layer_collection.layers.keys()}
 
@@ -372,12 +383,14 @@ class Jacobian:
 
                 self.compute_switch = True
                 torch.autograd.grad(f_output[:, i].sum(dim=0), [inputs],
-                                    retain_graph=True)
+                                    retain_graph=True,
+                                    only_inputs=True)
                 self.compute_switch = False
                 pseudo_loss = torch.dot(self._Jv[0, :], f_output[:, i])
                 grads = torch.autograd.grad(pseudo_loss,
                                             parameters,
-                                            retain_graph=i < self.n_output - 1)
+                                            retain_graph=i < self.n_output - 1,
+                                            only_inputs=True)
                 for i_p, p in enumerate(parameters):
                     output[p].add_(grads[i_p])
 
@@ -433,7 +446,8 @@ class Jacobian:
                 self._Jv = torch.zeros((1, bs), device=device)
 
                 torch.autograd.grad(f_output[i], [inputs],
-                                    retain_graph=True)
+                                    retain_graph=i < self.n_output - 1,
+                                    only_inputs=True)
                 norm2 += (self._Jv**2).sum()
         norm = norm2 / n_examples
 
@@ -464,7 +478,8 @@ class Jacobian:
                 .sum(dim=0)
             for i in range(self.n_output):
                 torch.autograd.grad(output[i], [inputs],
-                                    retain_graph=True)
+                                    retain_graph=i < self.n_output - 1,
+                                    only_inputs=True)
         trace = self._trace / n_examples
 
         # remove hooks
@@ -495,8 +510,10 @@ class Jacobian:
             output = self.function(*d).view(bs, self.n_output) \
                 .sum(dim=0)
             for self.i_output in range(self.n_output):
+                retain_graph = self.i_output < self.n_output - 1
                 torch.autograd.grad(output[self.i_output], [inputs],
-                                    retain_graph=True)
+                                    retain_graph=retain_graph,
+                                    only_inputs=True)
             self.start += inputs.size(0)
         Jv = self._Jv
 
