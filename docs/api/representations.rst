@@ -1,7 +1,7 @@
 Matrix representations
-==========
+======================
 
-.. automodule:: nngeometry.representations
+.. automodule:: nngeometry.object.pspace
     :members:
     :undoc-members:
     :show-inheritance:

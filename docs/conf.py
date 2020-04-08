@@ -12,13 +12,13 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../nngeometry'))
+sys.path.insert(0, os.path.abspath('..'))
 
 
 # -- Project information -----------------------------------------------------
 
 project = 'NNGeometry'
-copyright = '2019, Thomas George'
+copyright = '2020, Thomas George'
 author = 'Thomas George'
 
 
