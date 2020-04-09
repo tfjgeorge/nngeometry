@@ -36,10 +36,23 @@ class PSpaceAbstract(ABC):
 
     @abstractmethod
     def vTMv(self, v):
+        """
+        Computes the quadratic form defined by M in v,
+        namely the product :math:`v^\\top M v`
+
+        :param v: vector :math:`v`
+        :type v: :class:`.object.vector.PVector`
+        """
         raise NotImplementedError
 
     @abstractmethod
     def inverse(self, regul):
+        """
+        Inverse of the matrix
+
+        :param regul: Tikhonov regularization
+        :type regul: float
+        """
         raise NotImplementedError
 
     @abstractmethod
@@ -47,7 +60,7 @@ class PSpaceAbstract(ABC):
         """
         Computes and returns the diagonal elements of this matrix.
 
-        :return: a Pytorch Tensor
+        :return: a PyTorch Tensor
         """
         raise NotImplementedError
 
@@ -428,6 +441,12 @@ class PSpaceKFAC(PSpaceAbstract):
 
 
 class PSpaceEKFAC:
+    """
+    EKFAC representation from
+    *George, Laurent et al., Fast Approximate Natural Gradient Descent
+    in a Kronecker-factored Eigenbasis, NIPS 2018*
+
+    """
     def __init__(self, generator, data=None):
         self.generator = generator
         if data is None:
@@ -525,6 +544,12 @@ class PSpaceEKFAC:
                      for i, d in diags.items()}
         return PSpaceEKFAC(generator=self.generator,
                            data=(evecs, inv_diags))
+
+    def __rmul__(self, x):
+        evecs, diags = self.data
+        diags = {l_id: x * d for l_id, d in diags.items()}
+        return PSpaceEKFAC(generator=self.generator,
+                           data=(evecs, diags))
 
 
 class PSpaceImplicit(PSpaceAbstract):

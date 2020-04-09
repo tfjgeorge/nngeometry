@@ -80,9 +80,15 @@ def test_pspace_ekfac_vs_direct():
 
             M_ekfac.update_diag()
 
+            # Test inverse
             Mv2 = M_ekfac.mv(mv_ekfac)
             regul = 1e-4
             M_inv = M_ekfac.inverse(regul=regul)
             mv_back = M_inv.mv(Mv2 + regul * mv_ekfac)
             check_tensors(mv_ekfac.get_flat_representation(),
                           mv_back.get_flat_representation())
+
+            # Test rmul
+            M_mul = 1.23 * M_ekfac
+            check_tensors(1.23 * M_ekfac.get_dense_tensor(),
+                          M_mul.get_dense_tensor())
