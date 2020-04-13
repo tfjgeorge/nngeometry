@@ -6,9 +6,12 @@ def check_ratio(vref, v2, eps=1e-3):
     assert ratio < 1 + eps and ratio > 1 - eps
 
 
-def check_tensors(tref, t2, eps=1e-5):
+def check_tensors(tref, t2, eps=1e-1, only_print_diff=False):
     relative_diff = torch.norm(t2 - tref) / torch.norm(tref)
-    assert relative_diff < eps
+    if only_print_diff:
+        print(relative_diff)
+    else:
+        assert relative_diff < eps
 
 
 def angle(v1, v2):

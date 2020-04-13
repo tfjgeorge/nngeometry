@@ -7,6 +7,7 @@ def get_n_parameters(model):
 
 
 def get_individual_modules(model):
+    raise Exception
     mods = []
     sizes_mods = []
     parameters = []
@@ -14,8 +15,7 @@ def get_individual_modules(model):
     p_pos = dict()
     for mod in model.modules():
         mod_class = mod.__class__.__name__
-        if mod_class in ['Linear', 'Conv2d', 'BatchNorm1d',
-                         'BatchNorm2d']:
+        if mod_class in ['Linear', 'Conv2d', 'BatchNorm1d', 'BatchNorm2d']:
             mods.append(mod)
             p_pos[mod] = start
             sizes_mods.append(mod.weight.size())

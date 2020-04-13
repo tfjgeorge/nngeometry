@@ -1,8 +1,12 @@
 import torch
-from .pspace.m2gradients import M2Gradients
+from torch.nn.functional import softmax
+from .generator.jacobian import Jacobian
 
 
-def FIM_MonteCarlo1(representation, loader, model,
+def FIM_MonteCarlo1(layer_collection,
+                    model,
+                    loader,
+                    representation,
                     variant='classif_logsoftmax'):
     """
     Helper to create a matrix computing the Fisher Information
@@ -11,15 +15,49 @@ def FIM_MonteCarlo1(representation, loader, model,
 
     if variant == 'classif_logsoftmax':
 
-        def loss(input, target):
+        def function(input, target):
             log_softmax = model(input)
             probabilities = torch.exp(log_softmax)
             sampled_targets = torch.multinomial(probabilities, 1)
             return torch.gather(log_softmax, 1, sampled_targets)
 
-        generator = M2Gradients(model=model,
-                                dataloader=loader,
-                                loss_function=loss)
+        generator = Jacobian(layer_collection=layer_collection,
+                             model=model,
+                             loader=loader,
+                             function=function,
+                             n_output=1)
+        return representation(generator)
+    else:
+        raise NotImplementedError
+
+
+def FIM(layer_collection,
+        model,
+        loader,
+        representation,
+        n_output,
+        variant='classif_logits',
+        device='cpu'):
+    """
+    Helper to create a matrix computing the Fisher Information
+    Matrix using closed form expressions for the expectation y|x
+    as described in (Pascanu and Bengio, 2013)
+    """
+    # TODO: test
+
+    if variant == 'classif_logits':
+
+        def function(*d):
+            inputs = d[0].to(device)
+            logits = model(inputs)
+            probs = softmax(logits, dim=1).detach()
+            return (logits * probs**.5 * (1 - probs))
+
+        generator = Jacobian(layer_collection=layer_collection,
+                             model=model,
+                             loader=loader,
+                             function=function,
+                             n_output=n_output)
         return representation(generator)
     else:
         raise NotImplementedError
