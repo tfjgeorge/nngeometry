@@ -19,23 +19,10 @@ class LayerCollection:
         lc = LayerCollection()
         for layer, mod in model.named_modules():
             mod_class = mod.__class__.__name__
-            if mod_class == 'Linear':
+            if mod_class in ['Linear', 'Conv2d', 'BatchNorm1d',
+                             'BatchNorm2d']:
                 lc.add_layer('%s.%s' % (layer, str(mod)),
-                             LinearLayer(in_features=mod.in_features,
-                                         out_features=mod.out_features,
-                                         bias=(mod.bias is not None)))
-            elif mod_class == 'Conv2d':
-                lc.add_layer('%s.%s' % (layer, str(mod)),
-                             Conv2dLayer(in_channels=mod.in_channels,
-                                         out_channels=mod.out_channels,
-                                         kernel_size=mod.kernel_size,
-                                         bias=(mod.bias is not None)))
-            elif mod_class == 'BatchNorm1d':
-                lc.add_layer('%s.%s' % (layer, str(mod)),
-                             BatchNorm1dLayer(num_features=mod.num_features))
-            elif mod_class == 'BatchNorm2d':
-                lc.add_layer('%s.%s' % (layer, str(mod)),
-                             BatchNorm2dLayer(num_features=mod.num_features))
+                             LayerCollection._module_to_layer(mod))
 
         return lc
 
@@ -53,6 +40,39 @@ class LayerCollection:
         self.layers[name] = layer
         self.p_pos[name] = self._numel
         self._numel += layer.numel()
+
+    def add_layer_from_model(self, model, module):
+        """
+        Add a layer by specifying the module corresponding
+        to this layer (e.g. torch.nn.Linear or torch.nn.BatchNorm1d)
+
+        :param model: The model defining the neural network
+        :param module: The layer to be added
+        """
+        if module.__class__.__name__ not in \
+                ['Linear', 'Conv2d', 'BatchNorm1d',
+                 'BatchNorm2d']:
+            raise NotImplementedError
+        for layer, mod in model.named_modules():
+            if mod is module:
+                self.add_layer('%s.%s' % (layer, str(mod)),
+                               LayerCollection._module_to_layer(mod))
+
+    def _module_to_layer(mod):
+        mod_class = mod.__class__.__name__
+        if mod_class == 'Linear':
+            return LinearLayer(in_features=mod.in_features,
+                               out_features=mod.out_features,
+                               bias=(mod.bias is not None))
+        elif mod_class == 'Conv2d':
+            return Conv2dLayer(in_channels=mod.in_channels,
+                               out_channels=mod.out_channels,
+                               kernel_size=mod.kernel_size,
+                               bias=(mod.bias is not None))
+        elif mod_class == 'BatchNorm1d':
+            return BatchNorm1dLayer(num_features=mod.num_features)
+        elif mod_class == 'BatchNorm2d':
+            return BatchNorm2dLayer(num_features=mod.num_features)
 
     def numel(self):
         return self._numel

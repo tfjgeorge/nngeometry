@@ -289,11 +289,11 @@ class PSpaceBlockDiag(PSpaceAbstract):
         # TODO test
         vector_dict = vector.get_dict_representation()
         norm2 = 0
-        for mod in vector_dict.keys():
-            v = vector_dict[mod][0].view(-1)
-            if len(vector_dict[mod]) > 1:
-                v = torch.cat([v, vector_dict[mod][1].view(-1)])
-            norm2 += torch.dot(torch.mv(self.data[mod], v), v)
+        for layer_id, layer in self.generator.layer_collection.layers.items():
+            v = vector_dict[layer_id][0].view(-1)
+            if len(vector_dict[layer_id]) > 1:
+                v = torch.cat([v, vector_dict[layer_id][1].view(-1)])
+            norm2 += torch.dot(torch.mv(self.data[layer_id], v), v)
         return norm2
 
     def __add__(self, other):
