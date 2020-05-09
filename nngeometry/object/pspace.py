@@ -411,7 +411,7 @@ class PSpaceKFAC(PSpaceAbstract):
         for layer_id, layer in self.generator.layer_collection.layers.items():
             v = vector_dict[layer_id][0].view(vector_dict[layer_id][0].size(0),
                                               -1)
-            if len(vector_dict[layer_id]) > 1:
+            if layer.bias is not None:
                 v = torch.cat([v, vector_dict[layer_id][1].unsqueeze(1)],
                               dim=1)
             a, g = self.data[layer_id]

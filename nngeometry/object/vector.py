@@ -50,7 +50,7 @@ class PVector:
             if layer.bias is not None:
                 dict_repr[layer_id] = (mod.weight, mod.bias)
             else:
-                dict_repr[layer_id] = (mod.weight)
+                dict_repr[layer_id] = (mod.weight,)
         return PVector(layer_collection, dict_repr=dict_repr)
 
     @staticmethod
@@ -140,7 +140,7 @@ class PVector:
                     v_dict[l_id] = (x * self.dict_repr[l_id][0],
                                     x * self.dict_repr[l_id][1])
                 else:
-                    v_dict[l_id] = (x * self.dict_repr[l_id][0])
+                    v_dict[l_id] = (x * self.dict_repr[l_id][0],)
             return PVector(self.layer_collection, dict_repr=v_dict)
         else:
             return PVector(self.layer_collection,
@@ -157,7 +157,7 @@ class PVector:
                                     other.dict_repr[l_id][1])
                 else:
                     v_dict[l_id] = (self.dict_repr[l_id][0] +
-                                    other.dict_repr[l_id][0])
+                                    other.dict_repr[l_id][0],)
             return PVector(self.layer_collection, dict_repr=v_dict)
         elif self.vector_repr is not None and other.vector_repr is not None:
             return PVector(self.layer_collection,
@@ -178,7 +178,7 @@ class PVector:
                                     other.dict_repr[l_id][1])
                 else:
                     v_dict[l_id] = (self.dict_repr[l_id][0] -
-                                    other.dict_repr[l_id][0])
+                                    other.dict_repr[l_id][0],)
             return PVector(self.layer_collection, dict_repr=v_dict)
         elif self.vector_repr is not None and other.vector_repr is not None:
             return PVector(self.layer_collection,
