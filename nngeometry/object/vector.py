@@ -70,15 +70,17 @@ class PVector:
                 mod.weight.data.copy_(dict_repr[layer_id][0])
 
     @staticmethod
-    # TODO: fix and test
     def from_model_grad(model):
         dict_repr = dict()
-        for mod in get_individual_modules(model)[0]:
-            if mod.bias is not None:
-                dict_repr[mod] = (mod.weight.grad, mod.bias.grad)
+        layer_collection = LayerCollection.from_model(model)
+        l_to_m, _ = layer_collection.get_layerid_module_maps(model)
+        for layer_id, layer in layer_collection.layers.items():
+            mod = l_to_m[layer_id]
+            if layer.bias is not None:
+                dict_repr[layer_id] = (mod.weight.grad, mod.bias.grad)
             else:
-                dict_repr[mod] = (mod.weight.grad)
-        return PVector(model, dict_repr=dict_repr)
+                dict_repr[layer_id] = (mod.weight.grad,)
+        return PVector(layer_collection, dict_repr=dict_repr)
 
     def clone(self):
         if self.dict_repr is not None:
