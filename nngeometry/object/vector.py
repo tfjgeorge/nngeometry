@@ -33,6 +33,8 @@ def random_fvector(n_samples, n_output=1, device=None):
 class PVector:
     """
     A vector in parameter space
+
+    :param:
     """
     def __init__(self, layer_collection, vector_repr=None,
                  dict_repr=None):
@@ -42,6 +44,10 @@ class PVector:
 
     @staticmethod
     def from_model(model):
+        """
+        Creates a PVector using the current values of the given
+        model
+        """
         dict_repr = dict()
         layer_collection = LayerCollection.from_model(model)
         l_to_m, _ = layer_collection.get_layerid_module_maps(model)
@@ -55,7 +61,7 @@ class PVector:
 
     def copy_to_model(self, model):
         """
-        Updates `model` parameter values with the current vector
+        Updates `model` parameter values with the current PVector
 
         Note. This is an inplace operation
         """
@@ -71,6 +77,10 @@ class PVector:
 
     @staticmethod
     def from_model_grad(model):
+        """
+        Creates a PVector using the current values of the `.grad`
+        fields of parameters of the given model
+        """
         dict_repr = dict()
         layer_collection = LayerCollection.from_model(model)
         l_to_m, _ = layer_collection.get_layerid_module_maps(model)
@@ -83,6 +93,9 @@ class PVector:
         return PVector(layer_collection, dict_repr=dict_repr)
 
     def clone(self):
+        """
+        Returns a clone of the current object
+        """
         if self.dict_repr is not None:
             dict_clone = dict()
             for k, v in self.dict_repr.items():
@@ -96,6 +109,9 @@ class PVector:
                            vector_repr=self.vector_repr.clone())
 
     def detach(self):
+        """
+        Detachs the current PVector from the computation graph
+        """
         if self.dict_repr is not None:
             dict_detach = dict()
             for k, v in self.dict_repr.items():
@@ -109,6 +125,17 @@ class PVector:
                            vector_repr=self.vector_repr.detach())
 
     def get_flat_representation(self):
+        """
+        Returns a Pytorch 1d tensor of the flatten vector.
+
+        .. warning::
+            The ordering in which the parameters are
+            flattened can seem to be arbitrary. It is in fact
+            the same ordering as specified by the ``layercollection.LayerCollection``
+            object.
+
+        :return: a Pytorch Tensor
+        """
         if self.vector_repr is not None:
             return self.vector_repr
         elif self.dict_repr is not None:
