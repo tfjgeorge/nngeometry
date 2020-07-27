@@ -5,6 +5,28 @@ from ..object.vector import PVector, FVector
 
 
 class Jacobian:
+    """
+    Computes jacobians :math:`\mathbf{J}_{ijk}=\\frac{\partial f\left(x_{j}\\right)_{i}}{\delta\mathbf{w}_{k}}`,
+    FIM matrices :math:`\mathbf{F}_{k,k'}=\\frac{1}{n}\sum_{i,j}\mathbf{J}_{ijk}\mathbf{J}_{ijk'}`
+    and NTK matrices :math:`\mathbf{K}_{iji'j'}=\sum_{k}\mathbf{J}_{ijk}\mathbf{J}_{ijk'}`.
+    
+    This generator is written in pure PyTorch and exploits some tricks in order to make computations
+    more efficient.
+
+    :param layer_collection:
+    :type layer_collection: :class:`.layercollection.LayerCollection`
+    :param model:
+    :type model: Pytorch `nn.Module`
+    :param loader:
+    :type loader: Pytorch `utils.data.DataLoader`
+    :param function: A function :math:`f\left(X,Y,Z\\right)` where :math:`X,Y,Z` are minibatchs
+        returned by the dataloader (Note that in some cases :math:`Y,Z` are not required)
+    :type function: python function 
+    :param n_output: How many output is there for each example of your function. E.g. in 10 class
+        classification this would probably be 10.
+    :type n_output: integer
+
+    """
     def __init__(self, layer_collection, model, loader, function, n_output=1,
                  centering=False):
         self.model = model

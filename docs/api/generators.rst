@@ -1,9 +1,7 @@
 Generators
 ==========
 
-The spirit of NNGeometry is that you do not directly manipulate Generator objects, but instead instantiate representations such as `PSpaceDense` or `PSpaceKFAC` so that you do not have to worry about implementing i.e. matrix-vector products for a `PSpaceKFAC` representation.
+The spirit of NNGeometry is that you do not directly manipulate Generator objects, these can be considered as a backend that you do not need to worry about once instantiated. You instead instantiate concrete representations such as `PSpaceDense` or `PSpaceKFAC` and directly call linear algebra operations on these concrete representations.
 
-.. automodule:: nngeometry.generator
+.. automodule:: nngeometry.generator.jacobian
     :members:
-    :undoc-members:
-    :show-inheritance:
