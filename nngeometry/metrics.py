@@ -53,11 +53,18 @@ def FIM(layer_collection,
             probs = softmax(logits, dim=1).detach()
             return (logits * probs**.5 * (1 - probs))
 
-        generator = Jacobian(layer_collection=layer_collection,
-                             model=model,
-                             loader=loader,
-                             function=function,
-                             n_output=n_output)
-        return representation(generator)
+    elif variant == 'regression':
+
+        def function(*d):
+            inputs = d[0].to(device)
+            estimates = model(inputs)
+            return estimates
     else:
         raise NotImplementedError
+
+    generator = Jacobian(layer_collection=layer_collection,
+                         model=model,
+                         loader=loader,
+                         function=function,
+                         n_output=n_output)
+    return representation(generator)
