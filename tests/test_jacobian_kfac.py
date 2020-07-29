@@ -1,5 +1,5 @@
 from nngeometry.generator.jacobian import Jacobian
-from nngeometry.object.pspace import PSpaceBlockDiag, PSpaceKFAC
+from nngeometry.object.PMat import PMatBlockDiag, PMatKFAC
 from nngeometry.object.vector import random_pvector, PVector
 from nngeometry.maths import kronecker
 from nngeometry.layercollection import LayerCollection
@@ -129,8 +129,8 @@ def test_jacobian_kfac_vs_pblockdiag():
                              loader=loader,
                              function=function,
                              n_output=n_output)
-        M_kfac = PSpaceKFAC(generator)
-        M_blockdiag = PSpaceBlockDiag(generator)
+        M_kfac = PMatKFAC(generator)
+        M_blockdiag = PMatBlockDiag(generator)
 
         G_kfac = M_kfac.get_dense_tensor(split_weight_bias=True)
         G_blockdiag = M_blockdiag.get_dense_tensor()
@@ -146,7 +146,7 @@ def test_jacobian_kfac():
                              loader=loader,
                              function=function,
                              n_output=n_output)
-        M_kfac = PSpaceKFAC(generator)
+        M_kfac = PMatKFAC(generator)
         G_kfac_split = M_kfac.get_dense_tensor(split_weight_bias=True)
         G_kfac = M_kfac.get_dense_tensor(split_weight_bias=False)
 
@@ -190,7 +190,7 @@ def test_jacobian_kfac():
                       eps=1e-2)
 
 
-def test_pspace_kfac_eigendecomposition():
+def test_PMat_kfac_eigendecomposition():
     """
     Check KFAC eigendecomposition by comparing Mv products with v
     where v are the top eigenvectors. The remaining ones can be
@@ -205,7 +205,7 @@ def test_pspace_kfac_eigendecomposition():
                          function=function,
                          n_output=n_output)
 
-    M_kfac = PSpaceKFAC(generator)
+    M_kfac = PMatKFAC(generator)
     M_kfac.compute_eigendecomposition()
     evals, evecs = M_kfac.get_eigendecomposition()
     # Loop through all vectors in KFE

@@ -1,12 +1,12 @@
 from nngeometry.generator.jacobian import Jacobian
-from nngeometry.object.pspace import PSpaceBlockDiag, PSpaceKFAC, PSpaceEKFAC
+from nngeometry.object.PMat import PMatBlockDiag, PMatKFAC, PMatEKFAC
 import torch
 from tasks import get_fullyconnect_task, get_conv_task
 from nngeometry.object.vector import random_pvector
 from utils import check_ratio, check_tensors
 
 
-def test_pspace_ekfac_vs_kfac():
+def test_PMat_ekfac_vs_kfac():
     """
     Check that EKFAC matrix is closer to block diag one in the
     sense of the Frobenius norm
@@ -21,9 +21,9 @@ def test_pspace_ekfac_vs_kfac():
                              function=function,
                              n_output=n_output)
 
-        M_kfac = PSpaceKFAC(generator)
-        M_ekfac = PSpaceEKFAC(generator)
-        M_blockdiag = PSpaceBlockDiag(generator)
+        M_kfac = PMatKFAC(generator)
+        M_ekfac = PMatEKFAC(generator)
+        M_blockdiag = PMatBlockDiag(generator)
 
         # here KFAC and EKFAC should be the same
         for split in [True, False]:
@@ -39,7 +39,7 @@ def test_pspace_ekfac_vs_kfac():
                        - M_blockdiag.get_dense_tensor())
 
 
-def test_pspace_ekfac_vs_direct():
+def test_PMat_ekfac_vs_direct():
     """
     Check EKFAC basis operations against direct computation using
     get_dense_tensor
@@ -54,7 +54,7 @@ def test_pspace_ekfac_vs_direct():
                              function=function,
                              n_output=n_output)
 
-        M_ekfac = PSpaceEKFAC(generator)
+        M_ekfac = PMatEKFAC(generator)
         v = random_pvector(lc, device='cuda')
 
         # the second time we will have called update_diag

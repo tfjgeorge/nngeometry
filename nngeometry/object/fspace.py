@@ -3,14 +3,14 @@ from abc import ABC, abstractmethod
 from .vector import FVector, PVector
 
 
-class FSpaceAbstract(ABC):
+class FMatAbstract(ABC):
 
     @abstractmethod
     def __init__(self, generator):
         return NotImplementedError
 
 
-class FSpaceDense(FSpaceAbstract):
+class FMatDense(FMatAbstract):
     def __init__(self, generator, data=None):
         self.generator = generator
         if data is not None:
@@ -70,11 +70,11 @@ class FSpaceDense(FSpaceAbstract):
     def __add__(self, other):
         # TODO: test
         sum_data = self.data + other.data
-        return FSpaceDense(generator=self.generator,
+        return FMatDense(generator=self.generator,
                            data=sum_data)
 
     def __sub__(self, other):
         # TODO: test
         sub_data = self.data - other.data
-        return FSpaceDense(generator=self.generator,
+        return FMatDense(generator=self.generator,
                            data=sub_data)

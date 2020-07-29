@@ -1,12 +1,12 @@
 Parameter space matrix representations
 ======================================
 
-.. autoclass:: nngeometry.object.pspace.PSpaceAbstract
+.. autoclass:: nngeometry.object.PMat.PMatAbstract
     :members:
 
 Concrete representations
 ========================
 
-.. automodule:: nngeometry.object.pspace
+.. automodule:: nngeometry.object.PMat
     :members:
-    :exclude-members: PSpaceAbstract
+    :exclude-members: PMatAbstract

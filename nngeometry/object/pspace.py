@@ -4,7 +4,7 @@ from ..maths import kronecker
 from .vector import PVector
 
 
-class PSpaceAbstract(ABC):
+class PMatAbstract(ABC):
     """
     A :math:`d \\times d` matrix in parameter space. This abstract class
     defines common methods used in concrete representations.
@@ -86,7 +86,7 @@ class PSpaceAbstract(ABC):
             raise IndexError
 
 
-class PSpaceDense(PSpaceAbstract):
+class PMatDense(PMatAbstract):
     def __init__(self, generator, data=None):
         self.generator = generator
         if data is not None:
@@ -126,7 +126,7 @@ class PSpaceDense(PSpaceAbstract):
         inv_tensor = torch.inverse(self.data +
                                    regul * torch.eye(self.size(0),
                                                      device=self.data.device))
-        return PSpaceDense(generator=self.generator,
+        return PMatDense(generator=self.generator,
                            data=inv_tensor)
 
     def mv(self, v):
@@ -164,20 +164,20 @@ class PSpaceDense(PSpaceAbstract):
 
     def __add__(self, other):
         sum_data = self.data + other.data
-        return PSpaceDense(generator=self.generator,
+        return PMatDense(generator=self.generator,
                            data=sum_data)
 
     def __sub__(self, other):
         sub_data = self.data - other.data
-        return PSpaceDense(generator=self.generator,
+        return PMatDense(generator=self.generator,
                            data=sub_data)
 
     def __rmul__(self, x):
-        return PSpaceDense(generator=self.generator,
+        return PMatDense(generator=self.generator,
                            data=x * self.data)
 
 
-class PSpaceDiag(PSpaceAbstract):
+class PMatDiag(PMatAbstract):
     def __init__(self, generator=None, data=None):
         self.generator = generator
         if data is not None:
@@ -187,7 +187,7 @@ class PSpaceDiag(PSpaceAbstract):
 
     def inverse(self, regul=1e-8):
         inv_tensor = 1. / (self.data + regul)
-        return PSpaceDiag(generator=self.generator,
+        return PMatDiag(generator=self.generator,
                           data=inv_tensor)
 
     def mv(self, v):
@@ -212,20 +212,20 @@ class PSpaceDiag(PSpaceAbstract):
 
     def __add__(self, other):
         sum_diags = self.data + other.data
-        return PSpaceDiag(generator=self.generator,
+        return PMatDiag(generator=self.generator,
                           data=sum_diags)
 
     def __sub__(self, other):
         sub_diags = self.data - other.data
-        return PSpaceDiag(generator=self.generator,
+        return PMatDiag(generator=self.generator,
                           data=sub_diags)
 
     def __rmul__(self, x):
-        return PSpaceDiag(generator=self.generator,
+        return PMatDiag(generator=self.generator,
                           data=x * self.data)
 
 
-class PSpaceBlockDiag(PSpaceAbstract):
+class PMatBlockDiag(PMatAbstract):
     def __init__(self, generator, data=None):
         self.generator = generator
         if data is not None:
@@ -278,7 +278,7 @@ class PSpaceBlockDiag(PSpaceAbstract):
                                   regul *
                                   torch.eye(b.size(0), device=b.device))
             inv_data[layer_id] = inv_b
-        return PSpaceBlockDiag(generator=self.generator,
+        return PMatBlockDiag(generator=self.generator,
                                data=inv_data)
 
     def frobenius_norm(self):
@@ -299,22 +299,22 @@ class PSpaceBlockDiag(PSpaceAbstract):
     def __add__(self, other):
         sum_data = {l_id: d + other.data[l_id]
                     for l_id, d in self.data.items()}
-        return PSpaceBlockDiag(generator=self.generator,
+        return PMatBlockDiag(generator=self.generator,
                                data=sum_data)
 
     def __sub__(self, other):
         sum_data = {l_id: d - other.data[l_id]
                     for l_id, d in self.data.items()}
-        return PSpaceBlockDiag(generator=self.generator,
+        return PMatBlockDiag(generator=self.generator,
                                data=sum_data)
 
     def __rmul__(self, x):
         sum_data = {l_id: x * d for l_id, d in self.data.items()}
-        return PSpaceBlockDiag(generator=self.generator,
+        return PMatBlockDiag(generator=self.generator,
                                data=sum_data)
 
 
-class PSpaceKFAC(PSpaceAbstract):
+class PMatKFAC(PMatAbstract):
     def __init__(self, generator, data=None):
         self.generator = generator
         if data is None:
@@ -342,7 +342,7 @@ class PSpaceKFAC(PSpaceAbstract):
                                   regul**.5 / pi *
                                   torch.eye(g.size(0), device=g.device))
             inv_data[layer_id] = (inv_a, inv_g)
-        return PSpaceKFAC(generator=self.generator,
+        return PMatKFAC(generator=self.generator,
                           data=inv_data)
 
     def get_dense_tensor(self, split_weight_bias=True):
@@ -440,7 +440,7 @@ class PSpaceKFAC(PSpaceAbstract):
         return self.evals, self.evecs
 
 
-class PSpaceEKFAC:
+class PMatEKFAC:
     """
     EKFAC representation from
     *George, Laurent et al., Fast Approximate Natural Gradient Descent
@@ -542,17 +542,17 @@ class PSpaceEKFAC:
         evecs, diags = self.data
         inv_diags = {i: 1. / (d + regul)
                      for i, d in diags.items()}
-        return PSpaceEKFAC(generator=self.generator,
+        return PMatEKFAC(generator=self.generator,
                            data=(evecs, inv_diags))
 
     def __rmul__(self, x):
         evecs, diags = self.data
         diags = {l_id: x * d for l_id, d in diags.items()}
-        return PSpaceEKFAC(generator=self.generator,
+        return PMatEKFAC(generator=self.generator,
                            data=(evecs, diags))
 
 
-class PSpaceImplicit(PSpaceAbstract):
+class PMatImplicit(PMatAbstract):
     def __init__(self, generator):
         self.generator = generator
 
@@ -578,7 +578,7 @@ class PSpaceImplicit(PSpaceAbstract):
         raise NotImplementedError
 
 
-class PSpaceLowRank(PSpaceAbstract):
+class PMatLowRank(PMatAbstract):
     def __init__(self, generator, data=None):
         self.generator = generator
         if data is not None:
@@ -635,10 +635,10 @@ class PSpaceLowRank(PSpaceAbstract):
         return (self.data**2).sum(dim=(0, 1))
 
     def __rmul__(self, x):
-        return PSpaceLowRank(generator=self.generator,
+        return PMatLowRank(generator=self.generator,
                              data=x**.5 * self.data)
 
 
-class KrylovLowRankMatrix(PSpaceAbstract):
+class KrylovLowRankMatrix(PMatAbstract):
     def __init__(self, generator):
         raise NotImplementedError()
