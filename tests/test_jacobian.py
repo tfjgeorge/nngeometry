@@ -8,8 +8,8 @@ from tasks import (get_linear_fc_task, get_linear_conv_task,
                    get_conv_task, get_conv_bn_task)
 from nngeometry.object.map import (PushForwardDense, PushForwardImplicit,
                                    PullBackDense)
-from nngeometry.object.FMat import FMatDense
-from nngeometry.object.PMat import (PMatDense, PMatDiag, PMatBlockDiag,
+from nngeometry.object.fspace import FMatDense
+from nngeometry.object.pspace import (PMatDense, PMatDiag, PMatBlockDiag,
                                       PMatImplicit, PMatLowRank)
 from nngeometry.generator import Jacobian
 from nngeometry.object.vector import random_pvector, random_fvector, PVector

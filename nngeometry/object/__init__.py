@@ -1,7 +1,7 @@
-from .PMat import (PMatDense, PMatBlockDiag, PMatDiag,
+from .pspace import (PMatDense, PMatBlockDiag, PMatDiag,
                      PMatLowRank, PMatImplicit,
                      PMatKFAC, PMatEKFAC)
 from .vector import (PVector, FVector)
-from .FMat import (FMatDense,)
+from .fspace import (FMatDense,)
 from .map import (PushForwardDense, PushForwardImplicit,
                   PullBackDense)

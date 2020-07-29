@@ -1,5 +1,5 @@
 from nngeometry.generator.jacobian import Jacobian
-from nngeometry.object.PMat import PMatBlockDiag, PMatKFAC
+from nngeometry.object.pspace import PMatBlockDiag, PMatKFAC
 from nngeometry.object.vector import random_pvector, PVector
 from nngeometry.maths import kronecker
 from nngeometry.layercollection import LayerCollection

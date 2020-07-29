@@ -1,12 +1,12 @@
 from nngeometry.generator.jacobian import Jacobian
-from nngeometry.object.PMat import PMatBlockDiag, PMatKFAC, PMatEKFAC
+from nngeometry.object.pspace import PMatBlockDiag, PMatKFAC, PMatEKFAC
 import torch
 from tasks import get_fullyconnect_task, get_conv_task
 from nngeometry.object.vector import random_pvector
 from utils import check_ratio, check_tensors
 
 
-def test_PMat_ekfac_vs_kfac():
+def test_pspace_ekfac_vs_kfac():
     """
     Check that EKFAC matrix is closer to block diag one in the
     sense of the Frobenius norm
@@ -39,7 +39,7 @@ def test_PMat_ekfac_vs_kfac():
                        - M_blockdiag.get_dense_tensor())
 
 
-def test_PMat_ekfac_vs_direct():
+def test_pspace_ekfac_vs_direct():
     """
     Check EKFAC basis operations against direct computation using
     get_dense_tensor
