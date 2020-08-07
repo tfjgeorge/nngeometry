@@ -237,7 +237,7 @@ def test_jacobian_pdense():
                                 dw.get_flat_representation())
             Mv_regul = PVector(layer_collection=lc,
                                vector_repr=Mv_regul)
-            dw_using_inv = PMat_dense.solve(Mv_regul, regul=1e0)
+            dw_using_inv = PMat_dense.solve(Mv_regul, regul=regul)
             check_tensors(dw.get_flat_representation(),
                           dw_using_inv.get_flat_representation(), eps=5e-3)
 
