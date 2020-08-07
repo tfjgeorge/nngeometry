@@ -462,6 +462,7 @@ class PMatEKFAC:
                 evecs[layer_id] = (evecs_a, evecs_g)
                 diags[layer_id] = kronecker(evals_g.view(-1, 1),
                                             evals_a.view(-1, 1))
+                del a, g, kfac_blocks[layer_id]
             self.data = (evecs, diags)
         else:
             self.data = data

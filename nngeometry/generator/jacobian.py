@@ -191,11 +191,15 @@ class Jacobian:
                 torch.autograd.grad(output[self.i_output], [inputs],
                                     retain_graph=retain_graph,
                                     only_inputs=True)
-        blocks = {layer_id: (self._blocks[layer_id][0] / n_examples *
-                             self.n_output**.5,
-                             self._blocks[layer_id][1] / n_examples /
-                             self.n_output**.5)
-                  for layer_id in self.layer_collection.layers.keys()}
+        for layer_id in self.layer_collection.layers.keys():
+            self._blocks[layer_id][0].div_(n_examples / self.n_output**.5)
+            self._blocks[layer_id][1].div_(self.n_output**.5 * n_examples)
+        blocks = self._blocks
+        # blocks = {layer_id: (self._blocks[layer_id][0] / n_examples *
+        #                      self.n_output**.5,
+        #                      self._blocks[layer_id][1] / n_examples /
+        #                      self.n_output**.5)
+        #           for layer_id in self.layer_collection.layers.keys()}
 
         # remove hooks
         del self._blocks
