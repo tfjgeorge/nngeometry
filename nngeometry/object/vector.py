@@ -4,29 +4,49 @@ from ..layercollection import LayerCollection
 
 
 def random_pvector_dict(layer_collection, device=None):
+    """
+    Returns a random :class:`nngeometry.object.PVector` object using
+    the structure defined by the `layer_collection` parameter, with 
+    each components drawn from a normal distribution with mean 0 and standard
+    deviation 1.
+
+    The returned `PVector` will internally use a dict representation.
+
+    :param layer_collection: The :class:`nngeometry.layercollection.LayerCollection`
+    describing the structure of the random pvector
+    """
     v_dict = dict()
     for layer_id, layer in layer_collection.layers.items():
         if layer.bias is not None:
-            v_dict[layer_id] = (torch.rand(layer.weight.size, device=device),
-                                torch.rand(layer.bias.size, device=device))
+            v_dict[layer_id] = (torch.normal(0, 1, layer.weight.size, device=device),
+                                torch.normal(0, 1, layer.bias.size, device=device))
         else:
-            v_dict[layer_id] = (torch.rand(layer.weight.size))
+            v_dict[layer_id] = (torch.normal(0, 1, layer.weight.size, device=device))
     return PVector(layer_collection, dict_repr=v_dict)
 
 
 def random_pvector(layer_collection, device=None):
+    """
+    Returns a random :class:`nngeometry.object.PVector` object using
+    the structure defined by the `layer_collection` parameter, with 
+    each components drawn from a normal distribution with mean 0 and standard
+    deviation 1.
+
+    The returned `PVector` will internally use a flat representation.
+
+    :param layer_collection: The :class:`nngeometry.layercollection.LayerCollection`
+    describing the structure of the random pvector
+    """
     n_parameters = layer_collection.numel()
-    random_v_flat = torch.rand((n_parameters,),
-                               device=device) - .5
-    random_v_flat /= torch.norm(random_v_flat)
+    random_v_flat = torch.normal(0, 1, (n_parameters,),
+                               device=device)
     return PVector(layer_collection=layer_collection,
                    vector_repr=random_v_flat)
 
 
 def random_fvector(n_samples, n_output=1, device=None):
-    random_v_flat = torch.randn((n_output, n_samples,),
+    random_v_flat = torch.normal(0, 1, (n_output, n_samples,),
                                 device=device)
-    random_v_flat /= torch.norm(random_v_flat)
     return FVector(vector_repr=random_v_flat)
 
 
@@ -174,6 +194,20 @@ class PVector:
             else:
                 dict_repr[layer_id] = (w,)
         return dict_repr
+
+    def norm(self, p=2):
+        """
+        Computes the Lp norm of the PVector
+        """
+        if self.dict_repr is not None:
+            sum_p = 0
+            for l_id, l in self.layer_collection.layers.items():
+                sum_p += (self.dict_repr[l_id][0]**p).sum()
+                if l.bias:
+                    sum_p += (self.dict_repr[l_id][1]**p).sum()
+            return sum_p ** (1/p)
+        else:
+            return torch.norm(self.vector_repr, p=p)
 
     def __rmul__(self, x):
         # TODO: test

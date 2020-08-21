@@ -4,6 +4,7 @@ from nngeometry.object.vector import (PVector, random_pvector,
 from nngeometry.layercollection import LayerCollection
 import torch.nn as nn
 import torch.nn.functional as tF
+from utils import check_ratio
 
 
 class ConvNet(nn.Module):
@@ -143,3 +144,16 @@ def test_detach():
         assert torch.norm(pvec_dict[layer_id][0].grad) < eps
         if layer.bias is not None:
             assert torch.norm(pvec_dict[layer_id][1].grad) < eps
+
+
+def test_norm():
+    model = ConvNet()
+    layer_collection = LayerCollection.from_model(model)
+
+    v = random_pvector(layer_collection)
+    check_ratio(torch.norm(v.get_flat_representation()), v.norm())
+
+    v = random_pvector_dict(layer_collection)
+    check_ratio(torch.norm(v.get_flat_representation()), v.norm())
+
+

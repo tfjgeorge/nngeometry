@@ -73,7 +73,8 @@ def test_jacobian_pushforward_dense_nonlinear():
                              function=function,
                              n_output=n_output)
         push_forward = PushForwardDense(generator)
-        dw = 1e-4 * random_pvector(lc, device='cuda')
+        dw = random_pvector(lc, device='cuda')
+        dw = 1e-4 / dw.norm() * dw
 
         doutput_lin = push_forward.mv(dw)
 
