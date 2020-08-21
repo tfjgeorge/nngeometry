@@ -9,8 +9,8 @@ def FIM_MonteCarlo1(layer_collection,
                     representation,
                     variant='classif_logsoftmax'):
     """
-    Helper to create a matrix computing the Fisher Information
-    Matrix using a Monte-Carlo estimate with 1 sample per example
+    Helper that creates a matrix computing the Fisher Information
+    Matrix using a Monte-Carlo estimate of y|x with 1 sample per example
     """
 
     if variant == 'classif_logsoftmax':
@@ -39,7 +39,7 @@ def FIM(layer_collection,
         variant='classif_logits',
         device='cpu'):
     """
-    Helper to create a matrix computing the Fisher Information
+    Helper that creates a matrix computing the Fisher Information
     Matrix using closed form expressions for the expectation y|x
     as described in (Pascanu and Bengio, 2013)
     """
