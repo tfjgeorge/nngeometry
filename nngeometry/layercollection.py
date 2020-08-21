@@ -5,6 +5,13 @@ import operator
 
 
 class LayerCollection:
+    """
+    This class describes a set or subset of layers, that can be used
+    in order to instantiate :class:`nngeometry.object.PVector` or
+    :class:`nngeometry.object.PSpaceDense` objects
+
+    :param layers:
+    """
 
     def __init__(self, layers=None):
         if layers is None:
@@ -16,6 +23,13 @@ class LayerCollection:
             raise NotImplementedError
 
     def from_model(model):
+        """
+        Constructs a new LayerCollection object by using all parameters
+        of the model passed as argument.
+
+        :param model: The PyTorch model
+        :type model: `nn.Module`
+        """
         lc = LayerCollection()
         for layer, mod in model.named_modules():
             mod_class = mod.__class__.__name__
@@ -75,6 +89,12 @@ class LayerCollection:
             return BatchNorm2dLayer(num_features=mod.num_features)
 
     def numel(self):
+        """
+        Total number of scalar parameters in this LayerCollection object
+
+        :return: number of scalar parameters
+        :rtype: int 
+        """
         return self._numel
 
     def __getitem__(self, layer_id):
