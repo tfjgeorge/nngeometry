@@ -1,5 +1,5 @@
-Overview
-========
+Quick example
+=============
 
 With NNGeometry, you can easily manipulate :math:`d \times d` matrices and :math:`d` vectors where :math:`d` is the number of parameter of your neural network, for modern neural networks where :math:`d` can be as big as :math:`10^8`. These matrices include for instance:
 
