@@ -6,34 +6,6 @@ def get_n_parameters(model):
     return sum([p.numel() for p in model.parameters()])
 
 
-def get_individual_modules(model):
-    raise Exception
-    mods = []
-    sizes_mods = []
-    parameters = []
-    start = 0
-    p_pos = dict()
-    for mod in model.modules():
-        mod_class = mod.__class__.__name__
-        if mod_class in ['Linear', 'Conv2d', 'BatchNorm1d', 'BatchNorm2d']:
-            mods.append(mod)
-            p_pos[mod] = start
-            sizes_mods.append(mod.weight.size())
-            parameters.append(mod.weight)
-            start += mod.weight.numel()
-            if mod.bias is not None:
-                sizes_mods.append(mod.bias.size())
-                parameters.append(mod.bias)
-                start += mod.bias.numel()
-
-    # check order of flattening
-    sizes_flat = [p.size() for p in model.parameters() if p.requires_grad]
-    assert sizes_mods == sizes_flat
-    # check that all parameters were added
-    assert len(set(parameters) - set(model.parameters())) == 0
-    return mods, p_pos
-
-
 def per_example_grad_conv(mod, x, gy):
     ks = (mod.weight.size(2), mod.weight.size(3))
     gy_s = gy.size()

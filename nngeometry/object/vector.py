@@ -1,5 +1,4 @@
 import torch
-from ..utils import get_individual_modules
 from ..layercollection import LayerCollection
 
 
