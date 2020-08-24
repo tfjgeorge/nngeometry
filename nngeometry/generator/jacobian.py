@@ -35,9 +35,9 @@ class Jacobian:
         self.xs = dict()
         self.n_output = n_output
         self.centering = centering
-        # maps parameters to their position in flattened representation
         self.function = function
         self.layer_collection = layer_collection
+        # maps parameters to their position in flattened representation
         self.l_to_m, self.m_to_l = \
             layer_collection.get_layerid_module_maps(model)
 
@@ -121,6 +121,52 @@ class Jacobian:
             h.remove()
 
         return diag_m
+
+    def get_covariance_quasidiag(self):
+        if self.centering:
+            raise NotImplementedError
+        # add hooks
+        self.handles += self._add_hooks(self._hook_savex,
+                                        self._hook_compute_quasidiag,
+                                        self.l_to_m.values())
+
+        device = next(self.model.parameters()).device
+        n_examples = len(self.loader.sampler)
+        self._blocks = dict()
+        for layer_id, layer in self.layer_collection.layers.items():
+            s = layer.numel()
+            if layer.bias is None:
+                self._blocks[layer_id] = (torch.zeros((s, ), device=device),
+                                          None)
+            else:
+                cross_s = layer.weight.size
+                self._blocks[layer_id] = (torch.zeros((s, ), device=device),
+                                          torch.zeros(cross_s, device=device))
+
+        for d in self.loader:
+            inputs = d[0]
+            inputs.requires_grad = True
+            bs = inputs.size(0)
+            output = self.function(*d).view(bs, self.n_output) \
+                .sum(dim=0)
+            for i in range(self.n_output):
+                torch.autograd.grad(output[i], [inputs],
+                                    retain_graph=i < self.n_output - 1,
+                                    only_inputs=True)
+        for d, c in self._blocks.values():
+            d.div_(n_examples)
+            if c is not None:
+                c.div_(n_examples)
+
+        blocks = self._blocks
+
+        # remove hooks
+        del self._blocks
+        self.xs = dict()
+        for h in self.handles:
+            h.remove()
+
+        return blocks
 
     def get_covariance_layer_blocks(self):
         if self.centering:
@@ -666,6 +712,52 @@ class Jacobian:
                 .add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
         else:
             raise NotImplementedError
+
+    def _hook_compute_quasidiag(self, mod, grad_input, grad_output):
+        mod_class = mod.__class__.__name__
+        gy = grad_output[0]
+        x = self.xs[mod]
+        bs = x.size(0)
+        layer_id = self.m_to_l[mod]
+        diag, cross = self._blocks[layer_id]
+
+        if mod_class == 'Linear':
+            sw = self.layer_collection[layer_id].weight.numel()
+            diag[:sw].add_(torch.mm(gy.t()**2, x**2).view(-1))
+            if self.layer_collection[layer_id].bias is not None:
+                diag[sw:].add_((gy**2).sum(dim=0))
+            if cross is not None:
+                cross.add_(torch.mm(gy.t()**2, x))
+        # elif mod_class == 'Conv2d':
+        #     indiv_gw = per_example_grad_conv(mod, x, gy)
+        #     diag[start_p:start_p+mod.weight.numel()] \
+        #         .add_((indiv_gw**2).sum(dim=0).view(-1))
+        #     if self.layer_collection[layer_id].bias is not None:
+        #         start_p += mod.weight.numel()
+        #         diag[start_p:start_p+mod.bias.numel()] \
+        #             .add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
+        # elif mod_class == 'BatchNorm1d':
+        #     x_normalized = F.batch_norm(x, mod.running_mean,
+        #                                 mod.running_var,
+        #                                 None, None, mod.training)
+        #     diag[start_p:start_p+mod.weight.numel()] \
+        #         .add_((gy**2 * x_normalized**2).sum(dim=0).view(-1))
+        #     start_p += mod.weight.numel()
+        #     diag[start_p: start_p+mod.bias.numel()] \
+        #         .add_((gy**2).sum(dim=0))
+        # elif mod_class == 'BatchNorm2d':
+        #     x_normalized = F.batch_norm(x, mod.running_mean,
+        #                                 mod.running_var,
+        #                                 None, None, mod.training)
+        #     diag[start_p:start_p+mod.weight.numel()] \
+        #         .add_(((gy * x_normalized).sum(dim=(2, 3))**2).sum(dim=0)
+        #               .view(-1))
+        #     start_p += mod.weight.numel()
+        #     diag[start_p: start_p+mod.bias.numel()] \
+        #         .add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
+        else:
+            raise NotImplementedError
+
 
     def _hook_compute_layer_blocks(self, mod, grad_input, grad_output):
         mod_class = mod.__class__.__name__

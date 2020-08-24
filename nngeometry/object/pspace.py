@@ -127,7 +127,7 @@ class PMatDense(PMatAbstract):
                                    regul * torch.eye(self.size(0),
                                                      device=self.data.device))
         return PMatDense(generator=self.generator,
-                           data=inv_tensor)
+                         data=inv_tensor)
 
     def mv(self, v):
         v_flat = torch.mv(self.data, v.get_flat_representation())
@@ -165,16 +165,16 @@ class PMatDense(PMatAbstract):
     def __add__(self, other):
         sum_data = self.data + other.data
         return PMatDense(generator=self.generator,
-                           data=sum_data)
+                         data=sum_data)
 
     def __sub__(self, other):
         sub_data = self.data - other.data
         return PMatDense(generator=self.generator,
-                           data=sub_data)
+                         data=sub_data)
 
     def __rmul__(self, x):
         return PMatDense(generator=self.generator,
-                           data=x * self.data)
+                         data=x * self.data)
 
 
 class PMatDiag(PMatAbstract):
@@ -188,7 +188,7 @@ class PMatDiag(PMatAbstract):
     def inverse(self, regul=1e-8):
         inv_tensor = 1. / (self.data + regul)
         return PMatDiag(generator=self.generator,
-                          data=inv_tensor)
+                        data=inv_tensor)
 
     def mv(self, v):
         v_flat = v.get_flat_representation() * self.data
@@ -213,16 +213,16 @@ class PMatDiag(PMatAbstract):
     def __add__(self, other):
         sum_diags = self.data + other.data
         return PMatDiag(generator=self.generator,
-                          data=sum_diags)
+                        data=sum_diags)
 
     def __sub__(self, other):
         sub_diags = self.data - other.data
         return PMatDiag(generator=self.generator,
-                          data=sub_diags)
+                        data=sub_diags)
 
     def __rmul__(self, x):
         return PMatDiag(generator=self.generator,
-                          data=x * self.data)
+                        data=x * self.data)
 
 
 class PMatBlockDiag(PMatAbstract):
@@ -279,7 +279,7 @@ class PMatBlockDiag(PMatAbstract):
                                   torch.eye(b.size(0), device=b.device))
             inv_data[layer_id] = inv_b
         return PMatBlockDiag(generator=self.generator,
-                               data=inv_data)
+                             data=inv_data)
 
     def frobenius_norm(self):
         # TODO test
@@ -300,18 +300,18 @@ class PMatBlockDiag(PMatAbstract):
         sum_data = {l_id: d + other.data[l_id]
                     for l_id, d in self.data.items()}
         return PMatBlockDiag(generator=self.generator,
-                               data=sum_data)
+                             data=sum_data)
 
     def __sub__(self, other):
         sum_data = {l_id: d - other.data[l_id]
                     for l_id, d in self.data.items()}
         return PMatBlockDiag(generator=self.generator,
-                               data=sum_data)
+                             data=sum_data)
 
     def __rmul__(self, x):
         sum_data = {l_id: x * d for l_id, d in self.data.items()}
         return PMatBlockDiag(generator=self.generator,
-                               data=sum_data)
+                             data=sum_data)
 
 
 class PMatKFAC(PMatAbstract):
@@ -343,7 +343,7 @@ class PMatKFAC(PMatAbstract):
                                   torch.eye(g.size(0), device=g.device))
             inv_data[layer_id] = (inv_a, inv_g)
         return PMatKFAC(generator=self.generator,
-                          data=inv_data)
+                        data=inv_data)
 
     def get_dense_tensor(self, split_weight_bias=True):
         """
@@ -495,6 +495,10 @@ class PMatEKFAC:
         return M
 
     def update_diag(self):
+        """
+        Will update the diagonal in the KFE (aka the approximate eigenvalues)
+        using current values of the model's parameters
+        """
         self.data = (self.data[0], self.generator.get_kfe_diag(self.data[0]))
 
     def mv(self, vs):
@@ -544,13 +548,13 @@ class PMatEKFAC:
         inv_diags = {i: 1. / (d + regul)
                      for i, d in diags.items()}
         return PMatEKFAC(generator=self.generator,
-                           data=(evecs, inv_diags))
+                         data=(evecs, inv_diags))
 
     def __rmul__(self, x):
         evecs, diags = self.data
         diags = {l_id: x * d for l_id, d in diags.items()}
         return PMatEKFAC(generator=self.generator,
-                           data=(evecs, diags))
+                         data=(evecs, diags))
 
 
 class PMatImplicit(PMatAbstract):
@@ -637,9 +641,61 @@ class PMatLowRank(PMatAbstract):
 
     def __rmul__(self, x):
         return PMatLowRank(generator=self.generator,
-                             data=x**.5 * self.data)
+                           data=x**.5 * self.data)
 
 
-class KrylovLowRankMatrix(PMatAbstract):
-    def __init__(self, generator):
-        raise NotImplementedError()
+class PMatQuasiDiag(PMatAbstract):
+    """
+    Quasidiagonal approximation as decribed in Ollivier,
+    Riemannian metrics for neural networks I: feedforward networks,
+    Information and Inference: A Journal of the IMA, 2015
+    """
+    def __init__(self, generator, data=None):
+        self.generator = generator
+        if data is not None:
+            self.data = data
+        else:
+            self.data = generator.get_covariance_quasidiag()
+
+    def get_dense_tensor(self):
+        s = self.generator.layer_collection.numel()
+        device = self.generator.get_device()
+        M = torch.zeros((s, s), device=device)
+        for layer_id in self.generator.layer_collection.layers.keys():
+            diag, cross = self.data[layer_id]
+            block_s = diag.size(0)
+            block = torch.diag(diag)
+            if cross is not None:
+                out_s = cross.size(0)
+                in_s = cross.size(1)
+
+                block_bias = torch.cat((cross.t().reshape(-1, 1),
+                                        torch.zeros((out_s * in_s, out_s),
+                                                    device=device)),
+                                       dim=1)
+                block_bias = block_bias.view(in_s, out_s+1, out_s) \
+                    .transpose(0, 1).reshape(-1, out_s)[:in_s*out_s, :]
+
+                block[:in_s*out_s, in_s*out_s:].copy_(block_bias)
+                block[in_s*out_s:, :in_s*out_s].copy_(block_bias.t())
+            start = self.generator.layer_collection.p_pos[layer_id]
+            M[start:start+block_s, start:start+block_s].add_(block)
+        return M
+
+    def frobenius_norm(self):
+        raise NotImplementedError
+
+    def get_diag(self):
+        raise NotImplementedError
+
+    def inverse(self):
+        raise NotImplementedError
+
+    def mv(self):
+        raise NotImplementedError
+
+    def trace(self):
+        raise NotImplementedError
+
+    def vTMv(self):
+        raise NotImplementedError
