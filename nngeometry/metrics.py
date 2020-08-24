@@ -1,17 +1,21 @@
 import torch
 from torch.nn.functional import softmax
 from .generator.jacobian import Jacobian
+from .layercollection import LayerCollection
 
 
-def FIM_MonteCarlo1(layer_collection,
-                    model,
+def FIM_MonteCarlo1(model,
                     loader,
                     representation,
-                    variant='classif_logsoftmax'):
+                    variant='classif_logsoftmax',
+                    layer_collection=None):
     """
     Helper that creates a matrix computing the Fisher Information
     Matrix using a Monte-Carlo estimate of y|x with 1 sample per example
     """
+    
+    if layer_collection is None:
+        layer_collection = LayerCollection.from_model(model)
 
     if variant == 'classif_logsoftmax':
 
@@ -31,19 +35,22 @@ def FIM_MonteCarlo1(layer_collection,
         raise NotImplementedError
 
 
-def FIM(layer_collection,
-        model,
+def FIM(model,
         loader,
         representation,
         n_output,
         variant='classif_logits',
-        device='cpu'):
+        device='cpu',
+        layer_collection=None):
     """
     Helper that creates a matrix computing the Fisher Information
     Matrix using closed form expressions for the expectation y|x
     as described in (Pascanu and Bengio, 2013)
     """
     # TODO: test
+
+    if layer_collection is None:
+        layer_collection = LayerCollection.from_model(model)
 
     if variant == 'classif_logits':
 
