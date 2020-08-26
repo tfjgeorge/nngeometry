@@ -10,7 +10,7 @@ from nngeometry.object.map import (PushForwardDense, PushForwardImplicit,
                                    PullBackDense)
 from nngeometry.object.fspace import FMatDense
 from nngeometry.object.pspace import (PMatDense, PMatDiag, PMatBlockDiag,
-                                      PMatImplicit, PMatLowRank)
+                                      PMatImplicit, PMatLowRank, PMatQuasiDiag)
 from nngeometry.generator import Jacobian
 from nngeometry.object.vector import random_pvector, random_fvector, PVector
 from utils import check_ratio, check_tensors
@@ -554,3 +554,55 @@ def test_jacobian_plowrank():
 
         check_tensors(1.23 * PMat_lowrank.get_dense_tensor(),
                       (1.23 * PMat_lowrank).get_dense_tensor())
+
+
+def test_jacobian_pquasidiag_vs_pdense():
+    for get_task in [get_fullyconnect_task]:
+        loader, lc, parameters, model, function, n_output = get_task()
+        model.train()
+        generator = Jacobian(layer_collection=lc,
+                             model=model,
+                             loader=loader,
+                             function=function,
+                             n_output=n_output)
+        PMat_qd = PMatQuasiDiag(generator)
+        PMat_dense = PMatDense(generator)
+
+        # Test get_dense_tensor
+        matrix_qd = PMat_qd.get_dense_tensor()
+        matrix_dense = PMat_dense.get_dense_tensor()
+
+        for layer_id, layer in lc.layers.items():
+            start = lc.p_pos[layer_id]
+            # compare diags
+            sw = layer.weight.numel()
+
+            check_tensors(torch.diag(torch.diag(matrix_dense[start:start+sw,
+                                                             start:start+sw])),
+                          matrix_qd[start:start+sw,
+                                    start:start+sw])
+
+            if layer.bias is not None:
+                sb = layer.bias.numel()
+                check_tensors(torch.diag(torch.diag(matrix_dense[start+sw:start+sw+sb,
+                                                                 start+sw:start+sw+sb])),
+                              matrix_qd[start+sw:start+sw+sb,
+                                        start+sw:start+sw+sb])
+
+                s_in = sw // sb
+                for i in range(sb):
+                    # check the strips bias/weight
+                    check_tensors(matrix_dense[start+i*s_in:start+(i+1)*s_in,
+                                               start+sw+i:start+sw+i],
+                                  matrix_qd[start+i*s_in:start+(i+1)*s_in,
+                                               start+sw+i:start+sw+i])
+
+                    # verify that the rest is 0
+                    assert torch.norm(matrix_qd[start+i*s_in:start+(i+1)*s_in,
+                                                start+sw:start+sw+i]) < 1e-5
+                    assert torch.norm(matrix_qd[start+i*s_in:start+(i+1)*s_in,
+                                                start+sw+i+1:]) < 1e-5
+
+                # compare upper triangular block with lower triangular one
+                check_tensors(matrix_qd[start:start+sw+sb, start+sw:],
+                              matrix_qd[start+sw:, start:start+sw+sb].t())

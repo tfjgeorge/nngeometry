@@ -7,11 +7,17 @@ def check_ratio(vref, v2, eps=1e-3):
 
 
 def check_tensors(tref, t2, eps=1e-1, only_print_diff=False):
-    relative_diff = torch.norm(t2 - tref) / torch.norm(tref)
-    if only_print_diff:
-        print(relative_diff)
+    if torch.norm(tref) == 0:
+        if only_print_diff:
+            print(torch.norm(t2 - tref))
+        else:
+            assert torch.norm(t2 - tref) < eps
     else:
-        assert relative_diff < eps
+        relative_diff = torch.norm(t2 - tref) / torch.norm(tref)
+        if only_print_diff:
+            print(relative_diff)
+        else:
+            assert relative_diff < eps
 
 
 def angle(v1, v2):
