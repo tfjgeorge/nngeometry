@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 from ..utils import per_example_grad_conv
 from ..object.vector import PVector, FVector
+from ..layercollection import LayerCollection
 
 
 class Jacobian:
@@ -27,8 +28,8 @@ class Jacobian:
     :type n_output: integer
 
     """
-    def __init__(self, layer_collection, model, loader, function, n_output=1,
-                 centering=False):
+    def __init__(self, model, loader, function, n_output=1,
+                 centering=False, layer_collection=None):
         self.model = model
         self.loader = loader
         self.handles = []
@@ -36,10 +37,14 @@ class Jacobian:
         self.n_output = n_output
         self.centering = centering
         self.function = function
-        self.layer_collection = layer_collection
+
+        if layer_collection is None:
+            self.layer_collection = LayerCollection.from_model(model)
+        else:
+            self.layer_collection = layer_collection
         # maps parameters to their position in flattened representation
         self.l_to_m, self.m_to_l = \
-            layer_collection.get_layerid_module_maps(model)
+            self.layer_collection.get_layerid_module_maps(model)
 
     def get_device(self):
         return next(self.model.parameters()).device
