@@ -707,15 +707,27 @@ class PMatQuasiDiag(PMatAbstract):
     def inverse(self):
         raise NotImplementedError
 
-    def mv(self):
-        raise NotImplementedError
-
     def trace(self):
         return sum([self.data[l_id][0].sum() for l_id in
                     self.generator.layer_collection.layers.keys()])
 
-    def vTMv(self):
-        raise NotImplementedError
+    def vTMv(self, vs):
+        vs_dict = vs.get_dict_representation()
+        out = 0
+        for layer_id, layer in self.generator.layer_collection.layers.items():
+            diag, cross = self.data[layer_id]
+            v_weight, v_bias = vs_dict[layer_id]
+            mv_bias = None
+            mv_weight = diag[:layer.weight.numel()] * v_weight.view(-1)
+            if layer.bias is not None:
+                mv_bias = diag[layer.weight.numel():] * v_bias.view(-1)
+                mv_bias += (cross * v_weight).view(v_bias.size(0), -1) \
+                    .sum(dim=1)
+                mv_weight += (cross * v_bias.view(-1, 1)).view(-1)
+                out += torch.dot(mv_bias, v_bias)
+
+            out += torch.dot(mv_weight, v_weight.view(-1))
+        return out
 
     def mv(self, vs):
         vs_dict = vs.get_dict_representation()

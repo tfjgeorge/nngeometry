@@ -622,6 +622,7 @@ def test_jacobian_pquasidiag():
         dense_tensor = PMat_qd.get_dense_tensor()
 
         v = random_pvector(lc, device='cuda')
+        v_flat = v.get_flat_representation()
 
         check_tensors(torch.diag(dense_tensor), PMat_qd.get_diag())
 
@@ -629,5 +630,8 @@ def test_jacobian_pquasidiag():
 
         check_ratio(torch.trace(dense_tensor), PMat_qd.trace())
 
-        check_tensors(torch.mv(dense_tensor, v.get_flat_representation()),
+        check_tensors(torch.mv(dense_tensor, v_flat),
                       PMat_qd.mv(v).get_flat_representation())
+
+        check_ratio(torch.dot(torch.mv(dense_tensor, v_flat), v_flat),
+                    PMat_qd.vTMv(v))
