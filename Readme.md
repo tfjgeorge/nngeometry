@@ -2,6 +2,10 @@
 
 Explore the geometry of the function spaces described by Pytorch nn.Module functions with large d x d matrices where d is the number of parameters, using different sparse representations such as low-rank matrices, KFAC, diagonal matrix, and so on.
 
+# Documentation
+
+The documentation is available at https://nngeometry.readthedocs.io
+
 ## Installation of the current repository
 
 ```
