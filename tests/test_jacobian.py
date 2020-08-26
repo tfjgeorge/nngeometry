@@ -606,3 +606,21 @@ def test_jacobian_pquasidiag_vs_pdense():
                 # compare upper triangular block with lower triangular one
                 check_tensors(matrix_qd[start:start+sw+sb, start+sw:],
                               matrix_qd[start+sw:, start:start+sw+sb].t())
+
+def test_jacobian_pquasidiag():
+    for get_task in [get_fullyconnect_task]:
+        loader, lc, parameters, model, function, n_output = get_task()
+        model.train()
+        generator = Jacobian(layer_collection=lc,
+                             model=model,
+                             loader=loader,
+                             function=function,
+                             n_output=n_output)
+        PMat_qd = PMatQuasiDiag(generator)
+        dense_tensor = PMat_qd.get_dense_tensor()
+
+        check_tensors(torch.diag(dense_tensor), PMat_qd.get_diag())
+
+        check_ratio(torch.norm(dense_tensor), PMat_qd.frobenius_norm())
+
+        check_ratio(torch.trace(dense_tensor), PMat_qd.trace())

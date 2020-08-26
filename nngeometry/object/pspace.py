@@ -210,6 +210,15 @@ class PMatDiag(PMatAbstract):
     def get_diag(self):
         return self.data
 
+    def solve(self, v, regul=1e-8):
+        """
+        solves v = Ax in x
+        """
+        # TODO: test
+        solution = v.to_flat_representation() / (self.data + regul)
+        return PVector(layer_collection=v.layer_collection,
+                       vector_repr=solution)
+
     def __add__(self, other):
         sum_diags = self.data + other.data
         return PMatDiag(generator=self.generator,
@@ -683,10 +692,18 @@ class PMatQuasiDiag(PMatAbstract):
         return M
 
     def frobenius_norm(self):
-        raise NotImplementedError
+        norm2 = 0
+        for layer_id in self.generator.layer_collection.layers.keys():
+            diag, cross = self.data[layer_id]
+            norm2 += torch.dot(diag, diag)
+            if cross is not None:
+                norm2 += 2 * torch.dot(cross.view(-1), cross.view(-1))
+
+        return norm2 ** .5
 
     def get_diag(self):
-        raise NotImplementedError
+        return torch.cat([self.data[l_id][0] for l_id in
+                          self.generator.layer_collection.layers.keys()])
 
     def inverse(self):
         raise NotImplementedError
@@ -695,7 +712,8 @@ class PMatQuasiDiag(PMatAbstract):
         raise NotImplementedError
 
     def trace(self):
-        raise NotImplementedError
+        return sum([self.data[l_id][0].sum() for l_id in
+                    self.generator.layer_collection.layers.keys()])
 
     def vTMv(self):
         raise NotImplementedError
