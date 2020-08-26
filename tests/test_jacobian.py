@@ -144,7 +144,7 @@ def test_jacobian_fdense_vs_pullback():
             jacobian = pull_back.get_dense_tensor()
             sj = jacobian.size()
             FMat_computed = torch.mm(jacobian.view(-1, sj[2]),
-                                       jacobian.view(-1, sj[2]).t())
+                                     jacobian.view(-1, sj[2]).t())
             check_tensors(FMat_computed.view(sj[0], sj[1], sj[0], sj[1]),
                           FMat_dense.get_dense_tensor(), eps=1e-4)
 
@@ -181,7 +181,7 @@ def test_jacobian_pdense_vs_pushforward():
             jacobian = push_forward.get_dense_tensor()
             sj = jacobian.size()
             PMat_computed = torch.mm(jacobian.view(-1, sj[2]).t(),
-                                       jacobian.view(-1, sj[2])) / n
+                                     jacobian.view(-1, sj[2])) / n
             check_tensors(PMat_computed,
                           PMat_dense.get_dense_tensor(), eps=1e-4)
 
@@ -584,8 +584,9 @@ def test_jacobian_pquasidiag_vs_pdense():
 
             if layer.bias is not None:
                 sb = layer.bias.numel()
-                check_tensors(torch.diag(torch.diag(matrix_dense[start+sw:start+sw+sb,
-                                                                 start+sw:start+sw+sb])),
+                check_tensors(torch.diag(torch.diag(
+                                matrix_dense[start+sw:start+sw+sb,
+                                             start+sw:start+sw+sb])),
                               matrix_qd[start+sw:start+sw+sb,
                                         start+sw:start+sw+sb])
 
@@ -595,7 +596,7 @@ def test_jacobian_pquasidiag_vs_pdense():
                     check_tensors(matrix_dense[start+i*s_in:start+(i+1)*s_in,
                                                start+sw+i:start+sw+i],
                                   matrix_qd[start+i*s_in:start+(i+1)*s_in,
-                                               start+sw+i:start+sw+i])
+                                            start+sw+i:start+sw+i])
 
                     # verify that the rest is 0
                     assert torch.norm(matrix_qd[start+i*s_in:start+(i+1)*s_in,
@@ -606,6 +607,7 @@ def test_jacobian_pquasidiag_vs_pdense():
                 # compare upper triangular block with lower triangular one
                 check_tensors(matrix_qd[start:start+sw+sb, start+sw:],
                               matrix_qd[start+sw:, start:start+sw+sb].t())
+
 
 def test_jacobian_pquasidiag():
     for get_task in [get_fullyconnect_task]:
@@ -619,8 +621,13 @@ def test_jacobian_pquasidiag():
         PMat_qd = PMatQuasiDiag(generator)
         dense_tensor = PMat_qd.get_dense_tensor()
 
+        v = random_pvector(lc, device='cuda')
+
         check_tensors(torch.diag(dense_tensor), PMat_qd.get_diag())
 
         check_ratio(torch.norm(dense_tensor), PMat_qd.frobenius_norm())
 
         check_ratio(torch.trace(dense_tensor), PMat_qd.trace())
+
+        check_tensors(torch.mv(dense_tensor, v.get_flat_representation()),
+                      PMat_qd.mv(v).get_flat_representation())

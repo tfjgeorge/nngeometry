@@ -263,7 +263,6 @@ class PMatBlockDiag(PMatAbstract):
         return torch.cat(diag)
 
     def mv(self, vs):
-        # TODO test
         vs_dict = vs.get_dict_representation()
         out_dict = dict()
         for layer_id, layer in self.generator.layer_collection.layers.items():
@@ -717,3 +716,22 @@ class PMatQuasiDiag(PMatAbstract):
 
     def vTMv(self):
         raise NotImplementedError
+
+    def mv(self, vs):
+        vs_dict = vs.get_dict_representation()
+        out_dict = dict()
+        for layer_id, layer in self.generator.layer_collection.layers.items():
+            diag, cross = self.data[layer_id]
+            v_weight, v_bias = vs_dict[layer_id]
+            mv_bias = None
+            mv_weight = diag[:layer.weight.numel()].view(*v_weight.size()) \
+                * v_weight
+            if layer.bias is not None:
+                mv_bias = diag[layer.weight.numel():] * v_bias.view(-1)
+                mv_bias += (cross * v_weight).view(v_bias.size(0), -1) \
+                    .sum(dim=1)
+                mv_weight += cross * v_bias.view(-1, 1)
+
+            out_dict[layer_id] = (mv_weight, mv_bias)
+        return PVector(layer_collection=vs.layer_collection,
+                       dict_repr=out_dict)
