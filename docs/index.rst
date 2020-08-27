@@ -33,6 +33,8 @@ In-depth
 
 .. toctree::
    overview.rst
+   install.rst
+   pspace_repr.rst
    :maxdepth: 1
 
    api/index.rst
