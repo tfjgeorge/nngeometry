@@ -726,40 +726,25 @@ class Jacobian:
         layer_id = self.m_to_l[mod]
         diag, cross = self._blocks[layer_id]
 
+        sw = self.layer_collection[layer_id].weight.numel()
         if mod_class == 'Linear':
-            sw = self.layer_collection[layer_id].weight.numel()
             diag[:sw].add_(torch.mm(gy.t()**2, x**2).view(-1))
             if self.layer_collection[layer_id].bias is not None:
                 diag[sw:].add_((gy**2).sum(dim=0))
-            if cross is not None:
                 cross.add_(torch.mm(gy.t()**2, x))
-        # elif mod_class == 'Conv2d':
-        #     indiv_gw = per_example_grad_conv(mod, x, gy)
-        #     diag[start_p:start_p+mod.weight.numel()] \
-        #         .add_((indiv_gw**2).sum(dim=0).view(-1))
-        #     if self.layer_collection[layer_id].bias is not None:
-        #         start_p += mod.weight.numel()
-        #         diag[start_p:start_p+mod.bias.numel()] \
-        #             .add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
+        elif mod_class == 'Conv2d':
+            indiv_gw = per_example_grad_conv(mod, x, gy)
+            diag[:sw].add_((indiv_gw**2).sum(dim=0).view(-1))
+            if self.layer_collection[layer_id].bias is not None:
+                diag[sw:].add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
+                gb_per_example = gy.sum(dim=(2, 3))
+                cross.add_(F.conv2d(x.transpose(0, 1),
+                                    (gy * gb_per_example.unsqueeze(2).unsqueeze(3)).transpose(0, 1),
+                                    stride=mod.stride,
+                                    padding=mod.padding,
+                                    dilation=mod.dilation).transpose(0, 1))
         # elif mod_class == 'BatchNorm1d':
-        #     x_normalized = F.batch_norm(x, mod.running_mean,
-        #                                 mod.running_var,
-        #                                 None, None, mod.training)
-        #     diag[start_p:start_p+mod.weight.numel()] \
-        #         .add_((gy**2 * x_normalized**2).sum(dim=0).view(-1))
-        #     start_p += mod.weight.numel()
-        #     diag[start_p: start_p+mod.bias.numel()] \
-        #         .add_((gy**2).sum(dim=0))
         # elif mod_class == 'BatchNorm2d':
-        #     x_normalized = F.batch_norm(x, mod.running_mean,
-        #                                 mod.running_var,
-        #                                 None, None, mod.training)
-        #     diag[start_p:start_p+mod.weight.numel()] \
-        #         .add_(((gy * x_normalized).sum(dim=(2, 3))**2).sum(dim=0)
-        #               .view(-1))
-        #     start_p += mod.weight.numel()
-        #     diag[start_p: start_p+mod.bias.numel()] \
-        #         .add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
         else:
             raise NotImplementedError
 

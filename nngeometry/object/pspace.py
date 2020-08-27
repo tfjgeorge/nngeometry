@@ -675,9 +675,9 @@ class PMatQuasiDiag(PMatAbstract):
             block = torch.diag(diag)
             if cross is not None:
                 out_s = cross.size(0)
-                in_s = cross.size(1)
+                in_s = cross.numel() // out_s
 
-                block_bias = torch.cat((cross.t().reshape(-1, 1),
+                block_bias = torch.cat((cross.view(cross.size(0), -1).t().reshape(-1, 1),
                                         torch.zeros((out_s * in_s, out_s),
                                                     device=device)),
                                        dim=1)
@@ -723,7 +723,12 @@ class PMatQuasiDiag(PMatAbstract):
                 mv_bias = diag[layer.weight.numel():] * v_bias.view(-1)
                 mv_bias += (cross * v_weight).view(v_bias.size(0), -1) \
                     .sum(dim=1)
-                mv_weight += (cross * v_bias.view(-1, 1)).view(-1)
+                if len(cross.size()) == 2:
+                    mv_weight += (cross * v_bias.view(-1, 1)).view(-1)
+                elif len(cross.size()) == 4:
+                    mv_weight += (cross * v_bias.view(-1, 1, 1, 1)).view(-1)
+                else:
+                    raise NotImplementedError
                 out += torch.dot(mv_bias, v_bias)
 
             out += torch.dot(mv_weight, v_weight.view(-1))
@@ -742,7 +747,12 @@ class PMatQuasiDiag(PMatAbstract):
                 mv_bias = diag[layer.weight.numel():] * v_bias.view(-1)
                 mv_bias += (cross * v_weight).view(v_bias.size(0), -1) \
                     .sum(dim=1)
-                mv_weight += cross * v_bias.view(-1, 1)
+                if len(cross.size()) == 2:
+                    mv_weight += cross * v_bias.view(-1, 1)
+                elif len(cross.size()) == 4:
+                    mv_weight += cross * v_bias.view(-1, 1, 1, 1)
+                else:
+                    raise NotImplementedError
 
             out_dict[layer_id] = (mv_weight, mv_bias)
         return PVector(layer_collection=vs.layer_collection,

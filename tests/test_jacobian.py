@@ -557,7 +557,7 @@ def test_jacobian_plowrank():
 
 
 def test_jacobian_pquasidiag_vs_pdense():
-    for get_task in [get_fullyconnect_task]:
+    for get_task in [get_conv_task, get_fullyconnect_task]:
         loader, lc, parameters, model, function, n_output = get_task()
         model.train()
         generator = Jacobian(layer_collection=lc,
@@ -610,7 +610,7 @@ def test_jacobian_pquasidiag_vs_pdense():
 
 
 def test_jacobian_pquasidiag():
-    for get_task in [get_fullyconnect_task]:
+    for get_task in [get_conv_task, get_fullyconnect_task]:
         loader, lc, parameters, model, function, n_output = get_task()
         model.train()
         generator = Jacobian(layer_collection=lc,
