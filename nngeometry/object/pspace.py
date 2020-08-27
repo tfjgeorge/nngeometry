@@ -758,7 +758,9 @@ class PMatQuasiDiag(PMatAbstract):
         out = 0
         for layer_id, layer in self.generator.layer_collection.layers.items():
             diag, cross = self.data[layer_id]
-            v_weight, v_bias = vs_dict[layer_id]
+            v_weight = vs_dict[layer_id][0]
+            if layer.bias is not None:
+                v_bias = vs_dict[layer_id][1]
             mv_bias = None
             mv_weight = diag[:layer.weight.numel()] * v_weight.view(-1)
             if layer.bias is not None:
@@ -781,7 +783,11 @@ class PMatQuasiDiag(PMatAbstract):
         out_dict = dict()
         for layer_id, layer in self.generator.layer_collection.layers.items():
             diag, cross = self.data[layer_id]
-            v_weight, v_bias = vs_dict[layer_id]
+
+            v_weight = vs_dict[layer_id][0]
+            if layer.bias is not None:
+                v_bias = vs_dict[layer_id][1]
+
             mv_bias = None
             mv_weight = diag[:layer.weight.numel()].view(*v_weight.size()) \
                 * v_weight
