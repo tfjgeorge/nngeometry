@@ -7,7 +7,8 @@ from .layercollection import LayerCollection
 def FIM_MonteCarlo1(model,
                     loader,
                     representation,
-                    variant='classif_logsoftmax',
+                    variant='classif_logits',
+                    device='cpu',
                     layer_collection=None):
     """
     Helper that creates a matrix computing the Fisher Information
@@ -17,22 +18,29 @@ def FIM_MonteCarlo1(model,
     if layer_collection is None:
         layer_collection = LayerCollection.from_model(model)
 
-    if variant == 'classif_logsoftmax':
+    if variant == 'classif_logits':
 
         def function(input, target):
-            log_softmax = model(input)
+            log_softmax = torch.log_softmax(model(input.to(device)), dim=1)
             probabilities = torch.exp(log_softmax)
             sampled_targets = torch.multinomial(probabilities, 1)
             return torch.gather(log_softmax, 1, sampled_targets)
+    elif variant == 'classif_logsoftmax':
 
-        generator = Jacobian(layer_collection=layer_collection,
-                             model=model,
-                             loader=loader,
-                             function=function,
-                             n_output=1)
-        return representation(generator)
+        def function(input, target):
+            log_softmax = model(input.to(device))
+            probabilities = torch.exp(log_softmax)
+            sampled_targets = torch.multinomial(probabilities, 1)
+            return torch.gather(log_softmax, 1, sampled_targets)
     else:
         raise NotImplementedError
+
+    generator = Jacobian(layer_collection=layer_collection,
+                         model=model,
+                         loader=loader,
+                         function=function,
+                         n_output=1)
+    return representation(generator)
 
 
 def FIM(model,
