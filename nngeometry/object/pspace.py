@@ -566,6 +566,16 @@ class PMatEKFAC:
 
 
 class PMatImplicit(PMatAbstract):
+    """
+    PMatImplicit is a very special representation, since
+    no elements of the matrix is ever computed, but instead
+    various linear algebra operations are performed implicitely
+    using efficient tricks.
+
+    The computations are done exactly, meaning that there is
+    no approximation involved. This is useful for networks too big
+    to fit in memory.
+    """
     def __init__(self, generator):
         self.generator = generator
 
