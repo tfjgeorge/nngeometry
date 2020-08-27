@@ -421,18 +421,16 @@ def test_jacobian_pblockdiag():
                     PMat_blockdiag.vTMv(dw))
 
         # Test solve
-        # NB: regul is very high since the conditioning of PMat_blockdiag
-        # is very bad
-        regul = 1e0
-        # Mv_regul = torch.mv(PMat_blockdiag.get_dense_tensor() +
-        #                     regul * torch.eye(PMat_blockdiag.size(0),
-        #                                       device='cuda'),
-        #                     dw.get_flat_representation())
-        # Mv_regul = PVector(layer_collection=lc,
-        #                    vector_repr=Mv_regul)
-        # dw_using_inv = PMat_blockdiag.solve(Mv_regul, regul=1e0)
-        # check_tensors(dw.get_flat_representation(),
-        #               dw_using_inv.get_flat_representation(), eps=5e-3)
+        regul = 1e-3
+        Mv_regul = torch.mv(dense_tensor +
+                            regul * torch.eye(PMat_blockdiag.size(0),
+                                              device='cuda'),
+                            dw.get_flat_representation())
+        Mv_regul = PVector(layer_collection=lc,
+                           vector_repr=Mv_regul)
+        dw_using_inv = PMat_blockdiag.solve(Mv_regul, regul=regul)
+        check_tensors(dw.get_flat_representation(),
+                      dw_using_inv.get_flat_representation(), eps=5e-3)
 
         # Test inv
         PMat_inv = PMat_blockdiag.inverse(regul=regul)

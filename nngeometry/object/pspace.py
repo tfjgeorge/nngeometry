@@ -278,6 +278,27 @@ class PMatBlockDiag(PMatAbstract):
         return PVector(layer_collection=vs.layer_collection,
                        dict_repr=out_dict)
 
+    def solve(self, vs, regul=1e-8):
+        vs_dict = vs.get_dict_representation()
+        out_dict = dict()
+        for layer_id, layer in self.generator.layer_collection.layers.items():
+            v = vs_dict[layer_id][0].view(-1)
+            if layer.bias is not None:
+                v = torch.cat([v, vs_dict[layer_id][1].view(-1)])
+
+            inv_v, _ = torch.solve(v.view(-1, 1),
+                                   self.data[layer_id] +
+                                   regul * torch.eye(self.data[layer_id].size(0),
+                                                     device=self.data[layer_id].device))
+            inv_v_tuple = (inv_v[:layer.weight.numel()].view(*layer.weight.size),)
+            if layer.bias is not None:
+                inv_v_tuple = (inv_v_tuple[0],
+                               inv_v[layer.weight.numel():].view(*layer.bias.size),)
+
+            out_dict[layer_id] = inv_v_tuple
+        return PVector(layer_collection=vs.layer_collection,
+                       dict_repr=out_dict)
+
     def inverse(self, regul=1e-8):
         inv_data = dict()
         for layer_id, layer in self.generator.layer_collection.layers.items():
