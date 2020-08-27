@@ -215,7 +215,7 @@ class PMatDiag(PMatAbstract):
         solves v = Ax in x
         """
         # TODO: test
-        solution = v.to_flat_representation() / (self.data + regul)
+        solution = v.get_flat_representation() / (self.data + regul)
         return PVector(layer_collection=v.layer_collection,
                        vector_repr=solution)
 

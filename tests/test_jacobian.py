@@ -229,9 +229,8 @@ def test_jacobian_pdense():
             check_ratio(trace_PMat, trace_direct)
 
             # Test solve
-            # NB: regul is very high since the conditioning of PMat_dense
-            # is very bad
-            regul = 1e0
+            # NB: regul is high since the matrix is not full rank
+            regul = 1e-3
             Mv_regul = torch.mv(PMat_dense.get_dense_tensor() +
                                 regul * torch.eye(PMat_dense.size(0),
                                                   device='cuda'),
@@ -317,6 +316,18 @@ def test_jacobian_pdiag_vs_pdense():
                         PMat_diag_inverse.get_dense_tensor())
         check_tensors(torch.eye(lc.numel(), device='cuda'),
                       prod)
+
+        # Test solve
+        regul = 1e-3
+        Mv_regul = torch.mv(matrix_diag +
+                            regul * torch.eye(PMat_diag.size(0),
+                                              device='cuda'),
+                            dw.get_flat_representation())
+        Mv_regul = PVector(layer_collection=lc,
+                           vector_repr=Mv_regul)
+        dw_using_inv = PMat_diag.solve(Mv_regul, regul=regul)
+        check_tensors(dw.get_flat_representation(),
+                      dw_using_inv.get_flat_representation(), eps=5e-3)
 
         # Test get_diag
         diag_direct = torch.diag(matrix_diag)
