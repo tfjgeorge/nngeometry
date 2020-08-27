@@ -46,12 +46,14 @@ class PMatAbstract(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def inverse(self, regul):
+    def solve(self, v, regul):
         """
-        Inverse of the matrix
+        Solves Fx = v in x
 
         :param regul: Tikhonov regularization
         :type regul: float
+        :param v: v
+        :type regul: PVector
         """
         raise NotImplementedError
 
@@ -468,8 +470,11 @@ class PMatKFAC(PMatAbstract):
     def get_eigendecomposition(self):
         return self.evals, self.evecs
 
+    def solve(self, v):
+        raise NotImplementedError
 
-class PMatEKFAC:
+
+class PMatEKFAC(PMatAbstract):
     """
     EKFAC representation from
     *George, Laurent et al., Fast Approximate Natural Gradient Descent
@@ -572,6 +577,12 @@ class PMatEKFAC:
     def frobenius_norm(self):
         return sum([(d**2).sum() for d in self.data[1].values()])**.5
 
+    def solve(self, v):
+        raise NotImplementedError
+
+    def get_diag(self, v):
+        raise NotImplementedError
+
     def inverse(self, regul=1e-8):
         evecs, diags = self.data
         inv_diags = {i: 1. / (d + regul)
@@ -615,7 +626,7 @@ class PMatImplicit(PMatAbstract):
     def get_dense_tensor(self):
         raise NotImplementedError
 
-    def inverse(self, regul):
+    def solve(self, v):
         raise NotImplementedError
 
     def get_diag(self):
@@ -672,7 +683,7 @@ class PMatLowRank(PMatAbstract):
                      self.data.view(-1, self.data.size(2)).t())
         return torch.norm(A)
 
-    def inverse(self, regul):
+    def solve(self, v):
         raise NotImplementedError
 
     def get_diag(self):
@@ -735,7 +746,7 @@ class PMatQuasiDiag(PMatAbstract):
         return torch.cat([self.data[l_id][0] for l_id in
                           self.generator.layer_collection.layers.keys()])
 
-    def inverse(self):
+    def solve(self, v):
         raise NotImplementedError
 
     def trace(self):
