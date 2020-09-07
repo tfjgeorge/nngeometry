@@ -492,7 +492,7 @@ def test_jacobian_pimplicit_vs_pdense():
             'BatchNorm2dLayer' in [l.__class__.__name__
                                    for l in lc.layers.values()]):
             with pytest.raises(NotImplementedError):
-                PMat_implicit.mv(dw)
+                PMat_implicit.vTMv(dw)
         else:
             check_ratio(PMat_dense.vTMv(dw),
                         PMat_implicit.vTMv(dw))

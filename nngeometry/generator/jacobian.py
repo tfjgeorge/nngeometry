@@ -725,6 +725,15 @@ class Jacobian:
             start_p += mod.weight.numel()
             self.diag_m[start_p: start_p+mod.bias.numel()] \
                 .add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
+        elif mod_class == 'GroupNorm':
+            x_normalized = F.group_norm(x, mod.num_groups,
+                                        None, None, eps=mod.eps)
+            self.diag_m[start_p:start_p+mod.weight.numel()] \
+                .add_(((gy * x_normalized).sum(dim=(2, 3))**2).sum(dim=0)
+                      .view(-1))
+            start_p += mod.weight.numel()
+            self.diag_m[start_p: start_p+mod.bias.numel()] \
+                .add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
         else:
             raise NotImplementedError
 
@@ -787,6 +796,12 @@ class Jacobian:
             x_normalized = F.batch_norm(x, mod.running_mean,
                                         mod.running_var,
                                         None, None, mod.training)
+            gw = (gy * x_normalized).sum(dim=(2, 3))
+            gw = torch.cat([gw, gy.sum(dim=(2, 3))], dim=1)
+            block.add_(torch.mm(gw.t(), gw))
+        elif mod_class == 'GroupNorm':
+            x_normalized = F.group_norm(x, mod.num_groups,
+                                        None, None, mod.eps)
             gw = (gy * x_normalized).sum(dim=(2, 3))
             gw = torch.cat([gw, gy.sum(dim=(2, 3))], dim=1)
             block.add_(torch.mm(gw.t(), gw))
@@ -1011,6 +1026,14 @@ class Jacobian:
                              v_weight))
                 self._Jv[self.i_output, self.start:self.start+bs].add_(
                     torch.mv(gy.sum(dim=(2, 3)), v_bias))
+            elif mod_class == 'GroupNorm':
+                x_normalized = F.group_norm(x, mod.num_groups,
+                                            None, None, mod.eps)
+                self._Jv[self.i_output, self.start:self.start+bs].add_(
+                    torch.mv((gy * x_normalized).sum(dim=(2, 3)),
+                             v_weight))
+                self._Jv[self.i_output, self.start:self.start+bs].add_(
+                    torch.mv(gy.sum(dim=(2, 3)), v_bias))
             else:
                 raise NotImplementedError
 
@@ -1037,6 +1060,11 @@ class Jacobian:
             x_normalized = F.batch_norm(x, mod.running_mean,
                                         mod.running_var,
                                         None, None, mod.training)
+            self._trace += ((gy * x_normalized).sum(dim=(2, 3))**2).sum()
+            self._trace += (gy.sum(dim=(2, 3))**2).sum()
+        elif mod_class == 'GroupNorm':
+            x_normalized = F.group_norm(x, mod.num_groups,
+                                        None, None, mod.eps)
             self._trace += ((gy * x_normalized).sum(dim=(2, 3))**2).sum()
             self._trace += (gy.sum(dim=(2, 3))**2).sum()
         else:
