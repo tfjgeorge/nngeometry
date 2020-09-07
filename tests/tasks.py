@@ -13,14 +13,16 @@ if 'SLURM_TMPDIR' in os.environ:
 
 class FCNet(nn.Module):
     def __init__(self, in_size=10, out_size=10, n_hidden=2, hidden_size=15,
-                 nonlinearity=nn.ReLU, batch_norm=False):
+                 nonlinearity=nn.ReLU, normalization='none'):
         super(FCNet, self).__init__()
         layers = []
         sizes = [in_size] + [hidden_size] * n_hidden + [out_size]
         for s_in, s_out in zip(sizes[:-1], sizes[1:]):
-            layers.append(nn.Linear(s_in, s_out, bias=not batch_norm))
-            if batch_norm:
+            layers.append(nn.Linear(s_in, s_out, bias=(normalization == 'none')))
+            if normalization == 'batch_norm':
                 layers.append(nn.BatchNorm1d(s_out))
+            elif normalization != 'none':
+                raise NotImplementedError
             layers.append(nonlinearity())
         # remove last nonlinearity:
         layers.pop()
@@ -32,19 +34,23 @@ class FCNet(nn.Module):
 
 
 class ConvNet(nn.Module):
-    def __init__(self, batch_norm=False):
+    def __init__(self, normalization='none'):
         super(ConvNet, self).__init__()
-        self.batch_norm = batch_norm
-        self.conv1 = nn.Conv2d(1, 5, 3, 1, bias=not batch_norm)
-        if batch_norm:
+        self.normalization = normalization
+        self.conv1 = nn.Conv2d(1, 5, 3, 1, bias=(normalization == 'none'))
+        if self.normalization == 'batch_norm':
             self.bn1 = nn.BatchNorm2d(5)
+        elif self.normalization == 'group_norm':
+            self.gn = nn.GroupNorm(5, 2)
         self.conv2 = nn.Conv2d(5, 6, 4, 1)
         self.conv3 = nn.Conv2d(6, 7, 3, 1)
         self.fc1 = nn.Linear(1*1*7, 10)
 
     def forward(self, x):
-        if self.batch_norm:
+        if self.normalization == 'batch_norm':
             x = tF.relu(self.bn1(self.conv1(x)))
+        elif self.normalization == 'group_norm':
+            x = tF.relu(self.gn(self.conv1(x)))
         else:
             x = tF.relu(self.conv1(x))
         x = tF.max_pool2d(x, 2, 2)
@@ -254,14 +260,14 @@ def get_mnist():
                           transform=transforms.ToTensor())
 
 
-def get_fullyconnect_task(batch_norm=False):
+def get_fullyconnect_task(normalization='none'):
     train_set = get_mnist()
     train_set = Subset(train_set, range(1000))
     train_loader = DataLoader(
         dataset=train_set,
         batch_size=300,
         shuffle=False)
-    net = FCNet(in_size=784, batch_norm=batch_norm)
+    net = FCNet(in_size=784, normalization=normalization)
     net.to('cuda')
 
     def output_fn(input, target):
@@ -273,17 +279,17 @@ def get_fullyconnect_task(batch_norm=False):
 
 
 def get_fullyconnect_bn_task():
-    return get_fullyconnect_task(batch_norm=True)
+    return get_fullyconnect_task(normalization='batch_norm')
 
 
-def get_conv_task(batch_norm=False):
+def get_conv_task(normalization='none'):
     train_set = get_mnist()
     train_set = Subset(train_set, range(1000))
     train_loader = DataLoader(
         dataset=train_set,
         batch_size=300,
         shuffle=False)
-    net = ConvNet(batch_norm=batch_norm)
+    net = ConvNet(normalization=normalization)
     net.to('cuda')
 
     def output_fn(input, target):
@@ -295,7 +301,11 @@ def get_conv_task(batch_norm=False):
 
 
 def get_conv_bn_task():
-    return get_conv_task(batch_norm=True)
+    return get_conv_task(normalization='batch_norm')
+
+
+def get_conv_gn_task():
+    return get_conv_task(normalization='group_norm')
 
 
 def get_fullyconnect_onlylast_task():
