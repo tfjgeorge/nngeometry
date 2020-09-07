@@ -22,21 +22,28 @@ class LayerCollection:
             self.layers = layers
             raise NotImplementedError
 
-    def from_model(model):
+    def from_model(model, ignore_unsupported_layers=False):
         """
         Constructs a new LayerCollection object by using all parameters
         of the model passed as argument.
 
         :param model: The PyTorch model
         :type model: `nn.Module`
+        :param ignore_unsupported_layers: If false, will raise an error
+        when model contains layers that are not supported yet. If true, will
+        silently ignore the layer
+        :type ignore_unsupported_layers: bool
         """
         lc = LayerCollection()
         for layer, mod in model.named_modules():
             mod_class = mod.__class__.__name__
             if mod_class in ['Linear', 'Conv2d', 'BatchNorm1d',
-                             'BatchNorm2d']:
+                             'BatchNorm2d', 'GroupNorm']:
                 lc.add_layer('%s.%s' % (layer, str(mod)),
                              LayerCollection._module_to_layer(mod))
+            elif not ignore_unsupported_layers:
+                if len(list(mod.children())) == 0 and len(list(mod.parameters())) > 0:
+                    raise Exception('I do not know what to do with layer ' + str(mod))
 
         return lc
 
@@ -65,7 +72,7 @@ class LayerCollection:
         """
         if module.__class__.__name__ not in \
                 ['Linear', 'Conv2d', 'BatchNorm1d',
-                 'BatchNorm2d']:
+                 'BatchNorm2d', 'GroupNorm']:
             raise NotImplementedError
         for layer, mod in model.named_modules():
             if mod is module:
@@ -87,6 +94,9 @@ class LayerCollection:
             return BatchNorm1dLayer(num_features=mod.num_features)
         elif mod_class == 'BatchNorm2d':
             return BatchNorm2dLayer(num_features=mod.num_features)
+        elif mod_class == 'GroupNorm':
+            return GroupNormLayer(num_groups=mod.num_groups,
+                                  num_channels=mod.num_channels)
 
     def numel(self):
         """
@@ -170,6 +180,17 @@ class BatchNorm2dLayer(AbstractLayer):
         self.num_features = num_features
         self.weight = Parameter(num_features)
         self.bias = Parameter(num_features)
+
+    def numel(self):
+        return self.weight.numel() + self.bias.numel()
+
+
+class GroupNormLayer(AbstractLayer):
+
+    def __init__(self, num_groups, num_channels):
+        self.num_channels = num_channels
+        self.weight = Parameter(num_channels)
+        self.bias = Parameter(num_channels)
 
     def numel(self):
         return self.weight.numel() + self.bias.numel()

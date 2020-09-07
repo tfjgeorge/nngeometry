@@ -672,6 +672,16 @@ class Jacobian:
             self.grads[self.i_output, self.start:self.start+bs,
                        start_p:start_p+mod.bias.numel()] \
                 .add_(gy.sum(dim=(2, 3)))
+        elif mod_class == 'GroupNorm':
+            x_normalized = F.group_norm(x, mod.num_groups,
+                                        eps=mod.eps)
+            self.grads[self.i_output, self.start:self.start+bs,
+                       start_p:start_p+mod.weight.numel()] \
+                .add_((gy * x_normalized).sum(dim=(2, 3)))
+            start_p += mod.weight.numel()
+            self.grads[self.i_output, self.start:self.start+bs,
+                       start_p:start_p+mod.bias.numel()] \
+                .add_(gy.sum(dim=(2, 3)))
         else:
             raise NotImplementedError
 
@@ -715,6 +725,15 @@ class Jacobian:
             start_p += mod.weight.numel()
             self.diag_m[start_p: start_p+mod.bias.numel()] \
                 .add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
+        elif mod_class == 'GroupNorm':
+            x_normalized = F.group_norm(x, mod.num_groups,
+                                        None, None, eps=mod.eps)
+            self.diag_m[start_p:start_p+mod.weight.numel()] \
+                .add_(((gy * x_normalized).sum(dim=(2, 3))**2).sum(dim=0)
+                      .view(-1))
+            start_p += mod.weight.numel()
+            self.diag_m[start_p: start_p+mod.bias.numel()] \
+                .add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
         else:
             raise NotImplementedError
 
@@ -738,8 +757,9 @@ class Jacobian:
             if self.layer_collection[layer_id].bias is not None:
                 diag[sw:].add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
                 gb_per_example = gy.sum(dim=(2, 3))
+                y = (gy * gb_per_example.unsqueeze(2).unsqueeze(3))
                 cross.add_(F.conv2d(x.transpose(0, 1),
-                                    (gy * gb_per_example.unsqueeze(2).unsqueeze(3)).transpose(0, 1),
+                                    y.transpose(0, 1),
                                     stride=mod.stride,
                                     padding=mod.padding,
                                     dilation=mod.dilation).transpose(0, 1))
@@ -747,7 +767,6 @@ class Jacobian:
         # elif mod_class == 'BatchNorm2d':
         else:
             raise NotImplementedError
-
 
     def _hook_compute_layer_blocks(self, mod, grad_input, grad_output):
         mod_class = mod.__class__.__name__
@@ -777,6 +796,12 @@ class Jacobian:
             x_normalized = F.batch_norm(x, mod.running_mean,
                                         mod.running_var,
                                         None, None, mod.training)
+            gw = (gy * x_normalized).sum(dim=(2, 3))
+            gw = torch.cat([gw, gy.sum(dim=(2, 3))], dim=1)
+            block.add_(torch.mm(gw.t(), gw))
+        elif mod_class == 'GroupNorm':
+            x_normalized = F.group_norm(x, mod.num_groups,
+                                        None, None, mod.eps)
             gw = (gy * x_normalized).sum(dim=(2, 3))
             gw = torch.cat([gw, gy.sum(dim=(2, 3))], dim=1)
             block.add_(torch.mm(gw.t(), gw))
@@ -896,6 +921,26 @@ class Jacobian:
                        self.e_outer:self.e_outer+bs_outer] += \
                     torch.mm(gy_inner.sum(dim=(2, 3)),
                              gy_outer.sum(dim=(2, 3)).t())
+            elif mod_class == 'GroupNorm':
+                x_norm_inner = F.group_norm(x_inner, mod.num_groups,
+                                            None, None,
+                                            eps=mod.eps)
+                x_norm_outer = F.group_norm(x_outer, mod.num_groups,
+                                            None, None,
+                                            eps=mod.eps)
+                indiv_gw_inner = (x_norm_inner * gy_inner).sum(dim=(2, 3))
+                indiv_gw_outer = (x_norm_outer * gy_outer).sum(dim=(2, 3))
+                self.G[self.i_output_inner,
+                       self.e_inner:self.e_inner+bs_inner,
+                       self.i_output_outer,
+                       self.e_outer:self.e_outer+bs_outer] += \
+                    torch.mm(indiv_gw_inner, indiv_gw_outer.t())
+                self.G[self.i_output_inner,
+                       self.e_inner:self.e_inner+bs_inner,
+                       self.i_output_outer,
+                       self.e_outer:self.e_outer+bs_outer] += \
+                    torch.mm(gy_inner.sum(dim=(2, 3)),
+                             gy_outer.sum(dim=(2, 3)).t())
             else:
                 raise NotImplementedError
 
@@ -983,6 +1028,14 @@ class Jacobian:
                              v_weight))
                 self._Jv[self.i_output, self.start:self.start+bs].add_(
                     torch.mv(gy.sum(dim=(2, 3)), v_bias))
+            elif mod_class == 'GroupNorm':
+                x_normalized = F.group_norm(x, mod.num_groups,
+                                            None, None, mod.eps)
+                self._Jv[self.i_output, self.start:self.start+bs].add_(
+                    torch.mv((gy * x_normalized).sum(dim=(2, 3)),
+                             v_weight))
+                self._Jv[self.i_output, self.start:self.start+bs].add_(
+                    torch.mv(gy.sum(dim=(2, 3)), v_bias))
             else:
                 raise NotImplementedError
 
@@ -1009,6 +1062,11 @@ class Jacobian:
             x_normalized = F.batch_norm(x, mod.running_mean,
                                         mod.running_var,
                                         None, None, mod.training)
+            self._trace += ((gy * x_normalized).sum(dim=(2, 3))**2).sum()
+            self._trace += (gy.sum(dim=(2, 3))**2).sum()
+        elif mod_class == 'GroupNorm':
+            x_normalized = F.group_norm(x, mod.num_groups,
+                                        None, None, mod.eps)
             self._trace += ((gy * x_normalized).sum(dim=(2, 3))**2).sum()
             self._trace += (gy.sum(dim=(2, 3))**2).sum()
         else:
