@@ -757,8 +757,9 @@ class Jacobian:
             if self.layer_collection[layer_id].bias is not None:
                 diag[sw:].add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
                 gb_per_example = gy.sum(dim=(2, 3))
+                y = (gy * gb_per_example.unsqueeze(2).unsqueeze(3))
                 cross.add_(F.conv2d(x.transpose(0, 1),
-                                    (gy * gb_per_example.unsqueeze(2).unsqueeze(3)).transpose(0, 1),
+                                    y.transpose(0, 1),
                                     stride=mod.stride,
                                     padding=mod.padding,
                                     dilation=mod.dilation).transpose(0, 1))
@@ -766,7 +767,6 @@ class Jacobian:
         # elif mod_class == 'BatchNorm2d':
         else:
             raise NotImplementedError
-
 
     def _hook_compute_layer_blocks(self, mod, grad_input, grad_output):
         mod_class = mod.__class__.__name__
@@ -922,9 +922,11 @@ class Jacobian:
                     torch.mm(gy_inner.sum(dim=(2, 3)),
                              gy_outer.sum(dim=(2, 3)).t())
             elif mod_class == 'GroupNorm':
-                x_norm_inner = F.group_norm(x_inner, mod.num_groups, None, None,
+                x_norm_inner = F.group_norm(x_inner, mod.num_groups,
+                                            None, None,
                                             eps=mod.eps)
-                x_norm_outer = F.group_norm(x_outer, mod.num_groups, None, None,
+                x_norm_outer = F.group_norm(x_outer, mod.num_groups,
+                                            None, None,
                                             eps=mod.eps)
                 indiv_gw_inner = (x_norm_inner * gy_inner).sum(dim=(2, 3))
                 indiv_gw_outer = (x_norm_outer * gy_outer).sum(dim=(2, 3))
