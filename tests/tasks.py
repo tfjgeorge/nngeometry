@@ -37,13 +37,13 @@ class ConvNet(nn.Module):
     def __init__(self, normalization='none'):
         super(ConvNet, self).__init__()
         self.normalization = normalization
-        self.conv1 = nn.Conv2d(1, 5, 3, 1, bias=(normalization == 'none'))
+        self.conv1 = nn.Conv2d(1, 6, 3, 1, bias=(normalization == 'none'))
         if self.normalization == 'batch_norm':
-            self.bn1 = nn.BatchNorm2d(5)
+            self.bn1 = nn.BatchNorm2d(6)
         elif self.normalization == 'group_norm':
-            self.gn = nn.GroupNorm(5, 2)
-        self.conv2 = nn.Conv2d(5, 6, 4, 1)
-        self.conv3 = nn.Conv2d(6, 7, 3, 1)
+            self.gn = nn.GroupNorm(2, 6)
+        self.conv2 = nn.Conv2d(6, 5, 4, 1)
+        self.conv3 = nn.Conv2d(5, 7, 3, 1)
         self.fc1 = nn.Linear(1*1*7, 10)
 
     def forward(self, x):

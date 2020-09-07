@@ -672,6 +672,16 @@ class Jacobian:
             self.grads[self.i_output, self.start:self.start+bs,
                        start_p:start_p+mod.bias.numel()] \
                 .add_(gy.sum(dim=(2, 3)))
+        elif mod_class == 'GroupNorm':
+            x_normalized = F.group_norm(x, mod.num_groups,
+                                        eps=mod.eps)
+            self.grads[self.i_output, self.start:self.start+bs,
+                       start_p:start_p+mod.weight.numel()] \
+                .add_((gy * x_normalized).sum(dim=(2, 3)))
+            start_p += mod.weight.numel()
+            self.grads[self.i_output, self.start:self.start+bs,
+                       start_p:start_p+mod.bias.numel()] \
+                .add_(gy.sum(dim=(2, 3)))
         else:
             raise NotImplementedError
 
@@ -883,6 +893,24 @@ class Jacobian:
                                             None, True)
                 x_norm_outer = F.batch_norm(x_outer, None, None, None,
                                             None, True)
+                indiv_gw_inner = (x_norm_inner * gy_inner).sum(dim=(2, 3))
+                indiv_gw_outer = (x_norm_outer * gy_outer).sum(dim=(2, 3))
+                self.G[self.i_output_inner,
+                       self.e_inner:self.e_inner+bs_inner,
+                       self.i_output_outer,
+                       self.e_outer:self.e_outer+bs_outer] += \
+                    torch.mm(indiv_gw_inner, indiv_gw_outer.t())
+                self.G[self.i_output_inner,
+                       self.e_inner:self.e_inner+bs_inner,
+                       self.i_output_outer,
+                       self.e_outer:self.e_outer+bs_outer] += \
+                    torch.mm(gy_inner.sum(dim=(2, 3)),
+                             gy_outer.sum(dim=(2, 3)).t())
+            elif mod_class == 'GroupNorm':
+                x_norm_inner = F.group_norm(x_inner, mod.num_groups, None, None,
+                                            eps=mod.eps)
+                x_norm_outer = F.group_norm(x_outer, mod.num_groups, None, None,
+                                            eps=mod.eps)
                 indiv_gw_inner = (x_norm_inner * gy_inner).sum(dim=(2, 3))
                 indiv_gw_outer = (x_norm_outer * gy_outer).sum(dim=(2, 3))
                 self.G[self.i_output_inner,

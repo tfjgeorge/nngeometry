@@ -21,7 +21,7 @@ linear_tasks = [get_linear_fc_task, get_linear_conv_task,
                 get_batchnorm_fc_linear_task, get_batchnorm_conv_linear_task,
                 get_fullyconnect_onlylast_task]
 
-nonlinear_tasks = [get_fullyconnect_task, get_conv_task, get_conv_gn_task]
+nonlinear_tasks = [get_conv_gn_task, get_fullyconnect_task, get_conv_task]
 
 
 def update_model(parameters, dw):
@@ -65,7 +65,6 @@ def test_jacobian_pushforward_dense_linear():
 
 def test_jacobian_pushforward_dense_nonlinear():
     for get_task in nonlinear_tasks:
-        print(get_task)
         loader, lc, parameters, model, function, n_output = get_task()
         generator = Jacobian(layer_collection=lc,
                              model=model,
