@@ -77,7 +77,7 @@ def test_jacobian_pushforward_dense_nonlinear():
                              n_output=n_output)
         push_forward = PushForwardDense(generator)
         dw = random_pvector(lc, device=device)
-        dw = 1e-4 / dw.norm() * dw
+        dw = 1e-3 / dw.norm() * dw
 
         doutput_lin = push_forward.mv(dw)
 
@@ -86,7 +86,7 @@ def test_jacobian_pushforward_dense_nonlinear():
         output_after = get_output_vector(loader, function)
 
         check_tensors(output_after - output_before,
-                      doutput_lin.get_flat_representation().t())
+                      doutput_lin.get_flat_representation().t(), eps=1e-2)
 
 
 def test_jacobian_pushforward_implicit():
