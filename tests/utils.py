@@ -6,7 +6,7 @@ def check_ratio(vref, v2, eps=1e-3):
     assert ratio < 1 + eps and ratio > 1 - eps
 
 
-def check_tensors(tref, t2, eps=1e-1, only_print_diff=False):
+def check_tensors(tref, t2, eps=1e-3, only_print_diff=False):
     if torch.norm(tref) == 0:
         if only_print_diff:
             print(torch.norm(t2 - tref))

@@ -10,6 +10,10 @@ default_datapath = 'tmp'
 if 'SLURM_TMPDIR' in os.environ:
     default_datapath = os.path.join(os.environ['SLURM_TMPDIR'], 'data')
 
+if torch.cuda.is_available():
+    device = 'cuda'
+else:
+    device = 'cpu'
 
 class FCNet(nn.Module):
     def __init__(self, in_size=10, out_size=10, n_hidden=2, hidden_size=15,
@@ -37,14 +41,14 @@ class ConvNet(nn.Module):
     def __init__(self, normalization='none'):
         super(ConvNet, self).__init__()
         self.normalization = normalization
-        self.conv1 = nn.Conv2d(1, 6, 3, 1, bias=(normalization == 'none'))
+        self.conv1 = nn.Conv2d(1, 6, 3, 2, bias=(normalization == 'none'))
         if self.normalization == 'batch_norm':
             self.bn1 = nn.BatchNorm2d(6)
         elif self.normalization == 'group_norm':
             self.gn = nn.GroupNorm(2, 6)
         self.conv2 = nn.Conv2d(6, 5, 4, 1)
-        self.conv3 = nn.Conv2d(5, 7, 3, 1)
-        self.fc1 = nn.Linear(1*1*7, 10)
+        self.conv3 = nn.Conv2d(5, 7, 3, 1, 1)
+        self.fc1 = nn.Linear(1*1*7, 3)
 
     def forward(self, x):
         if self.normalization == 'batch_norm':
@@ -57,7 +61,6 @@ class ConvNet(nn.Module):
         x = tF.relu(self.conv2(x))
         x = tF.max_pool2d(x, 2, 2)
         x = tF.relu(self.conv3(x))
-        x = tF.max_pool2d(x, 2, 2)
         x = x.view(-1, 1*1*7)
         return self.fc1(x)
 
@@ -65,7 +68,7 @@ class ConvNet(nn.Module):
 class LinearFCNet(nn.Module):
     def __init__(self):
         super(LinearFCNet, self).__init__()
-        self.fc1 = nn.Linear(28*28, 10)
+        self.fc1 = nn.Linear(28*28, 3)
         self.fc2 = nn.Linear(28*28, 7, bias=False)
 
     def forward(self, x):
@@ -84,10 +87,10 @@ def get_linear_fc_task():
         batch_size=300,
         shuffle=False)
     net = LinearFCNet()
-    net.to('cuda')
+    net.to(device)
 
     def output_fn(input, target):
-        return net(input.to('cuda'))
+        return net(input.to(device))
 
     layer_collection = LayerCollection.from_model(net)
     return (train_loader, layer_collection, net.parameters(),
@@ -116,10 +119,10 @@ def get_linear_conv_task():
         batch_size=300,
         shuffle=False)
     net = LinearConvNet()
-    net.to('cuda')
+    net.to(device)
 
     def output_fn(input, target):
-        return net(input.to('cuda'))
+        return net(input.to(device))
 
     layer_collection = LayerCollection.from_model(net)
     return (train_loader, layer_collection, net.parameters(),
@@ -150,10 +153,10 @@ def get_batchnorm_fc_linear_task():
         batch_size=300,
         shuffle=False)
     net = BatchNormFCLinearNet()
-    net.to('cuda')
+    net.to(device)
 
     def output_fn(input, target):
-        return net(input.to('cuda'))
+        return net(input.to(device))
 
     lc_full = LayerCollection.from_model(net)
     layer_collection = LayerCollection()
@@ -191,10 +194,10 @@ def get_batchnorm_conv_linear_task():
         batch_size=300,
         shuffle=False)
     net = BatchNormConvLinearNet()
-    net.to('cuda')
+    net.to(device)
 
     def output_fn(input, target):
-        return net(input.to('cuda'))
+        return net(input.to(device))
 
     lc_full = LayerCollection.from_model(net)
     layer_collection = LayerCollection()
@@ -243,10 +246,10 @@ def get_batchnorm_nonlinear_task():
         batch_size=1000,
         shuffle=False)
     net = BatchNormNonLinearNet()
-    net.to('cuda')
+    net.to(device)
 
     def output_fn(input, target):
-        return net(input.to('cuda'))
+        return net(input.to(device))
 
     layer_collection = LayerCollection.from_model(net)
     return (train_loader, layer_collection, net.parameters(),
@@ -267,15 +270,15 @@ def get_fullyconnect_task(normalization='none'):
         dataset=train_set,
         batch_size=300,
         shuffle=False)
-    net = FCNet(in_size=784, normalization=normalization)
-    net.to('cuda')
+    net = FCNet(in_size=784, out_size=3, normalization=normalization)
+    net.to(device)
 
     def output_fn(input, target):
-        return net(input.to('cuda'))
+        return net(input.to(device))
 
     layer_collection = LayerCollection.from_model(net)
     return (train_loader, layer_collection, net.parameters(),
-            net, output_fn, 10)
+            net, output_fn, 3)
 
 
 def get_fullyconnect_bn_task():
@@ -290,14 +293,14 @@ def get_conv_task(normalization='none'):
         batch_size=300,
         shuffle=False)
     net = ConvNet(normalization=normalization)
-    net.to('cuda')
+    net.to(device)
 
     def output_fn(input, target):
-        return net(input.to('cuda'))
+        return net(input.to(device))
 
     layer_collection = LayerCollection.from_model(net)
     return (train_loader, layer_collection, net.parameters(),
-            net, output_fn, 10)
+            net, output_fn, 3)
 
 
 def get_conv_bn_task():

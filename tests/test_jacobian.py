@@ -23,6 +23,10 @@ linear_tasks = [get_linear_fc_task, get_linear_conv_task,
 
 nonlinear_tasks = [get_conv_gn_task, get_fullyconnect_task, get_conv_task]
 
+if torch.cuda.is_available():
+    device = 'cuda'
+else:
+    device = 'cpu'
 
 def update_model(parameters, dw):
     i = 0
@@ -36,7 +40,7 @@ def get_output_vector(loader, function):
     with torch.no_grad():
         outputs = []
         for inputs, targets in loader:
-            inputs, targets = inputs.to('cuda'), targets.to('cuda')
+            inputs, targets = inputs.to(device), targets.to(device)
             outputs.append(function(inputs, targets))
         return torch.cat(outputs)
 
@@ -51,7 +55,7 @@ def test_jacobian_pushforward_dense_linear():
                              function=function,
                              n_output=n_output)
         push_forward = PushForwardDense(generator)
-        dw = random_pvector(lc, device='cuda')
+        dw = random_pvector(lc, device=device)
 
         doutput_lin = push_forward.mv(dw)
 
@@ -72,7 +76,7 @@ def test_jacobian_pushforward_dense_nonlinear():
                              function=function,
                              n_output=n_output)
         push_forward = PushForwardDense(generator)
-        dw = random_pvector(lc, device='cuda')
+        dw = random_pvector(lc, device=device)
         dw = 1e-4 / dw.norm() * dw
 
         doutput_lin = push_forward.mv(dw)
@@ -95,7 +99,7 @@ def test_jacobian_pushforward_implicit():
                              n_output=n_output)
         dense_push_forward = PushForwardDense(generator)
         implicit_push_forward = PushForwardImplicit(generator)
-        dw = random_pvector(lc, device='cuda')
+        dw = random_pvector(lc, device=device)
 
         doutput_lin_dense = dense_push_forward.mv(dw)
         doutput_lin_implicit = implicit_push_forward.mv(dw)
@@ -114,7 +118,7 @@ def test_jacobian_pullback_dense():
                              n_output=n_output)
         pull_back = PullBackDense(generator)
         push_forward = PushForwardDense(generator)
-        dw = random_pvector(lc, device='cuda')
+        dw = random_pvector(lc, device=device)
 
         doutput_lin = push_forward.mv(dw)
         dinput_lin = pull_back.mv(doutput_lin)
@@ -122,9 +126,9 @@ def test_jacobian_pullback_dense():
                               dinput_lin.get_flat_representation()),
                     torch.norm(doutput_lin.get_flat_representation())**2)
 
-
 def test_jacobian_fdense_vs_pullback():
     for get_task in linear_tasks + nonlinear_tasks:
+        print(get_task)
         for centering in [True, False]:
             loader, lc, parameters, model, function, n_output = get_task()
             model.train()
@@ -136,7 +140,7 @@ def test_jacobian_fdense_vs_pullback():
                                  centering=centering)
             pull_back = PullBackDense(generator)
             FMat_dense = FMatDense(generator)
-            df = random_fvector(len(loader.sampler), n_output, device='cuda')
+            df = random_fvector(len(loader.sampler), n_output, device=device)
 
             # Test get_dense_tensor
             jacobian = pull_back.get_dense_tensor()
@@ -172,7 +176,7 @@ def test_jacobian_pdense_vs_pushforward():
             push_forward = PushForwardDense(generator)
             pull_back = PullBackDense(generator, data=push_forward.data)
             PMat_dense = PMatDense(generator)
-            dw = random_pvector(lc, device='cuda')
+            dw = random_pvector(lc, device=device)
             n = len(loader.sampler)
 
             # Test get_dense_tensor
@@ -210,7 +214,7 @@ def test_jacobian_pdense():
                                  n_output=n_output,
                                  centering=centering)
             PMat_dense = PMatDense(generator)
-            dw = random_pvector(lc, device='cuda')
+            dw = random_pvector(lc, device=device)
 
             # Test get_diag
             check_tensors(torch.diag(PMat_dense.get_dense_tensor()),
@@ -231,7 +235,7 @@ def test_jacobian_pdense():
             regul = 1e-3
             Mv_regul = torch.mv(PMat_dense.get_dense_tensor() +
                                 regul * torch.eye(PMat_dense.size(0),
-                                                  device='cuda'),
+                                                  device=device),
                                 dw.get_flat_representation())
             Mv_regul = PVector(layer_collection=lc,
                                vector_repr=Mv_regul)
@@ -277,7 +281,7 @@ def test_jacobian_pdiag_vs_pdense():
                              n_output=n_output)
         PMat_diag = PMatDiag(generator)
         PMat_dense = PMatDense(generator)
-        dw = random_pvector(lc, device='cuda')
+        dw = random_pvector(lc, device=device)
 
         # Test get_dense_tensor
         matrix_diag = PMat_diag.get_dense_tensor()
@@ -310,16 +314,16 @@ def test_jacobian_pdiag_vs_pdense():
         regul = 1e-3
         PMat_diag_inverse = PMat_diag.inverse(regul)
         prod = torch.mm(matrix_diag + regul * torch.eye(lc.numel(),
-                                                        device='cuda'),
+                                                        device=device),
                         PMat_diag_inverse.get_dense_tensor())
-        check_tensors(torch.eye(lc.numel(), device='cuda'),
+        check_tensors(torch.eye(lc.numel(), device=device),
                       prod)
 
         # Test solve
         regul = 1e-3
         Mv_regul = torch.mv(matrix_diag +
                             regul * torch.eye(PMat_diag.size(0),
-                                              device='cuda'),
+                                              device=device),
                             dw.get_flat_representation())
         Mv_regul = PVector(layer_collection=lc,
                            vector_repr=Mv_regul)
@@ -392,7 +396,7 @@ def test_jacobian_pblockdiag():
                              function=function,
                              n_output=n_output)
         PMat_blockdiag = PMatBlockDiag(generator)
-        dw = random_pvector(lc, device='cuda')
+        dw = random_pvector(lc, device=device)
         dense_tensor = PMat_blockdiag.get_dense_tensor()
 
         # Test get_diag
@@ -422,7 +426,7 @@ def test_jacobian_pblockdiag():
         regul = 1e-3
         Mv_regul = torch.mv(dense_tensor +
                             regul * torch.eye(PMat_blockdiag.size(0),
-                                              device='cuda'),
+                                              device=device),
                             dw.get_flat_representation())
         Mv_regul = PVector(layer_collection=lc,
                            vector_repr=Mv_regul)
@@ -469,7 +473,7 @@ def test_jacobian_pimplicit_vs_pdense():
                              n_output=n_output)
         PMat_implicit = PMatImplicit(generator)
         PMat_dense = PMatDense(generator)
-        dw = random_pvector(lc, device='cuda')
+        dw = random_pvector(lc, device=device)
 
         # Test trace
         check_ratio(PMat_dense.trace(),
@@ -527,7 +531,7 @@ def test_jacobian_plowrank():
                              function=function,
                              n_output=n_output)
         PMat_lowrank = PMatLowRank(generator)
-        dw = random_pvector(lc, device='cuda')
+        dw = random_pvector(lc, device=device)
         dense_tensor = PMat_lowrank.get_dense_tensor()
 
         # Test get_diag
@@ -628,7 +632,7 @@ def test_jacobian_pquasidiag():
         PMat_qd = PMatQuasiDiag(generator)
         dense_tensor = PMat_qd.get_dense_tensor()
 
-        v = random_pvector(lc, device='cuda')
+        v = random_pvector(lc, device=device)
         v_flat = v.get_flat_representation()
 
         check_tensors(torch.diag(dense_tensor), PMat_qd.get_diag())
