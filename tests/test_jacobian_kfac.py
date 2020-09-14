@@ -59,10 +59,9 @@ class ConvNet(nn.Module):
         return x
 
 
-def get_fullyconnect_kfac_task(bs=1000, subs=None):
+def get_fullyconnect_kfac_task(bs=300):
     train_set = get_dataset('train')
-    if subs is not None:
-        train_set = Subset(train_set, range(subs))
+    train_set = Subset(train_set, range(1000))
     train_set = to_onexdataset(train_set, 'cuda')
     train_loader = DataLoader(
         dataset=train_set,
@@ -81,14 +80,12 @@ def get_fullyconnect_kfac_task(bs=1000, subs=None):
             output_fn, 10)
 
 
-def get_convnet_kfc_task(bs=1000, subs=None):
+def get_convnet_kfc_task(bs=300):
     train_set = Subset(datasets.MNIST(root=default_datapath,
                                       train=True,
                                       download=True,
                                       transform=transforms.ToTensor()),
-                       range(40000))
-    if subs is not None:
-        train_set = Subset(train_set, range(subs))
+                       range(1000))
     train_loader = DataLoader(
         dataset=train_set,
         batch_size=bs,

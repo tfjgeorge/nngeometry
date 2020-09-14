@@ -758,13 +758,13 @@ class Jacobian:
                 diag[sw:].add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
                 gb_per_example = gy.sum(dim=(2, 3))
                 y = (gy * gb_per_example.unsqueeze(2).unsqueeze(3))
-                cross.add_(F.conv2d(x.transpose(0, 1),
+                cross_this = F.conv2d(x.transpose(0, 1),
                                     y.transpose(0, 1),
-                                    stride=mod.stride,
+                                    stride=mod.dilation,
                                     padding=mod.padding,
-                                    dilation=mod.dilation).transpose(0, 1))
-        # elif mod_class == 'BatchNorm1d':
-        # elif mod_class == 'BatchNorm2d':
+                                    dilation=mod.stride).transpose(0, 1)
+                cross_this = cross_this[:, :, :mod.kernel_size[0], :mod.kernel_size[1]]
+                cross.add_(cross_this)
         else:
             raise NotImplementedError
 
