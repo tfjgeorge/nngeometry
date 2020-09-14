@@ -163,6 +163,9 @@ def test_jacobian_fdense_vs_pullback():
 
 
 def test_jacobian_pdense_vs_pushforward():
+    # NB: sometimes the test with centering=True do not pass,
+    # which is probably due to the way we compute centering
+    # for PMatDense: E[x^2] - (Ex)^2 is notoriously not numerically stable
     for get_task in linear_tasks + nonlinear_tasks:
         for centering in [True, False]:
             loader, lc, parameters, model, function, n_output = get_task()
@@ -185,7 +188,7 @@ def test_jacobian_pdense_vs_pushforward():
             PMat_computed = torch.mm(jacobian.view(-1, sj[2]).t(),
                                      jacobian.view(-1, sj[2])) / n
             check_tensors(PMat_computed,
-                          PMat_dense.get_dense_tensor(), eps=1e-4)
+                          PMat_dense.get_dense_tensor())
 
             # Test vTMv
             vTMv_PMat = PMat_dense.vTMv(dw)
@@ -199,7 +202,7 @@ def test_jacobian_pdense_vs_pushforward():
             Mv_PMat = PMat_dense.mv(dw)
             Mv_pf_pb = pull_back.mv(Jv_pushforward)
             check_tensors(Mv_pf_pb.get_flat_representation() / n,
-                          Mv_PMat.get_flat_representation(), eps=1e-4)
+                          Mv_PMat.get_flat_representation())
 
 
 def test_jacobian_pdense():
