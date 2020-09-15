@@ -1,7 +1,7 @@
 from nngeometry.generator.jacobian import Jacobian
 from nngeometry.object.pspace import PMatBlockDiag, PMatKFAC, PMatEKFAC
 import torch
-from tasks import get_fullyconnect_task, get_conv_task
+from tasks import get_fullyconnect_task, get_conv_task, device
 from nngeometry.object.vector import random_pvector
 from utils import check_ratio, check_tensors
 
@@ -55,7 +55,7 @@ def test_pspace_ekfac_vs_direct():
                              n_output=n_output)
 
         M_ekfac = PMatEKFAC(generator)
-        v = random_pvector(lc, device='cuda')
+        v = random_pvector(lc, device=device)
 
         # the second time we will have called update_diag
         for i in range(2):

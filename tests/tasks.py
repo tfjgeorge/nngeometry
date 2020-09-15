@@ -12,8 +12,16 @@ if 'SLURM_TMPDIR' in os.environ:
 
 if torch.cuda.is_available():
     device = 'cuda'
+
+    def to_device(tensor):
+        return tensor.to(device)
 else:
     device = 'cpu'
+
+    # on cpu we need to use double as otherwise ill-conditioning in sums
+    # causes numerical instability
+    def to_device(tensor):
+        return tensor.double()
 
 class FCNet(nn.Module):
     def __init__(self, in_size=10, out_size=10, n_hidden=2, hidden_size=15,
@@ -90,7 +98,7 @@ def get_linear_fc_task():
     net.to(device)
 
     def output_fn(input, target):
-        return net(input.to(device))
+        return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
     return (train_loader, layer_collection, net.parameters(),
@@ -122,7 +130,7 @@ def get_linear_conv_task():
     net.to(device)
 
     def output_fn(input, target):
-        return net(input.to(device))
+        return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
     return (train_loader, layer_collection, net.parameters(),
@@ -156,7 +164,7 @@ def get_batchnorm_fc_linear_task():
     net.to(device)
 
     def output_fn(input, target):
-        return net(input.to(device))
+        return net(to_device(input))
 
     lc_full = LayerCollection.from_model(net)
     layer_collection = LayerCollection()
@@ -197,7 +205,7 @@ def get_batchnorm_conv_linear_task():
     net.to(device)
 
     def output_fn(input, target):
-        return net(input.to(device))
+        return net(to_device(input))
 
     lc_full = LayerCollection.from_model(net)
     layer_collection = LayerCollection()
@@ -249,7 +257,7 @@ def get_batchnorm_nonlinear_task():
     net.to(device)
 
     def output_fn(input, target):
-        return net(input.to(device))
+        return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
     return (train_loader, layer_collection, net.parameters(),
@@ -274,7 +282,7 @@ def get_fullyconnect_task(normalization='none'):
     net.to(device)
 
     def output_fn(input, target):
-        return net(input.to(device))
+        return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
     return (train_loader, layer_collection, net.parameters(),
@@ -296,7 +304,7 @@ def get_conv_task(normalization='none'):
     net.to(device)
 
     def output_fn(input, target):
-        return net(input.to(device))
+        return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
     return (train_loader, layer_collection, net.parameters(),

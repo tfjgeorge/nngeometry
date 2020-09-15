@@ -13,6 +13,20 @@ from utils import check_ratio, check_tensors, angle
 from tasks import get_fullyconnect_task
 
 
+if torch.cuda.is_available():
+    device = 'cuda'
+
+    def to_device(tensor):
+        return tensor.to(device)
+else:
+    device = 'cpu'
+
+    # on cpu we need to use double as otherwise ill-conditioning in sums
+    # causes numerical instability
+    def to_device(tensor):
+        return tensor.double()
+
+
 class Net(nn.Module):
     def __init__(self, in_size=10, out_size=10, n_hidden=2, hidden_size=25,
                  nonlinearity=nn.ReLU):
@@ -62,40 +76,17 @@ class ConvNet(nn.Module):
 def get_fullyconnect_kfac_task(bs=300):
     train_set = get_dataset('train')
     train_set = Subset(train_set, range(1000))
-    train_set = to_onexdataset(train_set, 'cuda')
+    train_set = to_onexdataset(train_set, device)
     train_loader = DataLoader(
         dataset=train_set,
         batch_size=bs,
         shuffle=False)
 
     net = Net(in_size=10)
-    net.to('cuda')
+    net.to(device)
 
     def output_fn(input, target):
-        input = input.to('cuda')
-        return net(input)
-
-    layer_collection = LayerCollection.from_model(net)
-    return (train_loader, layer_collection, net.parameters(), net,
-            output_fn, 10)
-
-
-def get_convnet_kfc_task(bs=300):
-    train_set = datasets.MNIST(root=default_datapath,
-                               train=True,
-                               download=True,
-                               transform=transforms.ToTensor()),
-    train_set = Subset(train_set, range(1000))
-    train_loader = DataLoader(
-        dataset=train_set,
-        batch_size=bs,
-        shuffle=False)
-    net = ConvNet()
-    net.to('cuda')
-
-    def output_fn(input, target):
-        input = input.to('cuda')
-        return net(input)
+        return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
     return (train_loader, layer_collection, net.parameters(), net,
@@ -110,6 +101,27 @@ def to_onexdataset(dataset, device):
     x, t = next(iter(loader))
     x = x[0, :].repeat(x.size(0), 1)
     return torch.utils.data.TensorDataset(x.to(device), t.to(device))
+
+
+def get_convnet_kfc_task(bs=300):
+    train_set = datasets.MNIST(root=default_datapath,
+                               train=True,
+                               download=True,
+                               transform=transforms.ToTensor()),
+    train_set = Subset(train_set, range(1000))
+    train_loader = DataLoader(
+        dataset=train_set,
+        batch_size=bs,
+        shuffle=False)
+    net = ConvNet()
+    net.to(device)
+
+    def output_fn(input, target):
+        return net(to_device(input))
+
+    layer_collection = LayerCollection.from_model(net)
+    return (train_loader, layer_collection, net.parameters(), net,
+            output_fn, 10)
 
 
 def test_jacobian_kfac_vs_pblockdiag():
@@ -162,7 +174,7 @@ def test_jacobian_kfac():
                       M_kfac.get_diag(split_weight_bias=True))
 
         # sample random vector
-        random_v = random_pvector(lc, 'cuda')
+        random_v = random_pvector(lc, device)
 
         # Test mv
         mv_direct = torch.mv(G_kfac_split, random_v.get_flat_representation())
