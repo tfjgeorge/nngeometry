@@ -81,11 +81,11 @@ def get_fullyconnect_kfac_task(bs=300):
 
 
 def get_convnet_kfc_task(bs=300):
-    train_set = Subset(datasets.MNIST(root=default_datapath,
-                                      train=True,
-                                      download=True,
-                                      transform=transforms.ToTensor()),
-                       range(1000))
+    train_set = datasets.MNIST(root=default_datapath,
+                               train=True,
+                               download=True,
+                               transform=transforms.ToTensor()),
+    train_set = Subset(train_set, range(1000))
     train_loader = DataLoader(
         dataset=train_set,
         batch_size=bs,
@@ -184,10 +184,10 @@ def test_jacobian_kfac():
         mv_back = kfac_inverse.mv(mv2 + regul * mv_kfac)
         check_tensors(mv_kfac.get_flat_representation(),
                       mv_back.get_flat_representation(),
-                      eps=1e-2)
+                      eps=1e-1)
 
 
-def test_PMat_kfac_eigendecomposition():
+def test_pspace_kfac_eigendecomposition():
     """
     Check KFAC eigendecomposition by comparing Mv products with v
     where v are the top eigenvectors. The remaining ones can be
@@ -208,8 +208,8 @@ def test_PMat_kfac_eigendecomposition():
     # Loop through all vectors in KFE
     l_to_m, _ = lc.get_layerid_module_maps(model)
     for l_id, layer in lc.layers.items():
-        for i_a in range(-4, 0):
-            for i_g in range(-4, 0):
+        for i_a in range(-3, 0):
+            for i_g in range(-3, 0):
                 evec_v = dict()
                 for l_id2, layer2 in lc.layers.items():
                     m = l_to_m[l_id2]
