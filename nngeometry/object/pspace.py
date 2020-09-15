@@ -577,9 +577,6 @@ class PMatEKFAC(PMatAbstract):
     def frobenius_norm(self):
         return sum([(d**2).sum() for d in self.data[1].values()])**.5
 
-    def solve(self, v):
-        raise NotImplementedError
-
     def get_diag(self, v):
         raise NotImplementedError
 
@@ -589,6 +586,27 @@ class PMatEKFAC(PMatAbstract):
                      for i, d in diags.items()}
         return PMatEKFAC(generator=self.generator,
                          data=(evecs, inv_diags))
+
+    def solve(self, vs, regul=1e-8):
+        vs_dict = vs.get_dict_representation()
+        out_dict = dict()
+        evecs, diags = self.data
+        for l_id, l in self.generator.layer_collection.layers.items():
+            diag = diags[l_id]
+            evecs_a, evecs_g = evecs[l_id]
+            v = vs_dict[l_id][0].view(vs_dict[l_id][0].size(0), -1)
+            if l.bias is not None:
+                v = torch.cat([v, vs_dict[l_id][1].unsqueeze(1)], dim=1)
+            v_kfe = torch.mm(torch.mm(evecs_g.t(), v), evecs_a)
+            inv_kfe = v_kfe / (diag.view(*v_kfe.size()) + regul)
+            inv = torch.mm(torch.mm(evecs_g, inv_kfe), evecs_a.t())
+            if l.bias is None:
+                inv_tuple = (inv,)
+            else:
+                inv_tuple = (inv[:, :-1].contiguous(), inv[:, -1].contiguous())
+            out_dict[l_id] = inv_tuple
+        return PVector(layer_collection=vs.layer_collection,
+                       dict_repr=out_dict)
 
     def __rmul__(self, x):
         evecs, diags = self.data

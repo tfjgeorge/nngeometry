@@ -79,12 +79,16 @@ def test_pspace_ekfac_vs_direct():
             check_tensors(mv_direct, mv_ekfac.get_flat_representation())
 
             # Test inverse
-            Mv2 = M_ekfac.mv(mv_ekfac)
-            regul = 1e-4
+            regul = 1e-5    
             M_inv = M_ekfac.inverse(regul=regul)
-            mv_back = M_inv.mv(Mv2 + regul * mv_ekfac)
-            check_tensors(mv_ekfac.get_flat_representation(),
-                          mv_back.get_flat_representation())
+            v_back = M_inv.mv(mv_ekfac + regul * v)
+            check_tensors(v.get_flat_representation(),
+                          v_back.get_flat_representation())
+
+            # Test solve
+            v_back = M_ekfac.solve(mv_ekfac + regul * v, regul=regul)
+            check_tensors(v.get_flat_representation(),
+                          v_back.get_flat_representation())
 
             # Test rmul
             M_mul = 1.23 * M_ekfac
