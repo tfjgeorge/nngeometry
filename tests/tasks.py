@@ -24,23 +24,23 @@ else:
         return tensor.double()
 
 class FCNet(nn.Module):
-    def __init__(self, in_size=10, out_size=10, n_hidden=2, hidden_size=15,
-                 nonlinearity=nn.ReLU, normalization='none'):
+    def __init__(self, out_size=10, normalization='none'):
         super(FCNet, self).__init__()
         layers = []
-        sizes = [in_size] + [hidden_size] * n_hidden + [out_size]
+        sizes = [18*18, 10, 10, out_size]
         for s_in, s_out in zip(sizes[:-1], sizes[1:]):
             layers.append(nn.Linear(s_in, s_out, bias=(normalization == 'none')))
             if normalization == 'batch_norm':
                 layers.append(nn.BatchNorm1d(s_out))
             elif normalization != 'none':
                 raise NotImplementedError
-            layers.append(nonlinearity())
+            layers.append(nn.ReLU())
         # remove last nonlinearity:
         layers.pop()
         self.net = nn.Sequential(*layers)
 
     def forward(self, x):
+        x = x[:, :, 5:-5, 5:-5].contiguous()
         x = x.view(x.size(0), -1)
         return self.net(x)
 
@@ -278,7 +278,7 @@ def get_fullyconnect_task(normalization='none'):
         dataset=train_set,
         batch_size=300,
         shuffle=False)
-    net = FCNet(in_size=784, out_size=3, normalization=normalization)
+    net = FCNet(out_size=3, normalization=normalization)
     net.to(device)
 
     def output_fn(input, target):
