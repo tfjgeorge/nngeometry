@@ -3,15 +3,18 @@ from nngeometry.object.pspace import PMatBlockDiag, PMatKFAC
 from nngeometry.object.vector import random_pvector, PVector
 from nngeometry.maths import kronecker
 from nngeometry.layercollection import LayerCollection
-from subsampled_mnist import get_dataset, default_datapath
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 from utils import check_ratio, check_tensors, angle
-from tasks import get_fullyconnect_task
+from tasks import get_fullyconnect_task, get_mnist
+import os
 
+default_datapath = 'tmp'
+if 'SLURM_TMPDIR' in os.environ:
+    default_datapath = os.path.join(os.environ['SLURM_TMPDIR'], 'data')
 
 if torch.cuda.is_available():
     device = 'cuda'
@@ -74,7 +77,7 @@ class ConvNet(nn.Module):
 
 
 def get_fullyconnect_kfac_task(bs=300):
-    train_set = get_dataset('train')
+    train_set = get_mnist()
     train_set = Subset(train_set, range(1000))
     train_set = to_onexdataset(train_set, device)
     train_loader = DataLoader(
@@ -82,7 +85,7 @@ def get_fullyconnect_kfac_task(bs=300):
         batch_size=bs,
         shuffle=False)
 
-    net = Net(in_size=10)
+    net = Net(in_size=18*18)
     net.to(device)
 
     def output_fn(input, target):
@@ -99,7 +102,7 @@ def to_onexdataset(dataset, device):
     # are the same
     loader = torch.utils.data.DataLoader(dataset, len(dataset))
     x, t = next(iter(loader))
-    x = x[0, :].repeat(x.size(0), 1)
+    x = x[0, :, 5:-5, 5:-5].contiguous().view(1, -1).repeat(x.size(0), 1)
     return torch.utils.data.TensorDataset(x.to(device), t.to(device))
 
 
