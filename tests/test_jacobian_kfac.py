@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 from utils import check_ratio, check_tensors, angle
-from tasks import get_fullyconnect_task, get_mnist
+from tasks import get_fullyconnect_task, get_mnist, get_conv_task
 import os
 
 default_datapath = 'tmp'
@@ -150,7 +150,7 @@ def test_jacobian_kfac_vs_pblockdiag():
 
 
 def test_jacobian_kfac():
-    for get_task in [get_fullyconnect_kfac_task]:
+    for get_task in [get_fullyconnect_task, get_conv_task]:
         loader, lc, parameters, model, function, n_output = get_task()
 
         generator = Jacobian(layer_collection=lc,
@@ -193,13 +193,14 @@ def test_jacobian_kfac():
         # Test inverse
         # We start from a mv vector since it kills its components projected to
         # the small eigenvalues of KFAC
-        regul = 1e-5
+        regul = 1e-7
+
         mv2 = M_kfac.mv(mv_kfac)
         kfac_inverse = M_kfac.inverse(regul)
         mv_back = kfac_inverse.mv(mv2 + regul * mv_kfac)
         check_tensors(mv_kfac.get_flat_representation(),
                       mv_back.get_flat_representation(),
-                      eps=1e-1)
+                      eps=1e-2)
 
 
 def test_pspace_kfac_eigendecomposition():
