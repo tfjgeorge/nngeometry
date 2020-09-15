@@ -1,15 +1,19 @@
 # NNGeometry
 
-Explore the geometry of the function spaces described by Pytorch nn.Module functions with large d x d matrices where d is the number of parameters, using different sparse representations such as low-rank matrices, KFAC, diagonal matrix, and so on.
+NNGeometry allows you to:
+ - compute **Fisher Information Matrices** (FIM) or derivates, using efficient approximatins such as low-rank matrices, KFAC, diagonal and so on
+ - compute finite **Neural Tangent Kernels**, even for multiple output functions
+ - easily and efficiently compute linear algebra operations involving these matrices **regardless of their approximation**
 
-# Documentation
+Example: in the Elastic Weight Consolidation continual learning technique, you want to compute <img src="https://render.githubusercontent.com/render/math?math=\left(\mathbf{w}-\mathbf{w}_{A}\right)^{\top}F\left(\mathbf{w}-\mathbf{w}_{A}\right)">. It can be achieved with a block diagonal approximation for the FIM using: 
+```python
+F = FIM(model=model,
+        loader=loader,
+        representation=PMatBlockDiag,
+        n_output=10)
 
-The documentation is available at https://nngeometry.readthedocs.io
-
-## Installation of the current repository
-
+regularizer = F.vTMv(w - w_a)
 ```
-git clone https://github.com/tfjgeorge/nngeometry.git
-cd nngeometry
-pip install .
-```
+If block diagonal is not sufficiently accurate then you could instead choose a KFAC approximation, by just changing `PMatBlockDiag` to `PMatKFAC` in the above.
+
+For more examples, you can visit the documentation at https://nngeometry.readthedocs.io
