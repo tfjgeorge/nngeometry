@@ -287,15 +287,18 @@ class PMatBlockDiag(PMatAbstract):
             v = vs_dict[layer_id][0].view(-1)
             if layer.bias is not None:
                 v = torch.cat([v, vs_dict[layer_id][1].view(-1)])
+            block = self.data[layer_id]
 
             inv_v, _ = torch.solve(v.view(-1, 1),
-                                   self.data[layer_id] +
-                                   regul * torch.eye(self.data[layer_id].size(0),
-                                                     device=self.data[layer_id].device))
-            inv_v_tuple = (inv_v[:layer.weight.numel()].view(*layer.weight.size),)
+                                   block +
+                                   regul * torch.eye(sblock.size(0),
+                                                     device=block.device))
+            inv_v_tuple = (inv_v[:layer.weight.numel()]
+                           .view(*layer.weight.size),)
             if layer.bias is not None:
                 inv_v_tuple = (inv_v_tuple[0],
-                               inv_v[layer.weight.numel():].view(*layer.bias.size),)
+                               inv_v[layer.weight.numel():]
+                               .view(*layer.bias.size),)
 
             out_dict[layer_id] = inv_v_tuple
         return PVector(layer_collection=vs.layer_collection,
@@ -762,7 +765,8 @@ class PMatQuasiDiag(PMatAbstract):
                 out_s = cross.size(0)
                 in_s = cross.numel() // out_s
 
-                block_bias = torch.cat((cross.view(cross.size(0), -1).t().reshape(-1, 1),
+                block_bias = torch.cat((cross.view(cross.size(0), -1).t()
+                                        .reshape(-1, 1),
                                         torch.zeros((out_s * in_s, out_s),
                                                     device=device)),
                                        dim=1)
