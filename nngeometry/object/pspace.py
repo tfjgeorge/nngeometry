@@ -376,6 +376,34 @@ class PMatKFAC(PMatAbstract):
         return PMatKFAC(generator=self.generator,
                         data=inv_data)
 
+    def solve(self, vs, regul=1e-8, use_pi=True):
+        vs_dict = vs.get_dict_representation()
+        out_dict = dict()
+        for layer_id, layer in self.generator.layer_collection.layers.items():
+            v = vs_dict[layer_id][0].view(vs_dict[layer_id][0].size(0), -1)
+            if layer.bias is not None:
+                v = torch.cat([v, vs_dict[layer_id][1].unsqueeze(1)], dim=1)
+            a, g = self.data[layer_id]
+            if use_pi:
+                pi = (torch.trace(a) / torch.trace(g) *
+                      g.size(0) / a.size(0))**.5
+            else:
+                pi = 1
+            a_reg = a + regul**.5 * pi * torch.eye(a.size(0), device=g.device)
+            g_reg = g + regul**.5 / pi * torch.eye(g.size(0), device=g.device)
+
+            solve_g, _ = torch.solve(v, g_reg)
+            solve_a, _ = torch.solve(solve_g.t(), a_reg)
+            solve_a = solve_a.t()
+            if layer.bias is None:
+                solve_tuple = (solve_a,)
+            else:
+                solve_tuple = (solve_a[:, :-1].contiguous(),
+                               solve_a[:, -1].contiguous())
+            out_dict[layer_id] = solve_tuple
+        return PVector(layer_collection=vs.layer_collection,
+                       dict_repr=out_dict)
+
     def get_dense_tensor(self, split_weight_bias=True):
         """
         - split_weight_bias (bool): if True then the parameters are ordered in
@@ -469,9 +497,6 @@ class PMatKFAC(PMatAbstract):
 
     def get_eigendecomposition(self):
         return self.evals, self.evecs
-
-    def solve(self, v):
-        raise NotImplementedError
 
 
 class PMatEKFAC(PMatAbstract):

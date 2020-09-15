@@ -202,6 +202,12 @@ def test_jacobian_kfac():
                       mv_back.get_flat_representation(),
                       eps=1e-2)
 
+        # Test solve
+        mv_back = M_kfac.solve(mv2 + regul * mv_kfac, regul=regul)
+        check_tensors(mv_kfac.get_flat_representation(),
+                      mv_back.get_flat_representation(),
+                      eps=1e-2)
+
 
 def test_pspace_kfac_eigendecomposition():
     """
