@@ -1,5 +1,7 @@
 # NNGeometry
 
+[![Build Status](https://travis-ci.org/tfjgeorge/nngeometry.svg?branch=master)](https://travis-ci.org/tfjgeorge/nngeometry)
+
 NNGeometry allows you to:
  - compute **Fisher Information Matrices** (FIM) or derivates, using efficient approximatins such as low-rank matrices, KFAC, diagonal and so on
  - compute finite **Neural Tangent Kernels**, even for multiple output functions
