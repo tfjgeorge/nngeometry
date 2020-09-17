@@ -20,6 +20,12 @@ def check_tensors(tref, t2, eps=1e-3, only_print_diff=False):
             assert relative_diff < eps
 
 
+def check_angle(v1, v2, eps=1e-3):
+    cos_angle = (torch.dot(v1.view(-1), v2.view(-1)) /
+                 torch.norm(v1) / torch.norm(v2))
+    assert cos_angle < 1 + eps and cos_angle > 1 - eps
+
+
 def angle(v1, v2):
     v1_flat = v1.get_flat_representation()
     v2_flat = v2.get_flat_representation()
