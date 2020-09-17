@@ -4,12 +4,13 @@ from .generator.jacobian import Jacobian
 from .layercollection import LayerCollection
 
 
-def FIM_MonteCarlo1(model,
-                    loader,
-                    representation,
-                    variant='classif_logits',
-                    device='cpu',
-                    layer_collection=None):
+def FIM_MonteCarlo(model,
+                   loader,
+                   representation,
+                   variant='classif_logits',
+                   trials=1,
+                   device='cpu',
+                   layer_collection=None):
     """
     Helper that creates a matrix computing the Fisher Information
     Matrix using a Monte-Carlo estimate of y|x with 1 sample per example
@@ -23,15 +24,15 @@ def FIM_MonteCarlo1(model,
         def function(input, target):
             log_softmax = torch.log_softmax(model(input.to(device)), dim=1)
             probabilities = torch.exp(log_softmax)
-            sampled_targets = torch.multinomial(probabilities, 1)
-            return torch.gather(log_softmax, 1, sampled_targets)
+            sampled_targets = torch.multinomial(probabilities, trials, replacement=True)
+            return trials ** -.5 * torch.gather(log_softmax, 1, sampled_targets)
     elif variant == 'classif_logsoftmax':
 
         def function(input, target):
             log_softmax = model(input.to(device))
             probabilities = torch.exp(log_softmax)
-            sampled_targets = torch.multinomial(probabilities, 1)
-            return torch.gather(log_softmax, 1, sampled_targets)
+            sampled_targets = torch.multinomial(probabilities, trials, replacement=True)
+            return trials ** -.5 * torch.gather(log_softmax, 1, sampled_targets)
     else:
         raise NotImplementedError
 
@@ -39,7 +40,7 @@ def FIM_MonteCarlo1(model,
                          model=model,
                          loader=loader,
                          function=function,
-                         n_output=1)
+                         n_output=trials)
     return representation(generator)
 
 
@@ -64,9 +65,9 @@ def FIM(model,
 
         def function(*d):
             inputs = d[0].to(device)
-            logits = model(inputs)
-            probs = softmax(logits, dim=1).detach()
-            return (logits * probs**.5 * (1 - probs))
+            log_probs = torch.log_softmax(model(inputs), dim=1)
+            probs = torch.exp(log_probs).detach()
+            return (log_probs * probs**.5)
 
     elif variant == 'regression':
 
