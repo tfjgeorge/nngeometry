@@ -13,7 +13,7 @@ from nngeometry.object.pspace import (PMatDense, PMatDiag, PMatBlockDiag,
                                       PMatImplicit, PMatLowRank, PMatQuasiDiag)
 from nngeometry.generator import Jacobian
 from nngeometry.object.vector import random_pvector, random_fvector, PVector
-from utils import check_ratio, check_tensors
+from utils import check_ratio, check_tensors, check_angle
 import pytest
 
 
@@ -608,15 +608,15 @@ def test_jacobian_pquasidiag_vs_pdense():
                 for i in range(sb):
                     # check the strips bias/weight
                     check_tensors(matrix_dense[start+i*s_in:start+(i+1)*s_in,
-                                               start+sw+i:start+sw+i],
+                                               start+sw+i],
                                   matrix_qd[start+i*s_in:start+(i+1)*s_in,
-                                            start+sw+i:start+sw+i])
+                                            start+sw+i])
 
                     # verify that the rest is 0
                     assert torch.norm(matrix_qd[start+i*s_in:start+(i+1)*s_in,
-                                                start+sw:start+sw+i]) < 1e-5
+                                                start+sw:start+sw+i]) < 1e-10
                     assert torch.norm(matrix_qd[start+i*s_in:start+(i+1)*s_in,
-                                                start+sw+i+1:]) < 1e-5
+                                                start+sw+i+1:]) < 1e-10
 
                 # compare upper triangular block with lower triangular one
                 check_tensors(matrix_qd[start:start+sw+sb, start+sw:],
@@ -644,8 +644,15 @@ def test_jacobian_pquasidiag():
 
         check_ratio(torch.trace(dense_tensor), PMat_qd.trace())
 
+        mv = PMat_qd.mv(v)
         check_tensors(torch.mv(dense_tensor, v_flat),
-                      PMat_qd.mv(v).get_flat_representation())
+                      mv.get_flat_representation())
 
         check_ratio(torch.dot(torch.mv(dense_tensor, v_flat), v_flat),
                     PMat_qd.vTMv(v))
+
+        # Test solve
+        regul = 1e-8
+        v_back = PMat_qd.solve(mv + regul * v, regul=regul)
+        check_tensors(v.get_flat_representation(),
+                      v_back.get_flat_representation())

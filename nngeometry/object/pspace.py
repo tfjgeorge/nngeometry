@@ -857,27 +857,33 @@ class PMatQuasiDiag(PMatAbstract):
             diag, cross = self.data[layer_id]
 
             v_weight = vs_dict[layer_id][0]
-            d_weight = diag[:layer.weight.numel()].view(*v_weight.size()) + regul
-            solve_bias = None
+            # keep original size
+            s_w = v_weight.size()
+            v_weight = v_weight.view(s_w[0], -1)
+
+            d_weight = diag[:layer.weight.numel()].view(s_w[0], -1) + regul
+            solve_b = None
             if layer.bias is None:
-                solve_weight = v_weight / d_weight
+                solve_w = v_weight / d_weight
             else:
                 v_bias = vs_dict[layer_id][1]
                 d_bias = diag[layer.weight.numel():] + regul
-                if len(cross.size()) == 2:
-                    d_bias_expanded = d_bias.view(-1, 1)
-                    v_bias_expanded = v_bias.view(-1, 1)
-                elif len(cross.size()) == 4:
-                    d_bias_expanded = d_bias.view(-1, 1, 1, 1)
-                    v_bias_expanded = v_bias.view(-1, 1, 1, 1)
 
-                # solve_weight = v_weight / d_weight
-                # solve_bias = v_bias / d_bias
-                solve_weight = (v_weight * d_bias_expanded - v_bias_expanded * cross) / \
-                               (d_weight * d_bias_expanded - cross**2)
-                print((d_weight * d_bias_expanded - cross**2))
-                solve_bias = (v_bias - (solve_weight * cross).view(v_bias.size(0), -1).sum(dim=1)) / d_bias
+                cross = cross.view(s_w[0], -1)
 
-            out_dict[layer_id] = (solve_weight, solve_bias)
+                solve_b_denom = d_bias - bdot(cross / d_weight, cross)
+                solve_b = ((v_bias - bdot(cross / d_weight, v_weight))
+                           / solve_b_denom)
+
+                solve_w = (v_weight - solve_b.unsqueeze(1) * cross) / d_weight
+
+            out_dict[layer_id] = (solve_w.view(*s_w), solve_b)
         return PVector(layer_collection=vs.layer_collection,
                        dict_repr=out_dict)
+
+
+def bdot(A, B):
+    """
+    batched dot product
+    """
+    return torch.matmul(A.unsqueeze(1), B.unsqueeze(2)).squeeze(1).squeeze(1)
