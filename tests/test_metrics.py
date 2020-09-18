@@ -7,6 +7,7 @@ from tasks import (get_linear_fc_task, get_linear_conv_task,
                    get_fullyconnect_task, get_fullyconnect_bn_task,
                    get_batchnorm_nonlinear_task,
                    get_conv_task, get_conv_bn_task, get_conv_gn_task)
+from tasks import to_device
 from nngeometry.object.map import (PushForwardDense, PushForwardImplicit,
                                    PullBackDense)
 from nngeometry.object.fspace import FMatDense
@@ -38,7 +39,7 @@ def test_FIM_MC_vs_linearization():
                                variant='classif_logits',
                                representation=PMatDense,
                                trials=10,
-                               device=device)
+                               function=lambda *d: model(to_device(d[0])))
 
             dw = random_pvector(lc, device=device)
             dw = step / dw.norm() * dw
@@ -74,7 +75,7 @@ def test_FIM_vs_linearization():
                     variant='classif_logits',
                     representation=PMatDense,
                     n_output=n_output,
-                    device=device)
+                    function=lambda *d: model(to_device(d[0])))
 
             dw = random_pvector(lc, device=device)
             dw = step / dw.norm() * dw

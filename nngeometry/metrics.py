@@ -10,6 +10,7 @@ def FIM_MonteCarlo(model,
                    variant='classif_logits',
                    trials=1,
                    device='cpu',
+                   function=None,
                    layer_collection=None):
     """
     Helper that creates a matrix computing the Fisher Information
@@ -35,19 +36,27 @@ def FIM_MonteCarlo(model,
         Number of trials for Monte Carlo sampling
     device : string, optional (default='cpu')
         Target device for the returned matrix
+    function : function, optional (default=None)
+        An optional function if different from `model(input)`. If
+        it is different from None, it will override the device
+        parameter.
     layer_collection : layercollection.LayerCollection, optional
             (default=None)
         An optional layer collection 
 
     """
 
+    if function is None:
+        def function(*d):
+            return model(d[0].to(device))
+
     if layer_collection is None:
         layer_collection = LayerCollection.from_model(model)
 
     if variant == 'classif_logits':
 
-        def function(input, target):
-            log_softmax = torch.log_softmax(model(input.to(device)), dim=1)
+        def fim_function(*d):
+            log_softmax = torch.log_softmax(function(*d), dim=1)
             probabilities = torch.exp(log_softmax)
             sampled_targets = torch.multinomial(probabilities, trials,
                                                 replacement=True)
@@ -55,8 +64,8 @@ def FIM_MonteCarlo(model,
                                                 sampled_targets)
     elif variant == 'classif_logsoftmax':
 
-        def function(input, target):
-            log_softmax = model(input.to(device))
+        def fim_function(input, target):
+            log_softmax = function(*d)
             probabilities = torch.exp(log_softmax)
             sampled_targets = torch.multinomial(probabilities, trials,
                                                 replacement=True)
@@ -68,7 +77,7 @@ def FIM_MonteCarlo(model,
     generator = Jacobian(layer_collection=layer_collection,
                          model=model,
                          loader=loader,
-                         function=function,
+                         function=fim_function,
                          n_output=trials)
     return representation(generator)
 
@@ -79,6 +88,7 @@ def FIM(model,
         n_output,
         variant='classif_logits',
         device='cpu',
+        function=None,
         layer_collection=None):
     """
     Helper that creates a matrix computing the Fisher Information
@@ -104,27 +114,33 @@ def FIM(model,
          - 'regression' when using a gaussian regression model
     device : string, optional (default='cpu')
         Target device for the returned matrix
+    function : function, optional (default=None)
+        An optional function if different from `model(input)`. If
+        it is different from None, it will override the device
+        parameter.
     layer_collection : layercollection.LayerCollection, optional
             (default=None)
         An optional layer collection 
     """
+
+    if function is None:
+        def function(*d):
+            return model(d[0].to(device))
 
     if layer_collection is None:
         layer_collection = LayerCollection.from_model(model)
 
     if variant == 'classif_logits':
 
-        def function(*d):
-            inputs = d[0].to(device)
-            log_probs = torch.log_softmax(model(inputs), dim=1)
+        def function_fim(*d):
+            log_probs = torch.log_softmax(function(*d), dim=1)
             probs = torch.exp(log_probs).detach()
             return (log_probs * probs**.5)
 
     elif variant == 'regression':
 
-        def function(*d):
-            inputs = d[0].to(device)
-            estimates = model(inputs)
+        def function_fim(*d):
+            estimates = model(function(*d))
             return estimates
     else:
         raise NotImplementedError
@@ -132,6 +148,6 @@ def FIM(model,
     generator = Jacobian(layer_collection=layer_collection,
                          model=model,
                          loader=loader,
-                         function=function,
+                         function=function_fim,
                          n_output=n_output)
     return representation(generator)
