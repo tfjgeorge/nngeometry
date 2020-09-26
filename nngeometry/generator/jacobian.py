@@ -755,8 +755,8 @@ class Jacobian:
             indiv_gw = per_example_grad_conv(mod, x, gy)
             diag[:sw].add_((indiv_gw**2).sum(dim=0).view(-1))
             if self.layer_collection[layer_id].bias is not None:
-                diag[sw:].add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
                 gb_per_example = gy.sum(dim=(2, 3))
+                diag[sw:].add_((gb_per_example**2).sum(dim=0))
                 y = (gy * gb_per_example.unsqueeze(2).unsqueeze(3))
                 cross_this = F.conv2d(x.transpose(0, 1),
                                     y.transpose(0, 1),
