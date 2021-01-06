@@ -61,7 +61,7 @@ def test_FIM_MC_vs_linearization():
         assert mean_quotient > 1 - 5e-2 and mean_quotient < 1 + 5e-2
 
 
-def test_FIM_vs_linearization():
+def test_FIM_vs_linearization_classif_logits():
     step = 1e-2
 
     for get_task in nonlinear_tasks:
@@ -90,6 +90,40 @@ def test_FIM_vs_linearization():
                            log_target=True, reduction='batchmean')
 
             quot = (KL / F.vTMv(dw) * 2) ** .5
+
+            quots.append(quot.item())
+
+        mean_quotient = sum(quots) / len(quots)
+        assert mean_quotient > 1 - 5e-2 and mean_quotient < 1 + 5e-2
+
+def test_FIM_vs_linearization_regression():
+    step = 1e-2
+
+    for get_task in nonlinear_tasks:
+        quots = []
+        for i in range(10): # repeat to kill statistical fluctuations
+            loader, lc, parameters, model, function, n_output = get_task()
+            model.train()
+            F = FIM(layer_collection=lc,
+                    model=model,
+                    loader=loader,
+                    variant='regression',
+                    representation=PMatDense,
+                    n_output=n_output,
+                    function=lambda *d: model(to_device(d[0])))
+
+            dw = random_pvector(lc, device=device)
+            dw = step / dw.norm() * dw
+
+            output_before = get_output_vector(loader, function)
+            update_model(parameters, dw.get_flat_representation())
+            output_after = get_output_vector(loader, function)
+            update_model(parameters, -dw.get_flat_representation())
+
+            diff = (((output_before - output_after)**2).sum() /
+                    output_before.size(0))
+
+            quot = (diff / F.vTMv(dw)) ** .5
 
             quots.append(quot.item())
 

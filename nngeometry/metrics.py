@@ -140,7 +140,7 @@ def FIM(model,
     elif variant == 'regression':
 
         def function_fim(*d):
-            estimates = model(function(*d))
+            estimates = function(*d)
             return estimates
     else:
         raise NotImplementedError
