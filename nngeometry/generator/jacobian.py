@@ -21,14 +21,15 @@ class Jacobian:
     :param loader:
     :type loader: Pytorch `utils.data.DataLoader`
     :param function: A function :math:`f\left(X,Y,Z\\right)` where :math:`X,Y,Z` are minibatchs
-        returned by the dataloader (Note that in some cases :math:`Y,Z` are not required)
+        returned by the dataloader (Note that in some cases :math:`Y,Z` are not required). If None,
+        it defaults to `function = lambda *x: model(x[0])`
     :type function: python function 
     :param n_output: How many output is there for each example of your function. E.g. in 10 class
         classification this would probably be 10.
     :type n_output: integer
 
     """
-    def __init__(self, model, loader, function, n_output=1,
+    def __init__(self, model, loader, function=None, n_output=1,
                  centering=False, layer_collection=None):
         self.model = model
         self.loader = loader
@@ -36,6 +37,9 @@ class Jacobian:
         self.xs = dict()
         self.n_output = n_output
         self.centering = centering
+
+        if function is None:
+            function = lambda *x: model(x[0])
         self.function = function
 
         if layer_collection is None:
