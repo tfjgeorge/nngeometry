@@ -1,6 +1,10 @@
 # NNGeometry
 
-[![Build Status](https://travis-ci.org/tfjgeorge/nngeometry.svg?branch=master)](https://travis-ci.org/tfjgeorge/nngeometry) [![codecov](https://codecov.io/gh/tfjgeorge/nngeometry/branch/master/graph/badge.svg)](https://codecov.io/gh/tfjgeorge/nngeometry)
+[![Build Status](https://travis-ci.org/tfjgeorge/nngeometry.svg?branch=master)](https://travis-ci.org/tfjgeorge/nngeometry) [![codecov](https://codecov.io/gh/tfjgeorge/nngeometry/branch/master/graph/badge.svg)](https://codecov.io/gh/tfjgeorge/nngeometry) 
+
+[![DOI](https://zenodo.org/badge/208082966.svg)](https://zenodo.org/badge/latestdoi/208082966)
+
+
 
 NNGeometry allows you to:
  - compute **Fisher Information Matrices** (FIM) or derivates, using efficient approximations such as low-rank matrices, KFAC, diagonal and so on.
@@ -23,3 +27,20 @@ If diagonal is not sufficiently accurate then you could instead choose a KFAC ap
 ## Documentation
 
 For more examples, you can visit the documentation at https://nngeometry.readthedocs.io
+
+## Citation
+
+If you use NNGeometry in a published project, please cite our work using the following bibtex entry
+
+```@software{thomas_george_2021_4532597,
+  author       = {Thomas George},
+  title        = {{NNGeometry: Easy and Fast Fisher Information 
+                   Matrices and Neural Tangent Kernels in PyTorch}},
+  month        = feb,
+  year         = 2021,
+  publisher    = {Zenodo},
+  version      = {v0.2.1},
+  doi          = {10.5281/zenodo.4532597},
+  url          = {https://doi.org/10.5281/zenodo.4532597}
+}
+```
