@@ -87,6 +87,7 @@ def get_fullyconnect_kfac_task(bs=300):
 
     net = Net(in_size=18*18)
     net.to(device)
+    net.eval()
 
     def output_fn(input, target):
         return net(to_device(input))
@@ -118,6 +119,7 @@ def get_convnet_kfc_task(bs=300):
         shuffle=False)
     net = ConvNet()
     net.to(device)
+    net.eval()
 
     def output_fn(input, target):
         return net(to_device(input))

@@ -610,6 +610,12 @@ class Jacobian:
 
         return FVector(vector_repr=Jv)
 
+    def _check_bn_training(self, mod):
+        # check that BN layers are in eval mode
+        if mod.training:
+            raise NotImplementedError('I don\'t know what to do with BN ' +
+                                      'layers in training mode')
+
     def _add_hooks(self, hook_x, hook_gy, mods):
         handles = []
         for m in mods:
@@ -653,6 +659,7 @@ class Jacobian:
                            start_p:start_p+mod.bias.numel()] \
                     .add_(gy.sum(dim=(2, 3)))
         elif mod_class == 'BatchNorm1d':
+            self._check_bn_training(mod)
             x_normalized = F.batch_norm(x, mod.running_mean,
                                         mod.running_var,
                                         None, None, mod.training,
@@ -665,6 +672,7 @@ class Jacobian:
                        start_p:start_p+mod.bias.numel()] \
                 .add_(gy)
         elif mod_class == 'BatchNorm2d':
+            self._check_bn_training(mod)
             x_normalized = F.batch_norm(x, mod.running_mean,
                                         mod.running_var,
                                         None, None, mod.training,
@@ -711,6 +719,7 @@ class Jacobian:
                 self.diag_m[start_p:start_p+mod.bias.numel()] \
                     .add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
         elif mod_class == 'BatchNorm1d':
+            self._check_bn_training(mod)
             x_normalized = F.batch_norm(x, mod.running_mean,
                                         mod.running_var,
                                         None, None, mod.training)
@@ -720,6 +729,7 @@ class Jacobian:
             self.diag_m[start_p: start_p+mod.bias.numel()] \
                 .add_((gy**2).sum(dim=0))
         elif mod_class == 'BatchNorm2d':
+            self._check_bn_training(mod)
             x_normalized = F.batch_norm(x, mod.running_mean,
                                         mod.running_var,
                                         None, None, mod.training)
@@ -790,6 +800,7 @@ class Jacobian:
                 gw = torch.cat([gw, gy.sum(dim=(2, 3)).view(bs, -1)], dim=1)
             block.add_(torch.mm(gw.t(), gw))
         elif mod_class == 'BatchNorm1d':
+            self._check_bn_training(mod)
             x_normalized = F.batch_norm(x, mod.running_mean,
                                         mod.running_var,
                                         None, None, mod.training)
@@ -797,6 +808,7 @@ class Jacobian:
             gw = torch.cat([gw, gy], dim=1)
             block.add_(torch.mm(gw.t(), gw))
         elif mod_class == 'BatchNorm2d':
+            self._check_bn_training(mod)
             x_normalized = F.batch_norm(x, mod.running_mean,
                                         mod.running_var,
                                         None, None, mod.training)
@@ -891,10 +903,15 @@ class Jacobian:
                         torch.mm(gy_inner.sum(dim=(2, 3)),
                                  gy_outer.sum(dim=(2, 3)).t())
             elif mod_class == 'BatchNorm1d':
-                x_norm_inner = F.batch_norm(x_inner, None, None, None,
-                                            None, True)
-                x_norm_outer = F.batch_norm(x_outer, None, None, None,
-                                            None, True)
+                self._check_bn_training(mod)
+                x_norm_inner = F.batch_norm(x_inner, mod.running_mean,
+                                            mod.running_var,
+                                            None, None, mod.training,
+                                            momentum=0.)
+                x_norm_outer = F.batch_norm(x_outer, mod.running_mean,
+                                            mod.running_var,
+                                            None, None, mod.training,
+                                            momentum=0.)
                 indiv_gw_inner = x_norm_inner * gy_inner
                 indiv_gw_outer = x_norm_outer * gy_outer
                 self.G[self.i_output_inner,
@@ -908,10 +925,15 @@ class Jacobian:
                        self.e_outer:self.e_outer+bs_outer] += \
                     torch.mm(gy_inner, gy_outer.t())
             elif mod_class == 'BatchNorm2d':
-                x_norm_inner = F.batch_norm(x_inner, None, None, None,
-                                            None, True)
-                x_norm_outer = F.batch_norm(x_outer, None, None, None,
-                                            None, True)
+                self._check_bn_training(mod)
+                x_norm_inner = F.batch_norm(x_inner, mod.running_mean,
+                                            mod.running_var,
+                                            None, None, mod.training,
+                                            momentum=0.)
+                x_norm_outer = F.batch_norm(x_outer, mod.running_mean,
+                                            mod.running_var,
+                                            None, None, mod.training,
+                                            momentum=0.)
                 indiv_gw_inner = (x_norm_inner * gy_inner).sum(dim=(2, 3))
                 indiv_gw_outer = (x_norm_outer * gy_outer).sum(dim=(2, 3))
                 self.G[self.i_output_inner,
@@ -1014,6 +1036,7 @@ class Jacobian:
                     self._Jv[self.i_output, self.start:self.start+bs].add_(
                         torch.mv(gy.sum(dim=(2, 3)), v_bias))
             elif mod_class == 'BatchNorm1d':
+                self._check_bn_training(mod)
                 x_normalized = F.batch_norm(x, mod.running_mean,
                                             mod.running_var,
                                             None, None, mod.training,
@@ -1023,6 +1046,7 @@ class Jacobian:
                 self._Jv[self.i_output, self.start:self.start+bs].add_(
                     torch.mv(gy.contiguous(), v_bias))
             elif mod_class == 'BatchNorm2d':
+                self._check_bn_training(mod)
                 x_normalized = F.batch_norm(x, mod.running_mean,
                                             mod.running_var,
                                             None, None, mod.training,
@@ -1057,12 +1081,14 @@ class Jacobian:
             if mod.bias is not None:
                 self._trace += (gy.sum(dim=(2, 3))**2).sum()
         elif mod_class == 'BatchNorm1d':
+            self._check_bn_training(mod)
             x_normalized = F.batch_norm(x, mod.running_mean,
                                         mod.running_var,
                                         None, None, mod.training)
             self._trace += (gy**2 * x_normalized**2).sum()
             self._trace += (gy**2).sum()
         elif mod_class == 'BatchNorm2d':
+            self._check_bn_training(mod)
             x_normalized = F.batch_norm(x, mod.running_mean,
                                         mod.running_var,
                                         None, None, mod.training)

@@ -96,6 +96,7 @@ def get_linear_fc_task():
         shuffle=False)
     net = LinearFCNet()
     net.to(device)
+    net.eval()
 
     def output_fn(input, target):
         return net(to_device(input))
@@ -128,6 +129,7 @@ def get_linear_conv_task():
         shuffle=False)
     net = LinearConvNet()
     net.to(device)
+    net.eval()
 
     def output_fn(input, target):
         return net(to_device(input))
@@ -162,6 +164,7 @@ def get_batchnorm_fc_linear_task():
         shuffle=False)
     net = BatchNormFCLinearNet()
     net.to(device)
+    net.eval()
 
     def output_fn(input, target):
         return net(to_device(input))
@@ -203,6 +206,7 @@ def get_batchnorm_conv_linear_task():
         shuffle=False)
     net = BatchNormConvLinearNet()
     net.to(device)
+    net.eval()
 
     def output_fn(input, target):
         return net(to_device(input))
@@ -255,6 +259,7 @@ def get_batchnorm_nonlinear_task():
         shuffle=False)
     net = BatchNormNonLinearNet()
     net.to(device)
+    net.eval()
 
     def output_fn(input, target):
         return net(to_device(input))
@@ -280,6 +285,7 @@ def get_fullyconnect_task(normalization='none'):
         shuffle=False)
     net = FCNet(out_size=3, normalization=normalization)
     net.to(device)
+    net.eval()
 
     def output_fn(input, target):
         return net(to_device(input))
@@ -302,6 +308,7 @@ def get_conv_task(normalization='none'):
         shuffle=False)
     net = ConvNet(normalization=normalization)
     net.to(device)
+    net.eval()
 
     def output_fn(input, target):
         return net(to_device(input))

@@ -48,7 +48,6 @@ def get_output_vector(loader, function):
 def test_jacobian_pushforward_dense_linear():
     for get_task in linear_tasks:
         loader, lc, parameters, model, function, n_output = get_task()
-        model.train()
         generator = Jacobian(layer_collection=lc,
                              model=model,
                              loader=loader,
@@ -131,7 +130,6 @@ def test_jacobian_fdense_vs_pullback():
         print(get_task)
         for centering in [True, False]:
             loader, lc, parameters, model, function, n_output = get_task()
-            model.train()
             generator = Jacobian(layer_collection=lc,
                                  model=model,
                                  loader=loader,
@@ -169,7 +167,6 @@ def test_jacobian_pdense_vs_pushforward():
     for get_task in linear_tasks + nonlinear_tasks:
         for centering in [True, False]:
             loader, lc, parameters, model, function, n_output = get_task()
-            model.train()
             generator = Jacobian(layer_collection=lc,
                                  model=model,
                                  loader=loader,
@@ -209,7 +206,6 @@ def test_jacobian_pdense():
     for get_task in nonlinear_tasks:
         for centering in [True, False]:
             loader, lc, parameters, model, function, n_output = get_task()
-            model.train()
             generator = Jacobian(layer_collection=lc,
                                  model=model,
                                  loader=loader,
@@ -254,7 +250,6 @@ def test_jacobian_pdense():
 
             # Test add, sub, rmul
             loader, lc, parameters, model, function, n_output = get_task()
-            model.train()
             generator = Jacobian(layer_collection=lc,
                                  model=model,
                                  loader=loader,
@@ -276,7 +271,6 @@ def test_jacobian_pdense():
 def test_jacobian_pdiag_vs_pdense():
     for get_task in nonlinear_tasks:
         loader, lc, parameters, model, function, n_output = get_task()
-        model.train()
         generator = Jacobian(layer_collection=lc,
                              model=model,
                              loader=loader,
@@ -341,7 +335,6 @@ def test_jacobian_pdiag_vs_pdense():
 
         # Test add, sub, rmul
         loader, lc, parameters, model, function, n_output = get_task()
-        model.train()
         generator = Jacobian(layer_collection=lc,
                              model=model,
                              loader=loader,
@@ -362,7 +355,6 @@ def test_jacobian_pdiag_vs_pdense():
 def test_jacobian_pblockdiag_vs_pdense():
     for get_task in linear_tasks + nonlinear_tasks:
         loader, lc, parameters, model, function, n_output = get_task()
-        model.train()
         generator = Jacobian(layer_collection=lc,
                              model=model,
                              loader=loader,
@@ -392,7 +384,6 @@ def test_jacobian_pblockdiag_vs_pdense():
 def test_jacobian_pblockdiag():
     for get_task in nonlinear_tasks:
         loader, lc, parameters, model, function, n_output = get_task()
-        model.train()
         generator = Jacobian(layer_collection=lc,
                              model=model,
                              loader=loader,
@@ -445,7 +436,6 @@ def test_jacobian_pblockdiag():
 
         # Test add, sub, rmul
         loader, lc, parameters, model, function, n_output = get_task()
-        model.train()
         generator = Jacobian(layer_collection=lc,
                              model=model,
                              loader=loader,
@@ -468,7 +458,6 @@ def test_jacobian_pblockdiag():
 def test_jacobian_pimplicit_vs_pdense():
     for get_task in linear_tasks + nonlinear_tasks:
         loader, lc, parameters, model, function, n_output = get_task()
-        model.train()
         generator = Jacobian(layer_collection=lc,
                              model=model,
                              loader=loader,
@@ -508,7 +497,6 @@ def test_jacobian_pimplicit_vs_pdense():
 def test_jacobian_plowrank_vs_pdense():
     for get_task in nonlinear_tasks:
         loader, lc, parameters, model, function, n_output = get_task()
-        model.train()
         generator = Jacobian(layer_collection=lc,
                              model=model,
                              loader=loader,
@@ -527,7 +515,6 @@ def test_jacobian_plowrank_vs_pdense():
 def test_jacobian_plowrank():
     for get_task in nonlinear_tasks:
         loader, lc, parameters, model, function, n_output = get_task()
-        model.train()
         generator = Jacobian(layer_collection=lc,
                              model=model,
                              loader=loader,
@@ -573,7 +560,6 @@ def test_jacobian_plowrank():
 def test_jacobian_pquasidiag_vs_pdense():
     for get_task in [get_conv_task, get_fullyconnect_task]:
         loader, lc, parameters, model, function, n_output = get_task()
-        model.train()
         generator = Jacobian(layer_collection=lc,
                              model=model,
                              loader=loader,
@@ -626,7 +612,6 @@ def test_jacobian_pquasidiag_vs_pdense():
 def test_jacobian_pquasidiag():
     for get_task in [get_conv_task, get_fullyconnect_task]:
         loader, lc, parameters, model, function, n_output = get_task()
-        model.train()
         generator = Jacobian(layer_collection=lc,
                              model=model,
                              loader=loader,
@@ -656,3 +641,24 @@ def test_jacobian_pquasidiag():
         v_back = PMat_qd.solve(mv + regul * v, regul=regul)
         check_tensors(v.get_flat_representation(),
                       v_back.get_flat_representation())
+
+def test_bn_eval_mode():
+    for get_task in [get_batchnorm_fc_linear_task,
+                     get_batchnorm_conv_linear_task]:
+        loader, lc, parameters, model, function, n_output = get_task()
+
+        generator = Jacobian(layer_collection=lc,
+                             model=model,
+                             loader=loader,
+                             function=function,
+                             n_output=n_output)
+
+        model.eval()
+        FMat_dense = FMatDense(generator)
+
+        model.train()
+        with pytest.raises(RuntimeError):
+            FMat_dense = FMatDense(generator)
+
+
+
