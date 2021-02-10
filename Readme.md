@@ -30,7 +30,8 @@ For more examples, you can visit the documentation at https://nngeometry.readthe
 
 If you use NNGeometry in a published project, please cite our work using the following bibtex entry
 
-```@software{thomas_george_2021_4532597,
+```tex
+@software{thomas_george_2021_4532597,
   author       = {Thomas George},
   title        = {{NNGeometry: Easy and Fast Fisher Information 
                    Matrices and Neural Tangent Kernels in PyTorch}},
