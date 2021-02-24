@@ -1,6 +1,6 @@
 # NNGeometry
 
-[![Build Status](https://travis-ci.org/tfjgeorge/nngeometry.svg?branch=master)](https://travis-ci.org/tfjgeorge/nngeometry) [![codecov](https://codecov.io/gh/tfjgeorge/nngeometry/branch/master/graph/badge.svg)](https://codecov.io/gh/tfjgeorge/nngeometry) [![DOI](https://zenodo.org/badge/208082966.svg)](https://zenodo.org/badge/latestdoi/208082966)
+[![Build Status](https://travis-ci.org/tfjgeorge/nngeometry.svg?branch=master)](https://travis-ci.org/tfjgeorge/nngeometry) [![codecov](https://codecov.io/gh/tfjgeorge/nngeometry/branch/master/graph/badge.svg)](https://codecov.io/gh/tfjgeorge/nngeometry) [![DOI](https://zenodo.org/badge/208082966.svg)](https://zenodo.org/badge/latestdoi/208082966) [![PyPI version](https://badge.fury.io/py/nngeometry.svg)](https://badge.fury.io/py/nngeometry)
 
 
 
@@ -31,7 +31,7 @@ For more examples, you can visit the documentation at https://nngeometry.readthe
 If you use NNGeometry in a published project, please cite our work using the following bibtex entry
 
 ```tex
-@software{thomas_george_2021_4532597,
+@software{george_nngeometry,
   author       = {Thomas George},
   title        = {{NNGeometry: Easy and Fast Fisher Information 
                    Matrices and Neural Tangent Kernels in PyTorch}},
