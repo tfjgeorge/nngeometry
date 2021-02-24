@@ -50,10 +50,10 @@ def test_jacobian_pushforward_dense_linear():
         loader, lc, parameters, model, function, n_output = get_task()
         generator = Jacobian(layer_collection=lc,
                              model=model,
-                             loader=loader,
                              function=function,
                              n_output=n_output)
-        push_forward = PushForwardDense(generator)
+        push_forward = PushForwardDense(generator=generator,
+                                        examples=loader)
         dw = random_pvector(lc, device=device)
 
         doutput_lin = push_forward.mv(dw)
@@ -71,10 +71,10 @@ def test_jacobian_pushforward_dense_nonlinear():
         loader, lc, parameters, model, function, n_output = get_task()
         generator = Jacobian(layer_collection=lc,
                              model=model,
-                             loader=loader,
                              function=function,
                              n_output=n_output)
-        push_forward = PushForwardDense(generator)
+        push_forward = PushForwardDense(generator=generator,
+                                        examples=loader)
         dw = random_pvector(lc, device=device)
         dw = 1e-4 / dw.norm() * dw
 
@@ -93,11 +93,12 @@ def test_jacobian_pushforward_implicit():
         loader, lc, parameters, model, function, n_output = get_task()
         generator = Jacobian(layer_collection=lc,
                              model=model,
-                             loader=loader,
                              function=function,
                              n_output=n_output)
-        dense_push_forward = PushForwardDense(generator)
-        implicit_push_forward = PushForwardImplicit(generator)
+        dense_push_forward = PushForwardDense(generator=generator,
+                                              examples=loader)
+        implicit_push_forward = PushForwardImplicit(generator=generator,
+                                                    examples=loader)
         dw = random_pvector(lc, device=device)
 
         doutput_lin_dense = dense_push_forward.mv(dw)
@@ -112,11 +113,12 @@ def test_jacobian_pullback_dense():
         loader, lc, parameters, model, function, n_output = get_task()
         generator = Jacobian(layer_collection=lc,
                              model=model,
-                             loader=loader,
                              function=function,
                              n_output=n_output)
-        pull_back = PullBackDense(generator)
-        push_forward = PushForwardDense(generator)
+        pull_back = PullBackDense(generator=generator,
+                                  examples=loader)
+        push_forward = PushForwardDense(generator=generator,
+                                        examples=loader)
         dw = random_pvector(lc, device=device)
 
         doutput_lin = push_forward.mv(dw)
@@ -132,12 +134,13 @@ def test_jacobian_fdense_vs_pullback():
             loader, lc, parameters, model, function, n_output = get_task()
             generator = Jacobian(layer_collection=lc,
                                  model=model,
-                                 loader=loader,
                                  function=function,
                                  n_output=n_output,
                                  centering=centering)
-            pull_back = PullBackDense(generator)
-            FMat_dense = FMatDense(generator)
+            pull_back = PullBackDense(generator=generator,
+                                      examples=loader)
+            FMat_dense = FMatDense(generator=generator,
+                                   examples=loader)
             df = random_fvector(len(loader.sampler), n_output, device=device)
 
             # Test get_dense_tensor
@@ -169,13 +172,13 @@ def test_jacobian_pdense_vs_pushforward():
             loader, lc, parameters, model, function, n_output = get_task()
             generator = Jacobian(layer_collection=lc,
                                  model=model,
-                                 loader=loader,
                                  function=function,
                                  n_output=n_output,
                                  centering=centering)
-            push_forward = PushForwardDense(generator)
-            pull_back = PullBackDense(generator, data=push_forward.data)
-            PMat_dense = PMatDense(generator)
+            push_forward = PushForwardDense(generator=generator,
+                                            examples=loader)
+            pull_back = PullBackDense(generator=generator, data=push_forward.data)
+            PMat_dense = PMatDense(generator=generator, examples=loader)
             dw = random_pvector(lc, device=device)
             n = len(loader.sampler)
 
@@ -208,11 +211,11 @@ def test_jacobian_pdense():
             loader, lc, parameters, model, function, n_output = get_task()
             generator = Jacobian(layer_collection=lc,
                                  model=model,
-                                 loader=loader,
                                  function=function,
                                  n_output=n_output,
                                  centering=centering)
-            PMat_dense = PMatDense(generator)
+            PMat_dense = PMatDense(generator=generator,
+                                   examples=loader)
             dw = random_pvector(lc, device=device)
 
             # Test get_diag
@@ -252,11 +255,10 @@ def test_jacobian_pdense():
             loader, lc, parameters, model, function, n_output = get_task()
             generator = Jacobian(layer_collection=lc,
                                  model=model,
-                                 loader=loader,
                                  function=function,
                                  n_output=n_output,
                                  centering=centering)
-            PMat_dense2 = PMatDense(generator)
+            PMat_dense2 = PMatDense(generator=generator, examples=loader)
 
             check_tensors(PMat_dense.get_dense_tensor() +
                           PMat_dense2.get_dense_tensor(),
@@ -273,11 +275,10 @@ def test_jacobian_pdiag_vs_pdense():
         loader, lc, parameters, model, function, n_output = get_task()
         generator = Jacobian(layer_collection=lc,
                              model=model,
-                             loader=loader,
                              function=function,
                              n_output=n_output)
-        PMat_diag = PMatDiag(generator)
-        PMat_dense = PMatDense(generator)
+        PMat_diag = PMatDiag(generator=generator, examples=loader)
+        PMat_dense = PMatDense(generator=generator, examples=loader)
         dw = random_pvector(lc, device=device)
 
         # Test get_dense_tensor
@@ -337,10 +338,9 @@ def test_jacobian_pdiag_vs_pdense():
         loader, lc, parameters, model, function, n_output = get_task()
         generator = Jacobian(layer_collection=lc,
                              model=model,
-                             loader=loader,
                              function=function,
                              n_output=n_output)
-        PMat_diag2 = PMatDiag(generator)
+        PMat_diag2 = PMatDiag(generator=generator, examples=loader)
 
         check_tensors(PMat_diag.get_dense_tensor() +
                       PMat_diag2.get_dense_tensor(),
@@ -357,11 +357,10 @@ def test_jacobian_pblockdiag_vs_pdense():
         loader, lc, parameters, model, function, n_output = get_task()
         generator = Jacobian(layer_collection=lc,
                              model=model,
-                             loader=loader,
                              function=function,
                              n_output=n_output)
-        PMat_blockdiag = PMatBlockDiag(generator)
-        PMat_dense = PMatDense(generator)
+        PMat_blockdiag = PMatBlockDiag(generator=generator, examples=loader)
+        PMat_dense = PMatDense(generator=generator, examples=loader)
 
         # Test get_dense_tensor
         matrix_blockdiag = PMat_blockdiag.get_dense_tensor()
@@ -386,10 +385,10 @@ def test_jacobian_pblockdiag():
         loader, lc, parameters, model, function, n_output = get_task()
         generator = Jacobian(layer_collection=lc,
                              model=model,
-                             loader=loader,
                              function=function,
                              n_output=n_output)
-        PMat_blockdiag = PMatBlockDiag(generator)
+        PMat_blockdiag = PMatBlockDiag(generator=generator,
+                                       examples=loader)
         dw = random_pvector(lc, device=device)
         dense_tensor = PMat_blockdiag.get_dense_tensor()
 
@@ -438,10 +437,10 @@ def test_jacobian_pblockdiag():
         loader, lc, parameters, model, function, n_output = get_task()
         generator = Jacobian(layer_collection=lc,
                              model=model,
-                             loader=loader,
                              function=function,
                              n_output=n_output)
-        PMat_blockdiag2 = PMatBlockDiag(generator)
+        PMat_blockdiag2 = PMatBlockDiag(generator=generator,
+                                        examples=loader)
 
         check_tensors(PMat_blockdiag.get_dense_tensor() +
                       PMat_blockdiag2.get_dense_tensor(),
@@ -460,11 +459,10 @@ def test_jacobian_pimplicit_vs_pdense():
         loader, lc, parameters, model, function, n_output = get_task()
         generator = Jacobian(layer_collection=lc,
                              model=model,
-                             loader=loader,
                              function=function,
                              n_output=n_output)
-        PMat_implicit = PMatImplicit(generator)
-        PMat_dense = PMatDense(generator)
+        PMat_implicit = PMatImplicit(generator=generator, examples=loader)
+        PMat_dense = PMatDense(generator=generator, examples=loader)
         dw = random_pvector(lc, device=device)
 
         # Test trace
@@ -499,11 +497,10 @@ def test_jacobian_plowrank_vs_pdense():
         loader, lc, parameters, model, function, n_output = get_task()
         generator = Jacobian(layer_collection=lc,
                              model=model,
-                             loader=loader,
                              function=function,
                              n_output=n_output)
-        PMat_lowrank = PMatLowRank(generator)
-        PMat_dense = PMatDense(generator)
+        PMat_lowrank = PMatLowRank(generator=generator, examples=loader)
+        PMat_dense = PMatDense(generator=generator, examples=loader)
 
         # Test get_dense_tensor
         matrix_lowrank = PMat_lowrank.get_dense_tensor()
@@ -517,10 +514,9 @@ def test_jacobian_plowrank():
         loader, lc, parameters, model, function, n_output = get_task()
         generator = Jacobian(layer_collection=lc,
                              model=model,
-                             loader=loader,
                              function=function,
                              n_output=n_output)
-        PMat_lowrank = PMatLowRank(generator)
+        PMat_lowrank = PMatLowRank(generator=generator, examples=loader)
         dw = random_pvector(lc, device=device)
         dense_tensor = PMat_lowrank.get_dense_tensor()
 
@@ -562,11 +558,10 @@ def test_jacobian_pquasidiag_vs_pdense():
         loader, lc, parameters, model, function, n_output = get_task()
         generator = Jacobian(layer_collection=lc,
                              model=model,
-                             loader=loader,
                              function=function,
                              n_output=n_output)
-        PMat_qd = PMatQuasiDiag(generator)
-        PMat_dense = PMatDense(generator)
+        PMat_qd = PMatQuasiDiag(generator=generator, examples=loader)
+        PMat_dense = PMatDense(generator=generator, examples=loader)
 
         # Test get_dense_tensor
         matrix_qd = PMat_qd.get_dense_tensor()
@@ -614,10 +609,9 @@ def test_jacobian_pquasidiag():
         loader, lc, parameters, model, function, n_output = get_task()
         generator = Jacobian(layer_collection=lc,
                              model=model,
-                             loader=loader,
                              function=function,
                              n_output=n_output)
-        PMat_qd = PMatQuasiDiag(generator)
+        PMat_qd = PMatQuasiDiag(generator=generator, examples=loader)
         dense_tensor = PMat_qd.get_dense_tensor()
 
         v = random_pvector(lc, device=device)
@@ -649,16 +643,43 @@ def test_bn_eval_mode():
 
         generator = Jacobian(layer_collection=lc,
                              model=model,
-                             loader=loader,
                              function=function,
                              n_output=n_output)
 
         model.eval()
-        FMat_dense = FMatDense(generator)
+        FMat_dense = FMatDense(generator=generator, examples=loader)
 
         model.train()
         with pytest.raises(RuntimeError):
-            FMat_dense = FMatDense(generator)
+            FMat_dense = FMatDense(generator=generator, examples=loader)
 
 
 
+def test_example_passing():
+    # test when passing a minibatch of examples instead of the full dataloader
+    for get_task in [get_fullyconnect_task]:
+        loader, lc, parameters, model, function, n_output = get_task()
+        generator = Jacobian(layer_collection=lc,
+                             model=model,
+                             function=function,
+                             n_output=n_output)
+
+        sum_mats = None
+        tot_examples = 0
+        for d in iter(loader):
+            this_mat = PMatDense(generator=generator,
+                                 examples=d)
+            n_examples = len(d[0])
+
+            if sum_mats is None:
+                sum_mats = n_examples * this_mat
+            else:
+                sum_mats = n_examples * this_mat + sum_mats
+
+            tot_examples += n_examples
+
+        PMat_dense = PMatDense(generator=generator,
+                               examples=loader)
+
+        check_tensors(PMat_dense.get_dense_tensor(),
+                      (1. / tot_examples * sum_mats).get_dense_tensor())

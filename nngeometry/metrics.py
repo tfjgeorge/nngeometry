@@ -76,10 +76,9 @@ def FIM_MonteCarlo(model,
 
     generator = Jacobian(layer_collection=layer_collection,
                          model=model,
-                         loader=loader,
                          function=fim_function,
                          n_output=trials)
-    return representation(generator)
+    return representation(generator=generator, examples=loader)
 
 
 def FIM(model,
@@ -147,7 +146,6 @@ def FIM(model,
 
     generator = Jacobian(layer_collection=layer_collection,
                          model=model,
-                         loader=loader,
                          function=function_fim,
                          n_output=n_output)
-    return representation(generator)
+    return representation(generator=generator, examples=loader)

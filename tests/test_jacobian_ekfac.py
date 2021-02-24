@@ -17,13 +17,12 @@ def test_pspace_ekfac_vs_kfac():
         model.train()
         generator = Jacobian(layer_collection=lc,
                              model=model,
-                             loader=loader,
                              function=function,
                              n_output=n_output)
 
-        M_kfac = PMatKFAC(generator)
-        M_ekfac = PMatEKFAC(generator)
-        M_blockdiag = PMatBlockDiag(generator)
+        M_kfac = PMatKFAC(generator=generator, examples=loader)
+        M_ekfac = PMatEKFAC(generator=generator, examples=loader)
+        M_blockdiag = PMatBlockDiag(generator=generator, examples=loader)
 
         # here KFAC and EKFAC should be the same
         for split in [True, False]:
@@ -32,7 +31,7 @@ def test_pspace_ekfac_vs_kfac():
             assert torch.norm(diff) < eps
 
         # now we compute the exact diagonal:
-        M_ekfac.update_diag()
+        M_ekfac.update_diag(loader)
         assert torch.norm(M_kfac.get_dense_tensor()
                           - M_blockdiag.get_dense_tensor()) > \
             torch.norm(M_ekfac.get_dense_tensor()
@@ -50,11 +49,10 @@ def test_pspace_ekfac_vs_direct():
 
         generator = Jacobian(layer_collection=lc,
                              model=model,
-                             loader=loader,
                              function=function,
                              n_output=n_output)
 
-        M_ekfac = PMatEKFAC(generator)
+        M_ekfac = PMatEKFAC(generator=generator, examples=loader)
         v = random_pvector(lc, device=device)
 
         # the second time we will have called update_diag
@@ -95,4 +93,4 @@ def test_pspace_ekfac_vs_direct():
             check_tensors(1.23 * M_ekfac.get_dense_tensor(),
                           M_mul.get_dense_tensor())
 
-            M_ekfac.update_diag()
+            M_ekfac.update_diag(loader)
