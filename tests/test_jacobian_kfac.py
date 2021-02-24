@@ -140,11 +140,10 @@ def test_jacobian_kfac_vs_pblockdiag():
 
         generator = Jacobian(layer_collection=lc,
                              model=model,
-                             loader=loader,
                              function=function,
                              n_output=n_output)
-        M_kfac = PMatKFAC(generator)
-        M_blockdiag = PMatBlockDiag(generator)
+        M_kfac = PMatKFAC(generator=generator, examples=loader)
+        M_blockdiag = PMatBlockDiag(generator=generator, examples=loader)
 
         G_kfac = M_kfac.get_dense_tensor(split_weight_bias=True)
         G_blockdiag = M_blockdiag.get_dense_tensor()
@@ -157,10 +156,9 @@ def test_jacobian_kfac():
 
         generator = Jacobian(layer_collection=lc,
                              model=model,
-                             loader=loader,
                              function=function,
                              n_output=n_output)
-        M_kfac = PMatKFAC(generator)
+        M_kfac = PMatKFAC(generator=generator, examples=loader)
         G_kfac_split = M_kfac.get_dense_tensor(split_weight_bias=True)
         G_kfac = M_kfac.get_dense_tensor(split_weight_bias=False)
 
@@ -222,11 +220,10 @@ def test_pspace_kfac_eigendecomposition():
 
     generator = Jacobian(layer_collection=lc,
                          model=model,
-                         loader=loader,
                          function=function,
                          n_output=n_output)
 
-    M_kfac = PMatKFAC(generator)
+    M_kfac = PMatKFAC(generator=generator, examples=loader)
     M_kfac.compute_eigendecomposition()
     evals, evecs = M_kfac.get_eigendecomposition()
     # Loop through all vectors in KFE

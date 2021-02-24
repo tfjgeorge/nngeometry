@@ -11,12 +11,12 @@ class AbstractPushForward(ABC):
 
 
 class PushForwardDense(AbstractPushForward):
-    def __init__(self, generator, data=None):
+    def __init__(self, generator, data=None, examples=None):
         self.generator = generator
         if data is not None:
             self.data = data
         else:
-            self.data = generator.get_jacobian()
+            self.data = generator.get_jacobian(examples)
 
     def get_dense_tensor(self):
         return self.data
@@ -29,11 +29,13 @@ class PushForwardDense(AbstractPushForward):
 
 
 class PushForwardImplicit(AbstractPushForward):
-    def __init__(self, generator):
+    def __init__(self, generator, data=None, examples=None):
         self.generator = generator
+        self.examples = examples
+        assert data is None
 
     def mv(self, v):
-        return self.generator.implicit_Jv(v)
+        return self.generator.implicit_Jv(v, self.examples)
 
 
 class PullBackAbstract(ABC):
@@ -44,12 +46,12 @@ class PullBackAbstract(ABC):
 
 
 class PullBackDense(PullBackAbstract):
-    def __init__(self, generator, data=None):
+    def __init__(self, generator, data=None, examples=None):
         self.generator = generator
         if data is not None:
             self.data = data
         else:
-            self.data = generator.get_jacobian()
+            self.data = generator.get_jacobian(examples)
 
     def get_dense_tensor(self):
         return self.data

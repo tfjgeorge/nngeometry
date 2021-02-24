@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+from torch.utils.data import DataLoader, TensorDataset
 from ..utils import per_example_grad_conv
 from ..object.vector import PVector, FVector
 from ..layercollection import LayerCollection
@@ -18,8 +19,6 @@ class Jacobian:
     :type layer_collection: :class:`.layercollection.LayerCollection`
     :param model:
     :type model: Pytorch `nn.Module`
-    :param loader:
-    :type loader: Pytorch `utils.data.DataLoader`
     :param function: A function :math:`f\left(X,Y,Z\\right)` where :math:`X,Y,Z` are minibatchs
         returned by the dataloader (Note that in some cases :math:`Y,Z` are not required). If None,
         it defaults to `function = lambda *x: model(x[0])`
@@ -29,10 +28,9 @@ class Jacobian:
     :type n_output: integer
 
     """
-    def __init__(self, model, loader, function=None, n_output=1,
+    def __init__(self, model, function=None, n_output=1,
                  centering=False, layer_collection=None):
         self.model = model
-        self.loader = loader
         self.handles = []
         self.xs = dict()
         self.n_output = n_output
@@ -53,16 +51,17 @@ class Jacobian:
     def get_device(self):
         return next(self.model.parameters()).device
 
-    def get_covariance_matrix(self):
+    def get_covariance_matrix(self, examples):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex,
                                         self._hook_compute_flat_grad,
                                         self.l_to_m.values())
 
         device = next(self.model.parameters()).device
-        n_examples = len(self.loader.sampler)
+        loader = self._get_dataloader(examples)
+        n_examples = len(loader.sampler)
         n_parameters = self.layer_collection.numel()
-        bs = self.loader.batch_size
+        bs = loader.batch_size
         G = torch.zeros((n_parameters, n_parameters), device=device)
         self.grads = torch.zeros((1, bs, n_parameters), device=device)
         if self.centering:
@@ -71,7 +70,7 @@ class Jacobian:
 
         self.start = 0
         self.i_output = 0
-        for d in self.loader:
+        for d in loader:
             inputs = d[0]
             inputs.requires_grad = True
             bs = inputs.size(0)
@@ -98,7 +97,7 @@ class Jacobian:
 
         return G
 
-    def get_covariance_diag(self):
+    def get_covariance_diag(self, examples):
         if self.centering:
             raise NotImplementedError
         # add hooks
@@ -107,11 +106,12 @@ class Jacobian:
                                         self.l_to_m.values())
 
         device = next(self.model.parameters()).device
-        n_examples = len(self.loader.sampler)
+        loader = self._get_dataloader(examples)
+        n_examples = len(loader.sampler)
         n_parameters = self.layer_collection.numel()
         self.diag_m = torch.zeros((n_parameters,), device=device)
         self.start = 0
-        for d in self.loader:
+        for d in loader:
             inputs = d[0]
             inputs.requires_grad = True
             bs = inputs.size(0)
@@ -131,7 +131,7 @@ class Jacobian:
 
         return diag_m
 
-    def get_covariance_quasidiag(self):
+    def get_covariance_quasidiag(self, examples):
         if self.centering:
             raise NotImplementedError
         # add hooks
@@ -140,7 +140,8 @@ class Jacobian:
                                         self.l_to_m.values())
 
         device = next(self.model.parameters()).device
-        n_examples = len(self.loader.sampler)
+        loader = self._get_dataloader(examples)
+        n_examples = len(loader.sampler)
         self._blocks = dict()
         for layer_id, layer in self.layer_collection.layers.items():
             s = layer.numel()
@@ -152,7 +153,7 @@ class Jacobian:
                 self._blocks[layer_id] = (torch.zeros((s, ), device=device),
                                           torch.zeros(cross_s, device=device))
 
-        for d in self.loader:
+        for d in loader:
             inputs = d[0]
             inputs.requires_grad = True
             bs = inputs.size(0)
@@ -177,7 +178,7 @@ class Jacobian:
 
         return blocks
 
-    def get_covariance_layer_blocks(self):
+    def get_covariance_layer_blocks(self, examples):
         if self.centering:
             raise NotImplementedError
         # add hooks
@@ -186,13 +187,14 @@ class Jacobian:
                                         self.l_to_m.values())
 
         device = next(self.model.parameters()).device
-        n_examples = len(self.loader.sampler)
+        loader = self._get_dataloader(examples)
+        n_examples = len(loader.sampler)
         self._blocks = dict()
         for layer_id, layer in self.layer_collection.layers.items():
             s = layer.numel()
             self._blocks[layer_id] = torch.zeros((s, s), device=device)
 
-        for d in self.loader:
+        for d in loader:
             inputs = d[0]
             inputs.requires_grad = True
             bs = inputs.size(0)
@@ -212,14 +214,15 @@ class Jacobian:
 
         return blocks
 
-    def get_kfac_blocks(self):
+    def get_kfac_blocks(self, examples):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex,
                                         self._hook_compute_kfac_blocks,
                                         self.l_to_m.values())
 
         device = next(self.model.parameters()).device
-        n_examples = len(self.loader.sampler)
+        loader = self._get_dataloader(examples)
+        n_examples = len(loader.sampler)
         self._blocks = dict()
         for layer_id, layer in self.layer_collection.layers.items():
             layer_class = layer.__class__.__name__
@@ -235,7 +238,7 @@ class Jacobian:
             self._blocks[layer_id] = (torch.zeros((sA, sA), device=device),
                                       torch.zeros((sG, sG), device=device))
 
-        for d in self.loader:
+        for d in loader:
             inputs = d[0]
             inputs.requires_grad = True
             bs = inputs.size(0)
@@ -265,19 +268,20 @@ class Jacobian:
 
         return blocks
 
-    def get_jacobian(self):
+    def get_jacobian(self, examples):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex,
                                         self._hook_compute_flat_grad,
                                         self.l_to_m.values())
 
         device = next(self.model.parameters()).device
-        n_examples = len(self.loader.sampler)
+        loader = self._get_dataloader(examples)
+        n_examples = len(loader.sampler)
         n_parameters = self.layer_collection.numel()
         self.grads = torch.zeros((self.n_output, n_examples, n_parameters),
                                  device=device)
         self.start = 0
-        for d in self.loader:
+        for d in loader:
             inputs = d[0]
             inputs.requires_grad = True
             bs = inputs.size(0)
@@ -303,20 +307,21 @@ class Jacobian:
 
         return grads
 
-    def get_gram_matrix(self):
+    def get_gram_matrix(self, examples):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex_io, self._hook_kxy,
                                         self.l_to_m.values())
 
         device = next(self.model.parameters()).device
-        n_examples = len(self.loader.sampler)
+        loader = self._get_dataloader(examples)
+        n_examples = len(loader.sampler)
         self.G = torch.zeros((self.n_output, n_examples,
                               self.n_output, n_examples), device=device)
         self.x_outer = dict()
         self.x_inner = dict()
         self.gy_outer = dict()
         self.e_outer = 0
-        for i_outer, d in enumerate(self.loader):
+        for i_outer, d in enumerate(loader):
             # used in hooks to switch between store/compute
             inputs_outer = d[0]
             inputs_outer.requires_grad = True
@@ -332,7 +337,7 @@ class Jacobian:
                 self.outerloop_switch = False
 
                 self.e_inner = 0
-                for i_inner, d in enumerate(self.loader):
+                for i_inner, d in enumerate(loader):
                     if i_inner > i_outer:
                         break
                     inputs_inner = d[0]
@@ -381,14 +386,15 @@ class Jacobian:
 
         return G
 
-    def get_kfe_diag(self, kfe):
+    def get_kfe_diag(self, kfe, examples):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex,
                                         self._hook_compute_kfe_diag,
                                         self.l_to_m.values())
 
         device = next(self.model.parameters()).device
-        n_examples = len(self.loader.sampler)
+        loader = self._get_dataloader(examples)
+        n_examples = len(loader.sampler)
         self._diags = dict()
         self._kfe = kfe
         for layer_id, layer in self.layer_collection.layers.items():
@@ -404,7 +410,7 @@ class Jacobian:
                 sA += 1
             self._diags[layer_id] = torch.zeros((sG * sA), device=device)
 
-        for d in self.loader:
+        for d in loader:
             inputs = d[0]
             inputs.requires_grad = True
             bs = inputs.size(0)
@@ -427,7 +433,7 @@ class Jacobian:
 
         return diags
 
-    def implicit_mv(self, v):
+    def implicit_mv(self, v, examples):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex,
                                         self._hook_compute_Jv,
@@ -448,11 +454,12 @@ class Jacobian:
                 output[mod.bias] = torch.zeros_like(mod.bias)
 
         device = next(self.model.parameters()).device
-        n_examples = len(self.loader.sampler)
+        loader = self._get_dataloader(examples)
+        n_examples = len(loader.sampler)
 
         self.i_output = 0
         self.start = 0
-        for d in self.loader:
+        for d in loader:
             inputs = d[0]
             inputs.requires_grad = True
             bs = inputs.size(0)
@@ -495,7 +502,7 @@ class Jacobian:
         return PVector(layer_collection=self.layer_collection,
                        dict_repr=output_dict)
 
-    def implicit_vTMv(self, v):
+    def implicit_vTMv(self, v, examples):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex,
                                         self._hook_compute_Jv,
@@ -504,7 +511,8 @@ class Jacobian:
         self._v = v.get_dict_representation()
 
         device = next(self.model.parameters()).device
-        n_examples = len(self.loader.sampler)
+        loader = self._get_dataloader(examples)
+        n_examples = len(loader.sampler)
 
         for layer_id, layer in self.layer_collection.layers.items():
             mod = self.l_to_m[layer_id]
@@ -516,7 +524,7 @@ class Jacobian:
         self.start = 0
         norm2 = 0
         self.compute_switch = True
-        for d in self.loader:
+        for d in loader:
             inputs = d[0]
             inputs.requires_grad = True
             bs = inputs.size(0)
@@ -542,16 +550,17 @@ class Jacobian:
 
         return norm
 
-    def implicit_trace(self):
+    def implicit_trace(self, examples):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex,
                                         self._hook_compute_trace,
                                         self.l_to_m.values())
 
-        n_examples = len(self.loader.sampler)
+        loader = self._get_dataloader(examples)
+        n_examples = len(loader.sampler)
 
         self._trace = 0
-        for d in self.loader:
+        for d in loader:
             inputs = d[0]
             inputs.requires_grad = True
             bs = inputs.size(0)
@@ -571,7 +580,7 @@ class Jacobian:
 
         return trace
 
-    def implicit_Jv(self, v):
+    def implicit_Jv(self, v, examples):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex,
                                         self._hook_compute_Jv,
@@ -580,11 +589,12 @@ class Jacobian:
         self._v = v.get_dict_representation()
 
         device = next(self.model.parameters()).device
-        n_examples = len(self.loader.sampler)
+        loader = self._get_dataloader(examples)
+        n_examples = len(loader.sampler)
         self._Jv = torch.zeros((self.n_output, n_examples), device=device)
         self.start = 0
         self.compute_switch = True
-        for d in self.loader:
+        for d in loader:
             inputs = d[0]
             inputs.requires_grad = True
             bs = inputs.size(0)
@@ -1101,3 +1111,10 @@ class Jacobian:
             self._trace += (gy.sum(dim=(2, 3))**2).sum()
         else:
             raise NotImplementedError
+
+    def _get_dataloader(self, examples):
+        if isinstance(examples, DataLoader):
+            return examples
+        else:
+            return DataLoader(TensorDataset(*examples),
+                              batch_size=len(examples[0]))

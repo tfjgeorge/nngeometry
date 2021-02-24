@@ -11,12 +11,12 @@ class FMatAbstract(ABC):
 
 
 class FMatDense(FMatAbstract):
-    def __init__(self, generator, data=None):
+    def __init__(self, generator, data=None, examples=None):
         self.generator = generator
         if data is not None:
             self.data = data
         else:
-            self.data = generator.get_gram_matrix()
+            self.data = generator.get_gram_matrix(examples)
 
     def compute_eigendecomposition(self, impl='symeig'):
         # TODO: test

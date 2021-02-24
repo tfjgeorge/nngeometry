@@ -11,11 +11,19 @@ class PMatAbstract(ABC):
 
     :param generator: The generator
     :type generator: :class:`nngeometry.generator.jacobian.Jacobian`
-    :param data: if None, uses the generator to populate the matrix data.
+    :param data: if None, it requires examples to be different from None, and
+        it uses the generator to populate the matrix data
+    :param examples: if data is None, it uses these examples to populate the
+        matrix using the generator. `examples` is either a Dataloader, or a
+        single mini-batch of (inputs, targets) from a Dataloader
+
+    Note:
+        Either `data` or `examples` has to be different from None, and both
+        cannot be not None at the same time.
     """
 
     @abstractmethod
-    def __init__(self, generator, data=None):
+    def __init__(self, generator, data=None, examples=None):
         raise NotImplementedError
 
     @abstractmethod
@@ -87,14 +95,24 @@ class PMatAbstract(ABC):
         else:
             raise IndexError
 
+    def _check_data_examples(self, data, examples):
+        """
+        Either data or examples has to be not None in order
+        to populate the matrix. If both are not None, then
+        it is ambiguous, then the following test will fail
+        """
+        assert (data is not None) ^ (examples is not None)
+
 
 class PMatDense(PMatAbstract):
-    def __init__(self, generator, data=None):
+    def __init__(self, generator, data=None, examples=None):
+        self._check_data_examples(data, examples)
+
         self.generator = generator
         if data is not None:
             self.data = data
         else:
-            self.data = generator.get_covariance_matrix()
+            self.data = generator.get_covariance_matrix(examples)
 
     def compute_eigendecomposition(self, impl='symeig'):
         # TODO: test
@@ -180,12 +198,14 @@ class PMatDense(PMatAbstract):
 
 
 class PMatDiag(PMatAbstract):
-    def __init__(self, generator=None, data=None):
+    def __init__(self, generator, data=None, examples=None):
+        self._check_data_examples(data, examples)
+
         self.generator = generator
         if data is not None:
             self.data = data
         else:
-            self.data = generator.get_covariance_diag()
+            self.data = generator.get_covariance_diag(examples)
 
     def inverse(self, regul=1e-8):
         inv_tensor = 1. / (self.data + regul)
@@ -237,12 +257,14 @@ class PMatDiag(PMatAbstract):
 
 
 class PMatBlockDiag(PMatAbstract):
-    def __init__(self, generator, data=None):
+    def __init__(self, generator, data=None, examples=None):
+        self._check_data_examples(data, examples)
+
         self.generator = generator
         if data is not None:
             self.data = data
         else:
-            self.data = generator.get_covariance_layer_blocks()
+            self.data = generator.get_covariance_layer_blocks(examples)
 
     def trace(self):
         # TODO test
@@ -349,10 +371,12 @@ class PMatBlockDiag(PMatAbstract):
 
 
 class PMatKFAC(PMatAbstract):
-    def __init__(self, generator, data=None):
+    def __init__(self, generator, data=None, examples=None):
+        self._check_data_examples(data, examples)
+
         self.generator = generator
         if data is None:
-            self.data = generator.get_kfac_blocks()
+            self.data = generator.get_kfac_blocks(examples)
         else:
             self.data = data
 
@@ -514,13 +538,15 @@ class PMatEKFAC(PMatAbstract):
     in a Kronecker-factored Eigenbasis, NIPS 2018*
 
     """
-    def __init__(self, generator, data=None):
+    def __init__(self, generator, data=None, examples=None):
+        self._check_data_examples(data, examples)
+
         self.generator = generator
         if data is None:
             evecs = dict()
             diags = dict()
 
-            kfac_blocks = generator.get_kfac_blocks()
+            kfac_blocks = generator.get_kfac_blocks(examples)
             for layer_id, layer in \
                     self.generator.layer_collection.layers.items():
                 a, g = kfac_blocks[layer_id]
@@ -561,12 +587,12 @@ class PMatEKFAC(PMatAbstract):
                                            KFE.t())))
         return M
 
-    def update_diag(self):
+    def update_diag(self, examples):
         """
         Will update the diagonal in the KFE (aka the approximate eigenvalues)
         using current values of the model's parameters
         """
-        self.data = (self.data[0], self.generator.get_kfe_diag(self.data[0]))
+        self.data = (self.data[0], self.generator.get_kfe_diag(self.data[0], examples))
 
     def mv(self, vs):
         vs_dict = vs.get_dict_representation()
@@ -665,17 +691,21 @@ class PMatImplicit(PMatAbstract):
     no approximation involved. This is useful for networks too big
     to fit in memory.
     """
-    def __init__(self, generator):
+    def __init__(self, generator, data=None, examples=None):
         self.generator = generator
 
+        assert data is None
+
+        self.examples = examples
+
     def mv(self, v):
-        return self.generator.implicit_mv(v)
+        return self.generator.implicit_mv(v, self.examples)
 
     def vTMv(self, v):
-        return self.generator.implicit_vTMv(v)
+        return self.generator.implicit_vTMv(v, self.examples)
 
     def trace(self):
-        return self.generator.implicit_trace()
+        return self.generator.implicit_trace(self.examples)
 
     def frobenius_norm(self):
         raise NotImplementedError
@@ -691,12 +721,14 @@ class PMatImplicit(PMatAbstract):
 
 
 class PMatLowRank(PMatAbstract):
-    def __init__(self, generator, data=None):
+    def __init__(self, generator, data=None, examples=None):
+        self._check_data_examples(data, examples)
+
         self.generator = generator
         if data is not None:
             self.data = data
         else:
-            self.data = generator.get_jacobian()
+            self.data = generator.get_jacobian(examples)
             self.data /= self.data.size(1)**.5
 
     def vTMv(self, v):
@@ -757,12 +789,14 @@ class PMatQuasiDiag(PMatAbstract):
     Riemannian metrics for neural networks I: feedforward networks,
     Information and Inference: A Journal of the IMA, 2015
     """
-    def __init__(self, generator, data=None):
+    def __init__(self, generator, data=None, examples=None):
+        self._check_data_examples(data, examples)
+
         self.generator = generator
         if data is not None:
             self.data = data
         else:
-            self.data = generator.get_covariance_quasidiag()
+            self.data = generator.get_covariance_quasidiag(examples)
 
     def get_dense_tensor(self):
         s = self.generator.layer_collection.numel()
