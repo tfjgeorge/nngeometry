@@ -27,6 +27,12 @@ class ConvNet(nn.Module):
         return tF.log_softmax(x, dim=1)
 
 
+@pytest.fixture(autouse=True)
+def make_test_deterministic():
+    torch.manual_seed(1234)
+    yield
+
+
 def test_from_dict_to_pvector():
     eps = 1e-8
     model = ConvNet()

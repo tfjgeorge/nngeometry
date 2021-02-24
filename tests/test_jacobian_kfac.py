@@ -129,6 +129,12 @@ def get_convnet_kfc_task(bs=300):
             output_fn, 10)
 
 
+@pytest.fixture(autouse=True)
+def make_test_deterministic():
+    torch.manual_seed(1234)
+    yield
+
+
 def test_jacobian_kfac_vs_pblockdiag():
     """
     Compares blockdiag and kfac representation on datasets/architectures

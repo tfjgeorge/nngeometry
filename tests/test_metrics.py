@@ -25,6 +25,12 @@ nonlinear_tasks = [get_conv_gn_task, get_fullyconnect_task, get_conv_task]
 import numpy as np
 
 
+@pytest.fixture(autouse=True)
+def make_test_deterministic():
+    torch.manual_seed(1234)
+    yield
+
+
 def test_FIM_MC_vs_linearization():
     step = 1e-2
 

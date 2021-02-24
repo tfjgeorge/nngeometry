@@ -6,6 +6,12 @@ from nngeometry.object.vector import random_pvector
 from utils import check_ratio, check_tensors
 
 
+@pytest.fixture(autouse=True)
+def make_test_deterministic():
+    torch.manual_seed(1234)
+    yield
+
+
 def test_pspace_ekfac_vs_kfac():
     """
     Check that EKFAC matrix is closer to block diag one in the
