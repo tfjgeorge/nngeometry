@@ -5,6 +5,7 @@ from nngeometry.layercollection import LayerCollection
 import torch.nn as nn
 import torch.nn.functional as tF
 from utils import check_ratio
+import pytest
 
 
 class ConvNet(nn.Module):

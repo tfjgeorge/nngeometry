@@ -21,8 +21,8 @@ from test_jacobian import update_model, get_output_vector, device
 
 nonlinear_tasks = [get_conv_gn_task, get_fullyconnect_task, get_conv_task]
 
-
 import numpy as np
+import pytest
 
 
 @pytest.fixture(autouse=True)

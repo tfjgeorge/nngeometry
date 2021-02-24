@@ -11,6 +11,7 @@ from torchvision import datasets, transforms
 from utils import check_ratio, check_tensors, angle
 from tasks import get_fullyconnect_task, get_mnist, get_conv_task
 import os
+import pytest
 
 default_datapath = 'tmp'
 if 'SLURM_TMPDIR' in os.environ:
