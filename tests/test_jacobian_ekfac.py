@@ -4,6 +4,13 @@ import torch
 from tasks import get_fullyconnect_task, get_conv_task, device
 from nngeometry.object.vector import random_pvector
 from utils import check_ratio, check_tensors
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def make_test_deterministic():
+    torch.manual_seed(1234)
+    yield
 
 
 def test_pspace_ekfac_vs_kfac():

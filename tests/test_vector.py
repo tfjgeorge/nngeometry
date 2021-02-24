@@ -5,6 +5,7 @@ from nngeometry.layercollection import LayerCollection
 import torch.nn as nn
 import torch.nn.functional as tF
 from utils import check_ratio
+import pytest
 
 
 class ConvNet(nn.Module):
@@ -25,6 +26,12 @@ class ConvNet(nn.Module):
         x = x.view(-1, 1*1*7)
         x = self.fc1(x)
         return tF.log_softmax(x, dim=1)
+
+
+@pytest.fixture(autouse=True)
+def make_test_deterministic():
+    torch.manual_seed(1234)
+    yield
 
 
 def test_from_dict_to_pvector():

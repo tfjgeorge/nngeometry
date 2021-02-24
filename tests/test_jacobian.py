@@ -45,6 +45,12 @@ def get_output_vector(loader, function):
         return torch.cat(outputs)
 
 
+@pytest.fixture(autouse=True)
+def make_test_deterministic():
+    torch.manual_seed(1234)
+    yield
+
+
 def test_jacobian_pushforward_dense_linear():
     for get_task in linear_tasks:
         loader, lc, parameters, model, function, n_output = get_task()
@@ -84,8 +90,10 @@ def test_jacobian_pushforward_dense_nonlinear():
         update_model(parameters, dw.get_flat_representation())
         output_after = get_output_vector(loader, function)
 
+        # This is non linear, so we don't expect the finite difference
+        # estimate to be very accurate. We use a larger eps value
         check_tensors(output_after - output_before,
-                      doutput_lin.get_flat_representation().t(), eps=1e-2)
+                      doutput_lin.get_flat_representation().t(), eps=5e-2)
 
 
 def test_jacobian_pushforward_implicit():
