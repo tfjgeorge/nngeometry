@@ -4,7 +4,7 @@ from nngeometry.object.vector import (PVector, random_pvector,
 from nngeometry.layercollection import LayerCollection
 import torch.nn as nn
 import torch.nn.functional as tF
-from utils import check_ratio
+from utils import check_ratio, check_tensors
 import pytest
 
 
@@ -164,3 +164,24 @@ def test_norm():
     check_ratio(torch.norm(v.get_flat_representation()), v.norm())
 
 
+def test_from_to_model():
+    model1 = ConvNet()
+    model2 = ConvNet()
+
+    w1 = PVector.from_model(model1).clone() 
+    w2 = PVector.from_model(model2).clone()
+
+    model3 = ConvNet()
+    w1.copy_to_model(model3)
+    # now model1 and model3 should be the same
+
+    for p1, p3 in zip(model1.parameters(), model3.parameters()):
+        check_tensors(p1, p3)
+
+    ###
+    diff_1_2 = w2 - w1
+    diff_1_2.add_to_model(model3)
+    # now model2 and model3 should be the same
+
+    for p2, p3 in zip(model2.parameters(), model3.parameters()):
+        check_tensors(p2, p3)

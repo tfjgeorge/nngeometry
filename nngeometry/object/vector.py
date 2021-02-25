@@ -91,8 +91,22 @@ class PVector:
             mod = l_to_m[layer_id]
             if layer.bias is not None:
                 mod.bias.data.copy_(dict_repr[layer_id][1])
-            else:
-                mod.weight.data.copy_(dict_repr[layer_id][0])
+            mod.weight.data.copy_(dict_repr[layer_id][0])
+
+    def add_to_model(self, model):
+        """
+        Updates `model` parameter values by adding the current PVector
+
+        Note. This is an inplace operation
+        """
+        dict_repr = self.get_dict_representation()
+        layer_collection = LayerCollection.from_model(model)
+        l_to_m, _ = layer_collection.get_layerid_module_maps(model)
+        for layer_id, layer in layer_collection.layers.items():
+            mod = l_to_m[layer_id]
+            if layer.bias is not None:
+                mod.bias.data.add_(dict_repr[layer_id][1])
+            mod.weight.data.add_(dict_repr[layer_id][0])
 
     @staticmethod
     def from_model_grad(model):
