@@ -6,7 +6,8 @@
 
 NNGeometry allows you to:
  - compute **Fisher Information Matrices** (FIM) or derivates, using efficient approximations such as low-rank matrices, KFAC, diagonal and so on.
- - compute finite **Neural Tangent Kernels**, even for multiple output functions.
+ - compute finite-width **Neural Tangent Kernels** (Gram matrices), even for multiple output functions.
+ - compute **per-examples jacobians** of the loss w.r.t network parameters, or of any function such as the network's output.
  - easily and efficiently compute linear algebra operations involving these matrices **regardless of their approximation**.
 
 ## Example
@@ -20,11 +21,13 @@ F = FIM(model=model,
 
 regularizer = F.vTMv(w - w_a)
 ```
-If diagonal is not sufficiently accurate then you could instead choose a KFAC approximation, by just changing `PMatDiag` to `PMatKFAC` in the above.
+If diagonal is not sufficiently accurate then you could instead choose a KFAC approximation, by just changing `PMatDiag` to `PMatKFAC` in the above. Note that it internally involves very different operations, depending on the chosen representation (e.g. KFAC, EKFAC, ...).
 
 ## Documentation
 
-For more examples, you can visit the documentation at https://nngeometry.readthedocs.io
+You can visit the documentation at https://nngeometry.readthedocs.io.
+
+More example usage are available in the repository https://github.com/tfjgeorge/nngeometry-examples.
 
 ## Citation
 
