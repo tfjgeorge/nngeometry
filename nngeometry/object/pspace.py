@@ -196,6 +196,20 @@ class PMatDense(PMatAbstract):
         return PMatDense(generator=self.generator,
                          data=x * self.data)
 
+    def mm(self, other):
+        """
+        Matrix-matrix product where `other` is another 
+        instance of PMatDense
+
+        :param other: Other FIM matrix
+        :type other: :class:`nngeometry.object.PMatDense`
+
+        :return: The matrix-matrix product
+        :rtype: :class:`nngeometry.object.PMatDense`
+        """
+        return PMatDense(self.generator,
+                         data=torch.mm(self.data, other.data))
+
 
 class PMatDiag(PMatAbstract):
     def __init__(self, generator, data=None, examples=None):
@@ -254,6 +268,20 @@ class PMatDiag(PMatAbstract):
     def __rmul__(self, x):
         return PMatDiag(generator=self.generator,
                         data=x * self.data)
+
+    def mm(self, other):
+        """
+        Matrix-matrix product where `other` is another 
+        instance of PMatDiag
+
+        :param other: Other FIM matrix
+        :type other: :class:`nngeometry.object.PMatDiag`
+
+        :return: The matrix-matrix product
+        :rtype: :class:`nngeometry.object.PMatDiag`
+        """
+        return PMatDiag(self.generator,
+                         data=self.data * other.data)
 
 
 class PMatBlockDiag(PMatAbstract):
@@ -368,6 +396,24 @@ class PMatBlockDiag(PMatAbstract):
         sum_data = {l_id: x * d for l_id, d in self.data.items()}
         return PMatBlockDiag(generator=self.generator,
                              data=sum_data)
+
+    def mm(self, other):
+        """
+        Matrix-matrix product where `other` is another 
+        instance of PMatBlockDiag
+
+        :param other: Other FIM matrix
+        :type other: :class:`nngeometry.object.PMatBlockDiag`
+
+        :return: The matrix-matrix product
+        :rtype: :class:`nngeometry.object.PMatBlockDiag`
+        """
+        prod = dict()
+        for layer_id, block in self.data.items():
+            block_other = other.data[layer_id]
+            prod[layer_id] = torch.mm(block, block_other)
+        return PMatBlockDiag(self.generator,
+                             data=prod)
 
 
 class PMatKFAC(PMatAbstract):
