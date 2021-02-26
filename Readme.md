@@ -29,6 +29,12 @@ You can visit the documentation at https://nngeometry.readthedocs.io.
 
 More example usage are available in the repository https://github.com/tfjgeorge/nngeometry-examples.
 
+## Feature requests, bugs or contributions
+
+We welcome any feature request or bug report in the [issue tracker](https://github.com/tfjgeorge/nngeometry/issues).
+
+We also welcome contributions, please submit your PRs!
+
 ## Citation
 
 If you use NNGeometry in a published project, please cite our work using the following bibtex entry

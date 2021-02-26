@@ -526,6 +526,7 @@ def test_jacobian_plowrank():
                              n_output=n_output)
         PMat_lowrank = PMatLowRank(generator=generator, examples=loader)
         dw = random_pvector(lc, device=device)
+        dw = dw / dw.norm()
         dense_tensor = PMat_lowrank.get_dense_tensor()
 
         # Test get_diag
@@ -545,14 +546,22 @@ def test_jacobian_plowrank():
 
         # Test mv
         mv_direct = torch.mv(dense_tensor, dw.get_flat_representation())
+        mv = PMat_lowrank.mv(dw)
         check_tensors(mv_direct,
-                      PMat_lowrank.mv(dw).get_flat_representation())
+                      mv.get_flat_representation())
 
         # Test vTMV
         check_ratio(torch.dot(mv_direct, dw.get_flat_representation()),
                     PMat_lowrank.vTMv(dw))
 
-        # Test solve TODO
+        # Test solve
+        # We will try to recover mv, which is in the span of the
+        # low rank matrix
+        regul = 1e-3
+        mmv = PMat_lowrank.mv(mv)
+        mv_using_inv = PMat_lowrank.solve(mmv, regul=regul)
+        check_tensors(mv.get_flat_representation(),
+                          mv_using_inv.get_flat_representation(), eps=1e-2)
         # Test inv TODO
 
         # Test add, sub, rmul
