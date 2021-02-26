@@ -23,17 +23,17 @@ regularizer = F.vTMv(w - w_a)
 ```
 If diagonal is not sufficiently accurate then you could instead choose a KFAC approximation, by just changing `PMatDiag` to `PMatKFAC` in the above. Note that it internally involves very different operations, depending on the chosen representation (e.g. KFAC, EKFAC, ...).
 
-## Feature requests, bugs or contributions
-
-We welcome any feature request or bug report in the [issue tracker](https://github.com/tfjgeorge/nngeometry/issues).
-
-We also welcome contributions, please submit your PRs!
-
 ## Documentation
 
 You can visit the documentation at https://nngeometry.readthedocs.io.
 
 More example usage are available in the repository https://github.com/tfjgeorge/nngeometry-examples.
+
+## Feature requests, bugs or contributions
+
+We welcome any feature request or bug report in the [issue tracker](https://github.com/tfjgeorge/nngeometry/issues).
+
+We also welcome contributions, please submit your PRs!
 
 ## Citation
 
