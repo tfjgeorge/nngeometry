@@ -257,3 +257,30 @@ def test_pspace_kfac_eigendecomposition():
                 assert angle_v_Mv < 1 + eps and angle_v_Mv > 1 - eps
                 norm_mv = torch.norm(Mv.get_flat_representation())
                 check_ratio(evals[l_id][0][i_a] * evals[l_id][1][i_g], norm_mv)
+
+
+def test_kfac():
+    for get_task in [get_fullyconnect_task, get_conv_task]:
+        loader, lc, parameters, model1, function1, n_output = get_task()
+        _, _, _, model2, function2, _ = get_task()
+
+        generator1 = Jacobian(layer_collection=lc,
+                              model=model1,
+                              function=function1,
+                              n_output=n_output)
+        generator2 = Jacobian(layer_collection=lc,
+                              model=model2,
+                              function=function1,
+                              n_output=n_output)
+        M_kfac1 = PMatKFAC(generator=generator1, examples=loader)
+        M_kfac2 = PMatKFAC(generator=generator2, examples=loader)
+
+        prod = M_kfac1.mm(M_kfac2)
+
+        M_kfac1_tensor = M_kfac1.get_dense_tensor(split_weight_bias=True)
+        M_kfac2_tensor = M_kfac2.get_dense_tensor(split_weight_bias=True)
+
+        prod_tensor = prod.get_dense_tensor(split_weight_bias=True)
+
+        check_tensors(torch.mm(M_kfac1_tensor, M_kfac2_tensor),
+                      prod_tensor)
