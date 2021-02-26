@@ -790,8 +790,11 @@ class PMatLowRank(PMatAbstract):
                      self.data.view(-1, self.data.size(2)).t())
         return torch.norm(A)
 
-    def solve(self, v):
-        raise NotImplementedError
+    def solve(self, b, regul=1e-8):
+        u, s, v = torch.svd(self.data.view(-1, self.data.size(2)))
+        x = torch.mv(v, torch.mv(v.t(), b.get_flat_representation()) /
+                     (s**2 + regul))
+        return PVector(b.layer_collection, vector_repr=x)
 
     def get_diag(self):
         return (self.data**2).sum(dim=(0, 1))

@@ -8,16 +8,14 @@ def check_ratio(vref, v2, eps=1e-3):
 
 def check_tensors(tref, t2, eps=1e-3, only_print_diff=False):
     if torch.norm(tref) == 0:
-        if only_print_diff:
-            print(torch.norm(t2 - tref))
-        else:
-            assert torch.norm(t2 - tref) < eps
+        relative_diff = torch.norm(t2 - tref)
     else:
         relative_diff = torch.norm(t2 - tref) / torch.norm(tref)
-        if only_print_diff:
-            print(relative_diff)
-        else:
-            assert relative_diff < eps
+    if only_print_diff:
+        print(relative_diff)
+    else:
+        assert relative_diff < eps
+    return relative_diff
 
 
 def check_angle(v1, v2, eps=1e-3):
