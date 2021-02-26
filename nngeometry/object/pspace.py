@@ -530,6 +530,24 @@ class PMatKFAC(PMatAbstract):
     def get_eigendecomposition(self):
         return self.evals, self.evecs
 
+    def mm(self, other):
+        """
+        Matrix-matrix product where `other` is another 
+        instance of PMatKFAC
+
+        :param other: Other FIM matrix
+        :type other: :class:`nngeometry.object.PMatKFAC`
+
+        :return: The matrix-matrix product
+        :rtype: :class:`nngeometry.object.PMatKFAC`
+        """
+        prod = dict()
+        for layer_id, (a, g) in self.data.items():
+            (a_other, g_other) = other.data[layer_id]
+            prod[layer_id] = (torch.mm(a, a_other),
+                              torch.mm(g, g_other))
+        return PMatKFAC(self.generator, data=prod)
+
 
 class PMatEKFAC(PMatAbstract):
     """
