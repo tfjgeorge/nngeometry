@@ -35,36 +35,44 @@ def test_FIM_MC_vs_linearization():
     step = 1e-2
 
     for get_task in nonlinear_tasks:
-        quots = []
-        for i in range(10): # repeat to kill statistical fluctuations
-            loader, lc, parameters, model, function, n_output = get_task()
-            model.train()
-            F = FIM_MonteCarlo(layer_collection=lc,
-                               model=model,
-                               loader=loader,
-                               variant='classif_logits',
-                               representation=PMatDense,
-                               trials=10,
-                               function=lambda *d: model(to_device(d[0])))
+        for variant in ['classif_logits', 'classif_logsoftmax']:
+            quots = []
+            for i in range(10): # repeat to kill statistical fluctuations
+                loader, lc, parameters, model, function, n_output = get_task()
+                model.train()
 
-            dw = random_pvector(lc, device=device)
-            dw = step / dw.norm() * dw
+                if variant == 'classif_logits':
+                  f = lambda *d: model(to_device(d[0]))
+                elif variant == 'classif_logsoftmax':
+                  f = lambda *d: torch.log_softmax(model(to_device(d[0])),
+                                                   dim=1)
 
-            output_before = get_output_vector(loader, function)
-            update_model(parameters, dw.get_flat_representation())
-            output_after = get_output_vector(loader, function)
-            update_model(parameters, -dw.get_flat_representation())
+                F = FIM_MonteCarlo(layer_collection=lc,
+                                   model=model,
+                                   loader=loader,
+                                   variant=variant,
+                                   representation=PMatDense,
+                                   trials=10,
+                                   function=f)
 
-            KL = tF.kl_div(tF.log_softmax(output_before, dim=1),
-                           tF.log_softmax(output_after, dim=1),
-                           log_target=True, reduction='batchmean')
+                dw = random_pvector(lc, device=device)
+                dw = step / dw.norm() * dw
 
-            quot = (KL / F.vTMv(dw) * 2) ** .5
+                output_before = get_output_vector(loader, function)
+                update_model(parameters, dw.get_flat_representation())
+                output_after = get_output_vector(loader, function)
+                update_model(parameters, -dw.get_flat_representation())
 
-            quots.append(quot.item())
+                KL = tF.kl_div(tF.log_softmax(output_before, dim=1),
+                               tF.log_softmax(output_after, dim=1),
+                               log_target=True, reduction='batchmean')
 
-        mean_quotient = sum(quots) / len(quots)
-        assert mean_quotient > 1 - 5e-2 and mean_quotient < 1 + 5e-2
+                quot = (KL / F.vTMv(dw) * 2) ** .5
+
+                quots.append(quot.item())
+
+            mean_quotient = sum(quots) / len(quots)
+            assert mean_quotient > 1 - 5e-2 and mean_quotient < 1 + 5e-2
 
 
 def test_FIM_vs_linearization_classif_logits():
