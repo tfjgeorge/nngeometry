@@ -2,10 +2,6 @@ import torch
 import torch.nn.functional as F
 
 
-def get_n_parameters(model):
-    return sum([p.numel() for p in model.parameters()])
-
-
 def per_example_grad_conv(mod, x, gy):
     ks = (mod.weight.size(2), mod.weight.size(3))
     gy_s = gy.size()
