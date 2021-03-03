@@ -64,7 +64,7 @@ def FIM_MonteCarlo(model,
                                                 sampled_targets)
     elif variant == 'classif_logsoftmax':
 
-        def fim_function(input, target):
+        def fim_function(*d):
             log_softmax = function(*d)
             probabilities = torch.exp(log_softmax)
             sampled_targets = torch.multinomial(probabilities, trials,
