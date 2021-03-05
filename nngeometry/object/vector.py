@@ -20,7 +20,7 @@ def random_pvector_dict(layer_collection, device=None):
             v_dict[layer_id] = (torch.normal(0, 1, layer.weight.size, device=device),
                                 torch.normal(0, 1, layer.bias.size, device=device))
         else:
-            v_dict[layer_id] = (torch.normal(0, 1, layer.weight.size, device=device))
+            v_dict[layer_id] = (torch.normal(0, 1, layer.weight.size, device=device),)
     return PVector(layer_collection, dict_repr=v_dict)
 
 
@@ -216,7 +216,7 @@ class PVector:
             sum_p = 0
             for l_id, l in self.layer_collection.layers.items():
                 sum_p += (self.dict_repr[l_id][0]**p).sum()
-                if l.bias:
+                if l.bias is not None:
                     sum_p += (self.dict_repr[l_id][1]**p).sum()
             return sum_p ** (1/p)
         else:
