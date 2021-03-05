@@ -12,7 +12,7 @@ class ConvNet(nn.Module):
     def __init__(self):
         super(ConvNet, self).__init__()
         self.conv1 = nn.Conv2d(1, 5, 3, 1)
-        self.conv2 = nn.Conv2d(5, 6, 4, 1)
+        self.conv2 = nn.Conv2d(5, 6, 4, 1, bias=False)
         self.conv3 = nn.Conv2d(6, 7, 3, 1)
         self.fc1 = nn.Linear(1*1*7, 10)
 
