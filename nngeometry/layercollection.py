@@ -99,10 +99,10 @@ class LayerCollection:
                                   num_channels=mod.num_channels)
         #New Output based on the 2D Convolution for the R2 Conv Layer
         elif mod_class == 'R2Conv':
-            return R2LayerConv(  in_channels=mod.in_channels,
+            return R2LayerConv(in_channels=mod.in_channels,
                             out_channels=mod.out_features,
                             kernel_size=mod.kernel_size,
-                            bias=(mod.bias is not None)
+                            bias=(mod.bias is not None))
 
     def numel(self):
         """
