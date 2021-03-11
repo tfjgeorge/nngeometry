@@ -38,7 +38,7 @@ class LayerCollection:
         for layer, mod in model.named_modules():
             mod_class = mod.__class__.__name__
             if mod_class in ['Linear', 'Conv2d', 'BatchNorm1d',
-                             'BatchNorm2d', 'GroupNorm']:
+                             'BatchNorm2d', 'GroupNorm', 'R2Conv']:
                 lc.add_layer('%s.%s' % (layer, str(mod)),
                              LayerCollection._module_to_layer(mod))
             elif not ignore_unsupported_layers:
@@ -72,7 +72,7 @@ class LayerCollection:
         """
         if module.__class__.__name__ not in \
                 ['Linear', 'Conv2d', 'BatchNorm1d',
-                 'BatchNorm2d', 'GroupNorm']:
+                 'BatchNorm2d', 'GroupNorm', 'R2Conv']:
             raise NotImplementedError
         for layer, mod in model.named_modules():
             if mod is module:
@@ -97,6 +97,12 @@ class LayerCollection:
         elif mod_class == 'GroupNorm':
             return GroupNormLayer(num_groups=mod.num_groups,
                                   num_channels=mod.num_channels)
+        #New Output based on the 2D Convolution for the R2 Conv Layer
+        elif mod_class == 'R2Conv':
+            return R2LayerConv(  in_channels=mod.in_channels,
+                            out_channels=mod.out_features,
+                            kernel_size=mod.kernel_size,
+                            bias=(mod.bias is not None)
 
     def numel(self):
         """
@@ -123,6 +129,25 @@ class LayerCollection:
 
 class AbstractLayer(ABC):
     pass
+
+class R2ConvLayer(AbstractLayer):
+
+    def __init__(self, in_channels, out_channels, kernel_size, bias=True):
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.weight = Parameter(out_channels, in_channels, kernel_size[0],
+                                kernel_size[1])
+        if bias:
+            self.bias = Parameter(out_channels)
+        else:
+            self.bias = None
+
+    def numel(self):
+        if self.bias is not None:
+            return self.weight.numel() + self.bias.numel()
+        else:
+            return self.weight.numel()
 
 
 class Conv2dLayer(AbstractLayer):
