@@ -38,7 +38,7 @@ class LayerCollection:
         for layer, mod in model.named_modules():
             mod_class = mod.__class__.__name__
             if mod_class in ['Linear', 'Conv2d', 'BatchNorm1d',
-                             'BatchNorm2d', 'GroupNorm', 'R2Conv']:
+                             'BatchNorm2d', 'GroupNorm', 'R2Conv', 'MaskModule']:
                 lc.add_layer('%s.%s' % (layer, str(mod)),
                              LayerCollection._module_to_layer(mod))
             elif not ignore_unsupported_layers:
@@ -72,7 +72,7 @@ class LayerCollection:
         """
         if module.__class__.__name__ not in \
                 ['Linear', 'Conv2d', 'BatchNorm1d',
-                 'BatchNorm2d', 'GroupNorm', 'R2Conv']:
+                 'BatchNorm2d', 'GroupNorm', 'R2Conv', 'MaskModule']:
             raise NotImplementedError
         for layer, mod in model.named_modules():
             if mod is module:
@@ -103,6 +103,8 @@ class LayerCollection:
                             out_channels=mod.out_features,
                             kernel_size=mod.kernel_size,
                             bias=(mod.bias is not None))
+        elif mod_class == 'MaskModule':
+            return MaskModule(num_features=mod.num_features)
 
     def numel(self):
         """
