@@ -280,6 +280,25 @@ class PVector:
                            vector_repr=(self.get_flat_representation() -
                                         other.get_flat_representation()))
 
+    def dot(self, other):
+        """
+        Computes the dot product between `self` and `other`
+
+        :param other: The other `PVector`
+        """
+        if self.vector_repr is not None or other.vector_repr is not None:
+            return torch.dot(self.get_flat_representation(),
+                             other.get_flat_representation())
+        else:
+            dot_ = 0
+            for l_id, l in self.layer_collection.layers.items():
+                if l.bias is not None:
+                    dot_ += torch.dot(self.dict_repr[l_id][1],
+                                      other.dict_repr[l_id][1])
+                dot_ += torch.dot(self.dict_repr[l_id][0].view(-1),
+                                  other.dict_repr[l_id][0].view(-1))
+            return dot_
+
 
 class FVector:
     """
