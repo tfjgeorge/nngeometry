@@ -185,3 +185,33 @@ def test_from_to_model():
 
     for p2, p3 in zip(model2.parameters(), model3.parameters()):
         check_tensors(p2, p3)
+
+
+def test_dot():
+    model = ConvNet()
+    layer_collection = LayerCollection.from_model(model)
+    r1 = random_pvector(layer_collection)
+    r2 = random_pvector(layer_collection)
+    dotr1r2 = r1.dot(r2)
+    check_ratio(torch.dot(r1.get_flat_representation(),
+                          r2.get_flat_representation()),
+                dotr1r2)
+
+    r1 = random_pvector_dict(layer_collection)
+    r2 = random_pvector_dict(layer_collection)
+    dotr1r2 = r1.dot(r2)
+    check_ratio(torch.dot(r1.get_flat_representation(),
+                          r2.get_flat_representation()),
+                dotr1r2)
+
+
+    r1 = random_pvector(layer_collection)
+    r2 = random_pvector_dict(layer_collection)
+    dotr1r2 = r1.dot(r2)
+    dotr2r1 = r2.dot(r1)
+    check_ratio(torch.dot(r1.get_flat_representation(),
+                          r2.get_flat_representation()),
+                dotr1r2)
+    check_ratio(torch.dot(r1.get_flat_representation(),
+                          r2.get_flat_representation()),
+                dotr2r1)
