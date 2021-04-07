@@ -2,6 +2,7 @@ import torch
 from abc import ABC, abstractmethod
 from ..maths import kronecker
 from .vector import PVector
+from nngeometry.generator.dummy import DummyGenerator
 
 
 class PMatAbstract(ABC):
@@ -102,6 +103,16 @@ class PMatAbstract(ABC):
         it is ambiguous, then the following test will fail
         """
         assert (data is not None) ^ (examples is not None)
+
+    def __getstate__(self):
+        return {'layer_collection': self.generator.layer_collection,
+                'data': self.data,
+                'device': self.generator.get_device()}
+
+    def __setstate__(self, state_dict):
+        self.data = state_dict['data']
+        self.generator = DummyGenerator(state_dict['layer_collection'],
+                                        state_dict['device'])
 
 
 class PMatDense(PMatAbstract):

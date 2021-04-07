@@ -120,6 +120,14 @@ class LayerCollection:
             elif layer.bias:
                 yield layerid_to_module[layer_id].bias
 
+    def __eq__(self, other):
+        for layer_id in set(self.layers.keys()).union(set(other.layers.keys())):
+            if (layer_id not in other.layers.keys()
+                    or layer_id not in self.layers.keys()
+                    or self.layers[layer_id] != other.layers[layer_id]):
+                return False
+        return True
+
 
 class AbstractLayer(ABC):
     pass
@@ -144,6 +152,11 @@ class Conv2dLayer(AbstractLayer):
         else:
             return self.weight.numel()
 
+    def __eq__(self, other):
+        return (self.in_channels == other.in_channels and
+                self.out_channels == other.out_channels and
+                self.kernel_size == other.kernel_size)
+
 
 class LinearLayer(AbstractLayer):
 
@@ -162,6 +175,10 @@ class LinearLayer(AbstractLayer):
         else:
             return self.weight.numel()
 
+    def __eq__(self, other):
+        return (self.in_features == other.in_features and
+                self.out_features == other.out_features)
+
 
 class BatchNorm1dLayer(AbstractLayer):
 
@@ -172,6 +189,9 @@ class BatchNorm1dLayer(AbstractLayer):
 
     def numel(self):
         return self.weight.numel() + self.bias.numel()
+
+    def __eq__(self, other):
+        return self.num_features == other.num_features
 
 
 class BatchNorm2dLayer(AbstractLayer):
@@ -184,6 +204,9 @@ class BatchNorm2dLayer(AbstractLayer):
     def numel(self):
         return self.weight.numel() + self.bias.numel()
 
+    def __eq__(self, other):
+        return self.num_features == other.num_features
+
 
 class GroupNormLayer(AbstractLayer):
 
@@ -194,6 +217,9 @@ class GroupNormLayer(AbstractLayer):
 
     def numel(self):
         return self.weight.numel() + self.bias.numel()
+
+    def __eq__(self, other):
+        return self.num_channels == other.num_channels
 
 
 class Parameter(object):
