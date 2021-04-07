@@ -6,6 +6,7 @@ from utils import check_tensors
 from nngeometry.object.pspace import (PMatDense, PMatDiag, PMatBlockDiag,
                                       PMatLowRank, PMatQuasiDiag)
 from nngeometry.generator import Jacobian
+from nngeometry.object.vector import PVector
 
 def test_layercollection_pkl():
     _, lc, _, _, _, _ = get_conv_gn_task()
@@ -48,3 +49,18 @@ def test_PMat_pickle():
             PMat_pkl = pkl.load(f)
 
         check_tensors(PMat.get_dense_tensor(), PMat_pkl.get_dense_tensor())
+
+
+def test_PVector_pickle():
+    _, _, _, model, _, _ = get_conv_task()
+
+    vec = PVector.from_model(model)
+
+    with open('/tmp/PVec.pkl', 'wb') as f:
+        pkl.dump(vec, f)
+
+    with open('/tmp/PVec.pkl', 'rb') as f:
+        vec_pkl = pkl.load(f)
+
+    check_tensors(vec.get_flat_representation(),
+                  vec_pkl.get_flat_representation())
