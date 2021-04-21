@@ -299,6 +299,13 @@ class PVector:
                                   other.dict_repr[l_id][0].view(-1))
             return dot_
 
+    def size(self):
+        """
+        The size of the PVector, or equivalently the number of
+        parameters of the layer collection
+        """
+        return (self.layer_collection.numel(), )
+
 
 class FVector:
     """
