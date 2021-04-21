@@ -215,3 +215,13 @@ def test_dot():
     check_ratio(torch.dot(r1.get_flat_representation(),
                           r2.get_flat_representation()),
                 dotr2r1)
+
+def test_size():
+    model = ConvNet()
+    layer_collection = LayerCollection.from_model(model)
+
+    v = random_pvector(layer_collection)
+    assert v.size() == v.get_flat_representation().size()
+
+    v = random_pvector_dict(layer_collection)
+    assert v.size() == v.get_flat_representation().size()
