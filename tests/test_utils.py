@@ -1,11 +1,7 @@
 import torch
-from nngeometry.object.vector import (PVector, random_pvector,
-                                      random_pvector_dict)
-from nngeometry.layercollection import LayerCollection
+from nngeometry.object.vector import PVector, random_pvector
 from nngeometry.utils import grad
-import torch.nn as nn
-import torch.nn.functional as tF
-from utils import check_ratio, check_tensors
+from utils import check_tensors
 import pytest
 from tasks import get_conv_gn_task, to_device
 
