@@ -45,6 +45,25 @@ class FCNet(nn.Module):
         return self.net(x)
 
 
+class FCNetSegmentation(nn.Module):
+    def __init__(self, out_size=10):
+        super(FCNetSegmentation, self).__init__()
+        layers = []
+        self.out_size = out_size
+        sizes = [18*18, 10, 10, 18*18*out_size]
+        for s_in, s_out in zip(sizes[:-1], sizes[1:]):
+            layers.append(nn.Linear(s_in, s_out))
+            layers.append(nn.ReLU())
+        # remove last nonlinearity:
+        layers.pop()
+        self.net = nn.Sequential(*layers)
+
+    def forward(self, x):
+        x = x[:, :, 5:-5, 5:-5].contiguous()
+        x = x.view(x.size(0), -1)
+        return self.net(x).view(-1, self.out_size, 18, 18)
+
+
 class ConvNet(nn.Module):
     def __init__(self, normalization='none'):
         super(ConvNet, self).__init__()
@@ -335,3 +354,21 @@ def get_fullyconnect_onlylast_task():
     parameters = net.net[-1].parameters()
 
     return train_loader, layer_collection, parameters, net, output_fn, n_output
+
+def get_fullyconnect_segm_task():
+    train_set = get_mnist()
+    train_set = Subset(train_set, range(1000))
+    train_loader = DataLoader(
+        dataset=train_set,
+        batch_size=300,
+        shuffle=False)
+    net = FCNetSegmentation(out_size=3)
+    net.to(device)
+    net.eval()
+
+    def output_fn(input, target):
+        return net(to_device(input))
+
+    layer_collection = LayerCollection.from_model(net)
+    return (train_loader, layer_collection, net.parameters(),
+            net, output_fn, 3)

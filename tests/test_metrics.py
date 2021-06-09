@@ -6,7 +6,8 @@ from tasks import (get_linear_fc_task, get_linear_conv_task,
                    get_fullyconnect_onlylast_task,
                    get_fullyconnect_task, get_fullyconnect_bn_task,
                    get_batchnorm_nonlinear_task,
-                   get_conv_task, get_conv_bn_task, get_conv_gn_task)
+                   get_conv_task, get_conv_bn_task, get_conv_gn_task,
+                   get_fullyconnect_segm_task)
 from tasks import to_device
 from nngeometry.object.map import (PushForwardDense, PushForwardImplicit,
                                    PullBackDense)
@@ -110,6 +111,7 @@ def test_FIM_vs_linearization_classif_logits():
         mean_quotient = sum(quots) / len(quots)
         assert mean_quotient > 1 - 5e-2 and mean_quotient < 1 + 5e-2
 
+
 def test_FIM_vs_linearization_regression():
     step = 1e-2
 
@@ -138,6 +140,45 @@ def test_FIM_vs_linearization_regression():
                     output_before.size(0))
 
             quot = (diff / F.vTMv(dw)) ** .5
+
+            quots.append(quot.item())
+
+        mean_quotient = sum(quots) / len(quots)
+        assert mean_quotient > 1 - 5e-2 and mean_quotient < 1 + 5e-2
+
+
+def test_FIM_MC_vs_linearization_segmentation():
+    step = 1e-2
+    variant = 'segmentation_logits'
+    for get_task in [get_fullyconnect_segm_task]:
+        quots = []
+        for i in range(10): # repeat to kill statistical fluctuations
+            loader, lc, parameters, model, function, n_output = get_task()
+            model.train()
+
+            f = lambda *d: model(to_device(d[0]))
+
+            F = FIM_MonteCarlo(layer_collection=lc,
+                                model=model,
+                                loader=loader,
+                                variant=variant,
+                                representation=PMatDense,
+                                trials=10,
+                                function=f)
+
+            dw = random_pvector(lc, device=device)
+            dw = step / dw.norm() * dw
+
+            output_before = get_output_vector(loader, function)
+            update_model(parameters, dw.get_flat_representation())
+            output_after = get_output_vector(loader, function)
+            update_model(parameters, -dw.get_flat_representation())
+
+            KL = tF.kl_div(tF.log_softmax(output_before, dim=1),
+                            tF.log_softmax(output_after, dim=1),
+                            log_target=True, reduction='batchmean')
+
+            quot = (KL / F.vTMv(dw) * 2) ** .5
 
             quots.append(quot.item())
 

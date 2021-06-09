@@ -31,6 +31,8 @@ def FIM_MonteCarlo(model,
         Variant to use depending on how you interpret your function.
         Possible choices are:
          - 'classif_logits' when using logits for classification
+         - 'classif_logsoftmax' when using log_softmax values for classification
+         - 'segmentation_logits' when using logits in a segmentation task
          - 'regression' when using a gaussian regression model
     trials : int, optional (default=1)
         Number of trials for Monte Carlo sampling
@@ -71,6 +73,22 @@ def FIM_MonteCarlo(model,
                                                 replacement=True)
             return trials ** -.5 * torch.gather(log_softmax, 1,
                                                 sampled_targets)
+    elif variant == 'segmentation_logits':
+
+        def fim_function(*d):
+            log_softmax = torch.log_softmax(function(*d), dim=1)
+            s_mb, s_c, s_h, s_w = log_softmax.size()
+            log_softmax = log_softmax.permute(0, 2, 3, 1).contiguous() \
+                .view(s_mb * s_h * s_w, s_c)
+            probabilities = torch.exp(log_softmax)
+            sampled_indices = torch.multinomial(probabilities, trials,
+                                                replacement=True)
+            sampled_targets = torch.gather(log_softmax, 1,
+                                        sampled_indices)
+            sampled_targets = sampled_targets.view(s_mb, s_h * s_w, trials) \
+                .sum(dim=1)
+            return trials ** -.5 * sampled_targets
+                                                
     else:
         raise NotImplementedError
 
