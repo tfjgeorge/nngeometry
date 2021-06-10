@@ -15,6 +15,9 @@ if torch.cuda.is_available():
 
     def to_device(tensor):
         return tensor.to(device)
+
+    def to_device_model(model):
+        model.to('cuda')
 else:
     device = 'cpu'
 
@@ -22,6 +25,9 @@ else:
     # causes numerical instability
     def to_device(tensor):
         return tensor.double()
+
+    def to_device_model(model):
+        model.double()
 
 class FCNet(nn.Module):
     def __init__(self, out_size=10, normalization='none'):
@@ -43,6 +49,25 @@ class FCNet(nn.Module):
         x = x[:, :, 5:-5, 5:-5].contiguous()
         x = x.view(x.size(0), -1)
         return self.net(x)
+
+
+class FCNetSegmentation(nn.Module):
+    def __init__(self, out_size=10):
+        super(FCNetSegmentation, self).__init__()
+        layers = []
+        self.out_size = out_size
+        sizes = [18*18, 10, 10, 4*4*out_size]
+        for s_in, s_out in zip(sizes[:-1], sizes[1:]):
+            layers.append(nn.Linear(s_in, s_out))
+            layers.append(nn.ReLU())
+        # remove last nonlinearity:
+        layers.pop()
+        self.net = nn.Sequential(*layers)
+
+    def forward(self, x):
+        x = x[:, :, 5:-5, 5:-5].contiguous()
+        x = x.view(x.size(0), -1)
+        return self.net(x).view(-1, self.out_size, 4, 4)
 
 
 class ConvNet(nn.Module):
@@ -95,7 +120,7 @@ def get_linear_fc_task():
         batch_size=300,
         shuffle=False)
     net = LinearFCNet()
-    net.to(device)
+    to_device_model(net)
     net.eval()
 
     def output_fn(input, target):
@@ -128,7 +153,7 @@ def get_linear_conv_task():
         batch_size=300,
         shuffle=False)
     net = LinearConvNet()
-    net.to(device)
+    to_device_model(net)
     net.eval()
 
     def output_fn(input, target):
@@ -163,7 +188,7 @@ def get_batchnorm_fc_linear_task():
         batch_size=300,
         shuffle=False)
     net = BatchNormFCLinearNet()
-    net.to(device)
+    to_device_model(net)
     net.eval()
 
     def output_fn(input, target):
@@ -205,7 +230,7 @@ def get_batchnorm_conv_linear_task():
         batch_size=300,
         shuffle=False)
     net = BatchNormConvLinearNet()
-    net.to(device)
+    to_device_model(net)
     net.eval()
 
     def output_fn(input, target):
@@ -258,7 +283,7 @@ def get_batchnorm_nonlinear_task():
         batch_size=1000,
         shuffle=False)
     net = BatchNormNonLinearNet()
-    net.to(device)
+    to_device_model(net)
     net.eval()
 
     def output_fn(input, target):
@@ -284,7 +309,7 @@ def get_fullyconnect_task(normalization='none'):
         batch_size=300,
         shuffle=False)
     net = FCNet(out_size=3, normalization=normalization)
-    net.to(device)
+    to_device_model(net)
     net.eval()
 
     def output_fn(input, target):
@@ -307,7 +332,7 @@ def get_conv_task(normalization='none'):
         batch_size=300,
         shuffle=False)
     net = ConvNet(normalization=normalization)
-    net.to(device)
+    to_device_model(net)
     net.eval()
 
     def output_fn(input, target):
@@ -335,3 +360,21 @@ def get_fullyconnect_onlylast_task():
     parameters = net.net[-1].parameters()
 
     return train_loader, layer_collection, parameters, net, output_fn, n_output
+
+def get_fullyconnect_segm_task():
+    train_set = get_mnist()
+    train_set = Subset(train_set, range(1000))
+    train_loader = DataLoader(
+        dataset=train_set,
+        batch_size=300,
+        shuffle=False)
+    net = FCNetSegmentation(out_size=3)
+    to_device_model(net)
+    net.eval()
+
+    def output_fn(input, target):
+        return net(to_device(input))
+
+    layer_collection = LayerCollection.from_model(net)
+    return (train_loader, layer_collection, net.parameters(),
+            net, output_fn, 3)
