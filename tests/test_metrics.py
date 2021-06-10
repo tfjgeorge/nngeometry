@@ -1,28 +1,15 @@
 import torch
 import torch.nn.functional as tF
-from tasks import (get_linear_fc_task, get_linear_conv_task,
-                   get_batchnorm_fc_linear_task,
-                   get_batchnorm_conv_linear_task,
-                   get_fullyconnect_onlylast_task,
-                   get_fullyconnect_task, get_fullyconnect_bn_task,
-                   get_batchnorm_nonlinear_task,
-                   get_conv_task, get_conv_bn_task, get_conv_gn_task,
+from tasks import (get_fullyconnect_task, get_conv_task, get_conv_gn_task,
                    get_fullyconnect_segm_task)
-from tasks import to_device
-from nngeometry.object.map import (PushForwardDense, PushForwardImplicit,
-                                   PullBackDense)
-from nngeometry.object.fspace import FMatDense
-from nngeometry.object.pspace import (PMatDense, PMatDiag, PMatBlockDiag,
-                                      PMatImplicit, PMatLowRank, PMatQuasiDiag)
-from nngeometry.generator import Jacobian
+from tasks import to_device, device
+from nngeometry.object.pspace import PMatDense
 from nngeometry.metrics import FIM, FIM_MonteCarlo
-from nngeometry.object.vector import random_pvector, random_fvector, PVector
-from utils import check_ratio, check_tensors, check_angle
-from test_jacobian import update_model, get_output_vector, device
+from nngeometry.object.vector import random_pvector
+from test_jacobian import update_model, get_output_vector
 
 nonlinear_tasks = [get_conv_gn_task, get_fullyconnect_task, get_conv_task]
 
-import numpy as np
 import pytest
 
 
