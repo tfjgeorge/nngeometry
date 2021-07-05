@@ -630,7 +630,7 @@ class Jacobian:
         handles = []
         for m in mods:
             handles.append(m.register_forward_pre_hook(hook_x))
-            handles.append(m.register_backward_hook(hook_gy))
+            handles.append(m.register_full_backward_hook(hook_gy))
         return handles
 
     def _hook_savex(self, mod, i):
