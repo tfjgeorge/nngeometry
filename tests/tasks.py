@@ -358,10 +358,6 @@ def get_conv_gn_task():
     return get_conv_task(normalization='group_norm')
 
 
-def get_conv_wn_task():
-    return get_conv_task(normalization='weight_norm')
-
-
 def get_fullyconnect_onlylast_task():
     train_loader, lc_full, _, net, output_fn, n_output = \
         get_fullyconnect_task()
