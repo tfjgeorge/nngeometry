@@ -3,13 +3,13 @@ from torch.nn import Linear, Module
 from torch.nn import functional as F
 import torch
 
-class Cosine(Linear):
+class Cosine1d(Linear):
     """Computes the cosine similarity between rows of the weight matrix
     and the incoming data
     """
 
     def __init__(self, in_features: int, out_features: int) -> None:
-        super(Cosine, self).__init__(in_features=in_features,
+        super(Cosine1d, self).__init__(in_features=in_features,
                                      out_features=out_features,
                                      bias=False)
 
