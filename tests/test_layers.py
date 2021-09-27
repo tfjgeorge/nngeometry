@@ -1,9 +1,9 @@
-from nngeometry.layers import Cosine, WeightNorm1d
+from nngeometry.layers import Cosine1d, WeightNorm1d
 import torch
 from utils import check_ratio
 
 def test_cosine():
-    cosine_layer = Cosine(2, 3)
+    cosine_layer = Cosine1d(2, 3)
 
     # extract vector parallel to cosine_layer.weight[0, :]
     x_0 = cosine_layer.weight[0, :]
