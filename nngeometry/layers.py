@@ -1,6 +1,7 @@
 from torch import Tensor
 from torch.nn import Linear, Module
 from torch.nn import functional as F
+from torch.nn.parameter import Parameter
 import torch
 
 class Cosine1d(Linear):
@@ -32,4 +33,26 @@ class WeightNorm1d(Linear):
         return F.linear(input,
                         self.weight / torch.norm(self.weight, dim=1, keepdim=True))
 
-# class Affine(Module):
+
+class Affine1d(Module):
+    def __init__(self, n_features: int, bias: bool = True,
+                 device=None, dtype=None) -> None:
+        factory_kwargs = {'device': device, 'dtype': dtype}
+        super(Affine1d, self).__init__()
+        self.n_features = n_features
+        self.weight = Parameter(torch.ones(n_features, **factory_kwargs))
+        if bias:
+            self.bias = Parameter(torch.zeros(n_features, **factory_kwargs))
+        else:
+            self.register_parameter('bias', None)
+    
+    def forward(self, input: Tensor) -> Tensor:
+        if self.bias is not None:
+            return input * self.weight.unsqueeze(0) + self.bias
+        else:
+            return input * self.weight.unsqueeze(0)
+
+    def extra_repr(self) -> str:
+        return 'n_features={}, bias={}'.format(
+            self.n_features, self.bias is not None
+        )

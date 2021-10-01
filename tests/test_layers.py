@@ -1,6 +1,6 @@
-from nngeometry.layers import Cosine1d, WeightNorm1d
+from nngeometry.layers import Cosine1d, WeightNorm1d, Affine1d
 import torch
-from utils import check_ratio
+from utils import check_ratio, check_tensors
 
 def test_cosine():
     cosine_layer = Cosine1d(2, 3)
@@ -45,3 +45,25 @@ def test_weightnorm1d():
     check_ratio(mult0 * torch.norm(x_0), out[0, 0])
     # this one is orthogonal hence cos(angle) = 0
     check_ratio(0, out[1, 1])
+
+
+def test_affine1d():
+    affine_layer = Affine1d(3)
+
+    x = torch.randn((5, 3))
+
+    out = affine_layer(x)
+    affine_layer = Affine1d(3)
+    manual = affine_layer.weight.unsqueeze(0) * x
+    check_tensors(manual + affine_layer.bias, out)
+
+
+    affine_layer = Affine1d(3, bias=False)
+
+    out = affine_layer(x)
+    affine_layer = Affine1d(3)
+    manual = affine_layer.weight.unsqueeze(0) * x
+    check_tensors(manual, out)
+
+    print(affine_layer)
+
