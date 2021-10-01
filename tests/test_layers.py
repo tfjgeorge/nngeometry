@@ -53,17 +53,21 @@ def test_affine1d():
     x = torch.randn((5, 3))
 
     out = affine_layer(x)
-    affine_layer = Affine1d(3)
     manual = affine_layer.weight.unsqueeze(0) * x
     check_tensors(manual + affine_layer.bias, out)
 
+    check_tensors(affine_layer.weight,
+                  torch.ones_like(affine_layer.weight))
+    check_tensors(affine_layer.bias,
+                  torch.zeros_like(affine_layer.bias))
 
     affine_layer = Affine1d(3, bias=False)
 
     out = affine_layer(x)
-    affine_layer = Affine1d(3)
     manual = affine_layer.weight.unsqueeze(0) * x
     check_tensors(manual, out)
+
+    assert affine_layer.bias is None
 
     print(affine_layer)
 

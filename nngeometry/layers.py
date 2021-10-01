@@ -1,5 +1,5 @@
 from torch import Tensor
-from torch.nn import Linear, Module
+from torch.nn import Linear, Module, init
 from torch.nn import functional as F
 from torch.nn.parameter import Parameter
 import torch
@@ -35,17 +35,28 @@ class WeightNorm1d(Linear):
 
 
 class Affine1d(Module):
+    """Computes the transformation out = weight * input + bias
+    where * is the elementwise multiplication. This is similar to the
+    scaling and translation given by parameters gamma and beta in batch norm
+
+    """
     def __init__(self, n_features: int, bias: bool = True,
                  device=None, dtype=None) -> None:
         factory_kwargs = {'device': device, 'dtype': dtype}
         super(Affine1d, self).__init__()
         self.n_features = n_features
-        self.weight = Parameter(torch.ones(n_features, **factory_kwargs))
+        self.weight = Parameter(torch.empty(n_features, **factory_kwargs))
         if bias:
-            self.bias = Parameter(torch.zeros(n_features, **factory_kwargs))
+            self.bias = Parameter(torch.empty(n_features, **factory_kwargs))
         else:
             self.register_parameter('bias', None)
-    
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        init.ones_(self.weight)
+        if self.bias is not None:
+            init.zeros_(self.bias)
+
     def forward(self, input: Tensor) -> Tensor:
         if self.bias is not None:
             return input * self.weight.unsqueeze(0) + self.bias
