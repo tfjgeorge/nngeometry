@@ -630,7 +630,7 @@ class Jacobian:
         handles = []
         for m in mods:
             handles.append(m.register_forward_pre_hook(hook_x))
-            handles.append(m.register_full_backward_hook(hook_gy))
+            handles.append(m.register_backward_hook(hook_gy))
         return handles
 
     def _hook_savex(self, mod, i):
@@ -704,6 +704,14 @@ class Jacobian:
             self.grads[self.i_output, self.start:self.start+bs,
                        start_p:start_p+mod.bias.numel()] \
                 .add_(gy.sum(dim=(2, 3)))
+        elif mod_class == 'WeightNorm1d':
+            norm = torch.norm(mod.weight, dim=1, keepdim=True)
+            gw = torch.bmm(gy.unsqueeze(2) / norm,
+                              x.unsqueeze(1))
+            wn2_out = F.linear(x, mod.weight / norm**2)
+            gw -= (gy * wn2_out).unsqueeze(2) * mod.weight.unsqueeze(0)
+            self.grads[self.i_output, self.start:self.start+bs,
+                       start_p:start_p+mod.weight.numel()].add_(gw.view(bs, -1))
         else:
             raise NotImplementedError
 
@@ -758,6 +766,14 @@ class Jacobian:
             start_p += mod.weight.numel()
             self.diag_m[start_p: start_p+mod.bias.numel()] \
                 .add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
+        elif mod_class == 'WeightNorm1d':
+            norm = torch.norm(mod.weight, dim=1, keepdim=True)
+            gw = torch.bmm(gy.unsqueeze(2) / norm,
+                              x.unsqueeze(1))
+            wn2_out = F.linear(x, mod.weight / norm**2)
+            gw -= (gy * wn2_out).unsqueeze(2) * mod.weight.unsqueeze(0)
+            self.diag_m[start_p: start_p+mod.weight.numel()] \
+                .add_((gw**2).sum(dim=0).view(-1))
         else:
             raise NotImplementedError
 
@@ -802,7 +818,7 @@ class Jacobian:
         if mod_class == 'Linear':
             gw = torch.bmm(gy.unsqueeze(2), x.unsqueeze(1)).view(bs, -1)
             if self.layer_collection[layer_id].bias is not None:
-                gw = torch.cat([gw.view(bs, -1), gy.view(bs, -1)], dim=1)
+                gw = torch.cat([gw, gy.view(bs, -1)], dim=1)
             block.add_(torch.mm(gw.t(), gw))
         elif mod_class == 'Conv2d':
             gw = per_example_grad_conv(mod, x, gy).view(bs, -1)
@@ -830,6 +846,14 @@ class Jacobian:
                                         None, None, mod.eps)
             gw = (gy * x_normalized).sum(dim=(2, 3))
             gw = torch.cat([gw, gy.sum(dim=(2, 3))], dim=1)
+            block.add_(torch.mm(gw.t(), gw))
+        elif mod_class == 'WeightNorm1d':
+            norm = torch.norm(mod.weight, dim=1, keepdim=True)
+            gw = torch.bmm(gy.unsqueeze(2) / norm,
+                              x.unsqueeze(1))
+            wn2_out = F.linear(x, mod.weight / norm**2)
+            gw -= (gy * wn2_out).unsqueeze(2) * mod.weight.unsqueeze(0)
+            gw = gw.view(bs, -1)
             block.add_(torch.mm(gw.t(), gw))
         else:
             raise NotImplementedError

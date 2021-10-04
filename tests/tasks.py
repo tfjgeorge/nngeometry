@@ -4,6 +4,7 @@ import torch.nn.functional as tF
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 from nngeometry.layercollection import LayerCollection
+from nngeometry.layers import WeightNorm1d, WeightNorm2d
 import os
 
 default_datapath = 'tmp'
@@ -74,14 +75,20 @@ class ConvNet(nn.Module):
     def __init__(self, normalization='none'):
         super(ConvNet, self).__init__()
         self.normalization = normalization
-        self.conv1 = nn.Conv2d(1, 6, 3, 2, bias=(normalization == 'none'))
+        if False and normalization == 'weight_norm':
+            self.wn1 = WeightNorm2d(1, 6, 3, 2)
+        else:
+            self.conv1 = nn.Conv2d(1, 6, 3, 2, bias=(normalization == 'none'))
         if self.normalization == 'batch_norm':
             self.bn1 = nn.BatchNorm2d(6)
         elif self.normalization == 'group_norm':
             self.gn1 = nn.GroupNorm(2, 6)
         self.conv2 = nn.Conv2d(6, 5, 4, 1)
         self.conv3 = nn.Conv2d(5, 7, 3, 1, 1)
-        self.fc1 = nn.Linear(1*1*7, 4)
+        if self.normalization == 'weight_norm':
+            self.wn2 = WeightNorm1d(7, 4)
+        else:
+            self.fc1 = nn.Linear(7, 4)
         if self.normalization == 'batch_norm':
             self.bn2 = nn.BatchNorm1d(4)
         self.fc2 = nn.Linear(4, 3)
@@ -91,17 +98,23 @@ class ConvNet(nn.Module):
             x = tF.relu(self.bn1(self.conv1(x)))
         elif self.normalization == 'group_norm':
             x = tF.relu(self.gn1(self.conv1(x)))
+        elif False and self.normalization == 'weight_norm':
+            x = tF.relu(self.wn1(x))
         else:
             x = tF.relu(self.conv1(x))
         x = tF.max_pool2d(x, 2, 2)
         x = tF.relu(self.conv2(x))
         x = tF.max_pool2d(x, 2, 2)
         x = tF.relu(self.conv3(x))
-        x = self.fc1(x.view(-1, 1*1*7))
+        x = x.view(-1, 1*1*7)
         if self.normalization == 'batch_norm':
-            x = self.fc2(self.bn2(x))
+            x = self.bn2(self.fc1(x))
+        elif self.normalization == 'weight_norm':
+            x = self.wn2(x)
         else:
-            x = self.fc2(x)
+            x = self.fc1(x)
+
+        x = self.fc2(tF.relu(x))
         return x
 
 
@@ -360,6 +373,10 @@ def get_conv_gn_task():
 
 def get_conv_wn_task():
     return get_conv_task(normalization='weight_norm')
+
+
+def get_conv_cosine_task():
+    return get_conv_task(normalization='cosine')
 
 
 def get_fullyconnect_onlylast_task():

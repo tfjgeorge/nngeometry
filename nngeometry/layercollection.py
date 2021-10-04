@@ -38,7 +38,7 @@ class LayerCollection:
         for layer, mod in model.named_modules():
             mod_class = mod.__class__.__name__
             if mod_class in ['Linear', 'Conv2d', 'BatchNorm1d',
-                             'BatchNorm2d', 'GroupNorm']:
+                             'BatchNorm2d', 'GroupNorm', 'WeightNorm1d']:
                 lc.add_layer('%s.%s' % (layer, str(mod)),
                              LayerCollection._module_to_layer(mod))
             elif not ignore_unsupported_layers:
@@ -72,7 +72,7 @@ class LayerCollection:
         """
         if module.__class__.__name__ not in \
                 ['Linear', 'Conv2d', 'BatchNorm1d',
-                 'BatchNorm2d', 'GroupNorm']:
+                 'BatchNorm2d', 'GroupNorm', 'WeightNorm1d']:
             raise NotImplementedError
         for layer, mod in model.named_modules():
             if mod is module:
@@ -97,6 +97,13 @@ class LayerCollection:
         elif mod_class == 'GroupNorm':
             return GroupNormLayer(num_groups=mod.num_groups,
                                   num_channels=mod.num_channels)
+        elif mod_class == 'WeightNorm1d':
+            return WeightNorm1dLayer(in_features=mod.in_features,
+                                     out_features=mod.out_features)
+        elif mod_class == 'WeightNorm2d':
+            return WeightNorm2dLayer(in_channels=mod.in_channels,
+                                     out_channels=mod.out_channels,
+                                     kernel_size=mod.kernel_size)
 
     def numel(self):
         """
@@ -220,6 +227,41 @@ class GroupNormLayer(AbstractLayer):
 
     def __eq__(self, other):
         return self.num_channels == other.num_channels
+
+
+class WeightNorm1dLayer(AbstractLayer):
+
+    def __init__(self, in_features, out_features):
+        self.in_features = in_features
+        self.out_features = out_features
+        self.weight = Parameter(out_features, in_features)
+        self.bias = None
+
+    def numel(self):
+        return self.weight.numel()
+
+    def __eq__(self, other):
+        return (self.in_features == other.in_features and
+                self.out_features == other.out_features)
+
+
+class WeightNorm2dLayer(AbstractLayer):
+
+    def __init__(self, in_channels, out_channels, kernel_size):
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.weight = Parameter(out_channels, in_channels, kernel_size[0],
+                                kernel_size[1])
+        self.bias = None
+
+    def numel(self):
+        return self.weight.numel()
+
+    def __eq__(self, other):
+        return (self.in_channels == other.in_channels and
+                self.out_channels == other.out_channels and
+                self.kernel_size == other.kernel_size)
 
 
 class Parameter(object):

@@ -1,5 +1,5 @@
 from torch import Tensor
-from torch.nn import Linear, Module, init
+from torch.nn import Linear, Conv2d, Module, init
 from torch.nn import functional as F
 from torch.nn.parameter import Parameter
 import torch
@@ -32,6 +32,21 @@ class WeightNorm1d(Linear):
     def forward(self, input: Tensor) -> Tensor:
         return F.linear(input,
                         self.weight / torch.norm(self.weight, dim=1, keepdim=True))
+
+
+class WeightNorm2d(Conv2d):
+    """Computes an 2d convolution using a kernel weight matrix
+    with rows normalized with norm 1
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        assert 'bias' not in kwargs or kwargs['bias'] is False
+        super(WeightNorm2d, self).__init__(*args, **kwargs)
+
+    def forward(self, input: Tensor) -> Tensor:
+        return self._conv_forward(input,
+                                  self.weight / torch.norm(self.weight, dim=(1, 2, 3),
+                                                           keepdim=True))
 
 
 class Affine1d(Module):
