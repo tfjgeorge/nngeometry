@@ -32,15 +32,18 @@ else:
 
 class FCNet(nn.Module):
     def __init__(self, out_size=10, normalization='none'):
+        if normalization not in ['none', 'batch_norm', 'weight_norm']:
+            raise NotImplementedError
         super(FCNet, self).__init__()
         layers = []
         sizes = [18*18, 10, 10, out_size]
         for s_in, s_out in zip(sizes[:-1], sizes[1:]):
-            layers.append(nn.Linear(s_in, s_out, bias=(normalization == 'none')))
+            if normalization == 'weight_norm':
+                layers.append(WeightNorm1d(s_in, s_out))
+            else:
+                layers.append(nn.Linear(s_in, s_out, bias=(normalization == 'none')))
             if normalization == 'batch_norm':
                 layers.append(nn.BatchNorm1d(s_out))
-            elif normalization != 'none':
-                raise NotImplementedError
             layers.append(nn.ReLU())
         # remove last nonlinearity:
         layers.pop()
@@ -116,6 +119,22 @@ class ConvNet(nn.Module):
 
         x = self.fc2(tF.relu(x))
         return x
+
+
+class SmallConvNet(nn.Module):
+    def __init__(self, normalization='none'):
+        super(SmallConvNet, self).__init__()
+        self.normalization = normalization
+        if normalization == 'weight_norm':
+            self.l1 = WeightNorm2d(1, 6, 3, 2)
+            self.l2 = WeightNorm2d(6, 3, 2, 3)
+        else:
+            raise NotImplementedError
+
+    def forward(self, x):
+        x = tF.relu(self.l1(x))
+        x = tF.relu(self.l2(x))
+        return x.sum(dim=(2, 3))
 
 
 class LinearFCNet(nn.Module):
@@ -344,6 +363,10 @@ def get_fullyconnect_bn_task():
     return get_fullyconnect_task(normalization='batch_norm')
 
 
+def get_fullyconnect_wn_task():
+    return get_fullyconnect_task(normalization='weight_norm')
+
+
 def get_conv_task(normalization='none'):
     train_set = get_mnist()
     train_set = Subset(train_set, range(1000))
@@ -378,6 +401,30 @@ def get_conv_wn_task():
 def get_conv_cosine_task():
     return get_conv_task(normalization='cosine')
 
+def get_conv_task(normalization='none', small=False):
+    train_set = get_mnist()
+    train_set = Subset(train_set, range(1000))
+    train_loader = DataLoader(
+        dataset=train_set,
+        batch_size=300,
+        shuffle=False)
+    if small:
+        net = SmallConvNet(normalization=normalization)
+    else:
+        net = ConvNet(normalization=normalization)
+    to_device_model(net)
+    net.eval()
+
+    def output_fn(input, target):
+        return net(to_device(input))
+
+    layer_collection = LayerCollection.from_model(net)
+    return (train_loader, layer_collection, net.parameters(),
+            net, output_fn, 3)
+
+
+def get_small_conv_wn_task():
+    return get_conv_task(normalization='batch_norm', small=True)
 
 def get_fullyconnect_onlylast_task():
     train_loader, lc_full, _, net, output_fn, n_output = \

@@ -708,10 +708,11 @@ class Jacobian:
             norm = torch.norm(mod.weight, dim=1, keepdim=True)
             gw = torch.bmm(gy.unsqueeze(2) / norm,
                               x.unsqueeze(1))
-            wn2_out = F.linear(x, mod.weight / norm**2)
+            wn2_out = F.linear(x, mod.weight / norm**3)
             gw -= (gy * wn2_out).unsqueeze(2) * mod.weight.unsqueeze(0)
             self.grads[self.i_output, self.start:self.start+bs,
-                       start_p:start_p+mod.weight.numel()].add_(gw.view(bs, -1))
+                       start_p:start_p+mod.weight.numel()] \
+                           .add_(gw.view(bs, -1))
         else:
             raise NotImplementedError
 
