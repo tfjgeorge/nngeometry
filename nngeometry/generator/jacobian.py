@@ -1002,6 +1002,24 @@ class Jacobian:
                        self.e_outer:self.e_outer+bs_outer] += \
                     torch.mm(gy_inner.sum(dim=(2, 3)),
                              gy_outer.sum(dim=(2, 3)).t())
+            elif mod_class == 'WeightNorm1d':
+                norm = torch.norm(mod.weight, dim=1, keepdim=True)
+                gw_inner = torch.bmm(gy_inner.unsqueeze(2) / norm,
+                                x_inner.unsqueeze(1))
+                wn2_out = F.linear(x_inner, mod.weight / norm**3)
+                gw_inner -= (gy_inner * wn2_out).unsqueeze(2) * \
+                    mod.weight.unsqueeze(0)
+                gw_outer = torch.bmm(gy_outer.unsqueeze(2) / norm,
+                                x_outer.unsqueeze(1))
+                wn2_out = F.linear(x_outer, mod.weight / norm**3)
+                gw_outer -= (gy_outer * wn2_out).unsqueeze(2) * \
+                    mod.weight.unsqueeze(0)
+                self.G[self.i_output_inner,
+                       self.e_inner:self.e_inner+bs_inner,
+                       self.i_output_outer,
+                       self.e_outer:self.e_outer+bs_outer] += \
+                    torch.mm(gw_inner.view(bs_inner, -1),
+                             gw_outer.view(bs_outer, -1).t())
             else:
                 raise NotImplementedError
 
@@ -1099,6 +1117,14 @@ class Jacobian:
                              v_weight))
                 self._Jv[self.i_output, self.start:self.start+bs].add_(
                     torch.mv(gy.sum(dim=(2, 3)), v_bias))
+            elif mod_class == 'WeightNorm1d':
+                norm = torch.norm(mod.weight, dim=1, keepdim=True)
+                gw = torch.bmm(gy.unsqueeze(2) / norm,
+                                x.unsqueeze(1))
+                wn2_out = F.linear(x, mod.weight / norm**3)
+                gw -= (gy * wn2_out).unsqueeze(2) * mod.weight.unsqueeze(0)
+                self._Jv[self.i_output, self.start:self.start+bs].add_(
+                    torch.mv(gw.view(bs, -1), v_weight.view(-1)))
             else:
                 raise NotImplementedError
 
@@ -1134,6 +1160,13 @@ class Jacobian:
                                         None, None, mod.eps)
             self._trace += ((gy * x_normalized).sum(dim=(2, 3))**2).sum()
             self._trace += (gy.sum(dim=(2, 3))**2).sum()
+        elif mod_class == 'WeightNorm1d':
+            norm = torch.norm(mod.weight, dim=1, keepdim=True)
+            gw = torch.bmm(gy.unsqueeze(2) / norm,
+                              x.unsqueeze(1))
+            wn2_out = F.linear(x, mod.weight / norm**3)
+            gw -= (gy * wn2_out).unsqueeze(2) * mod.weight.unsqueeze(0)
+            self._trace += (gw**2).sum()
         else:
             raise NotImplementedError
 
