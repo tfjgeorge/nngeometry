@@ -771,7 +771,7 @@ class Jacobian:
             norm = torch.norm(mod.weight, dim=1, keepdim=True)
             gw = torch.bmm(gy.unsqueeze(2) / norm,
                               x.unsqueeze(1))
-            wn2_out = F.linear(x, mod.weight / norm**2)
+            wn2_out = F.linear(x, mod.weight / norm**3)
             gw -= (gy * wn2_out).unsqueeze(2) * mod.weight.unsqueeze(0)
             self.diag_m[start_p: start_p+mod.weight.numel()] \
                 .add_((gw**2).sum(dim=0).view(-1))
@@ -852,7 +852,7 @@ class Jacobian:
             norm = torch.norm(mod.weight, dim=1, keepdim=True)
             gw = torch.bmm(gy.unsqueeze(2) / norm,
                               x.unsqueeze(1))
-            wn2_out = F.linear(x, mod.weight / norm**2)
+            wn2_out = F.linear(x, mod.weight / norm**3)
             gw -= (gy * wn2_out).unsqueeze(2) * mod.weight.unsqueeze(0)
             gw = gw.view(bs, -1)
             block.add_(torch.mm(gw.t(), gw))
