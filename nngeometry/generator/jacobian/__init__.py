@@ -651,21 +651,11 @@ class Jacobian:
         layer_id = self.m_to_l[mod]
         layer = self.layer_collection[layer_id]
         start_p = self.layer_collection.p_pos[layer_id]
-        if mod_class == 'Linear':
+        if mod_class in ['Linear', 'Conv2d']:
             FactoryMap[layer.__class__].flat_grad(
                 self.grads[self.i_output, self.start:self.start+bs,
                            start_p:start_p+layer.numel()],
                 mod, layer, x, gy, bs)
-        elif mod_class == 'Conv2d':
-            indiv_gw = per_example_grad_conv(mod, x, gy)
-            self.grads[self.i_output, self.start:self.start+bs,
-                       start_p:start_p+mod.weight.numel()] \
-                .add_(indiv_gw.view(bs, -1))
-            if self.layer_collection[layer_id].bias is not None:
-                start_p += mod.weight.numel()
-                self.grads[self.i_output, self.start:self.start+bs,
-                           start_p:start_p+mod.bias.numel()] \
-                    .add_(gy.sum(dim=(2, 3)))
         elif mod_class == 'BatchNorm1d':
             self._check_bn_training(mod)
             x_normalized = F.batch_norm(x, mod.running_mean,
@@ -713,18 +703,10 @@ class Jacobian:
         layer_id = self.m_to_l[mod]
         layer = self.layer_collection[layer_id]
         start_p = self.layer_collection.p_pos[layer_id]
-        if mod_class == 'Linear':
+        if mod_class in ['Linear', 'Conv2d']:
             FactoryMap[layer.__class__].diag(
                 self.diag_m[start_p:start_p+layer.numel()],
                 mod, layer, x, gy, bs)
-        elif mod_class == 'Conv2d':
-            indiv_gw = per_example_grad_conv(mod, x, gy)
-            self.diag_m[start_p:start_p+mod.weight.numel()] \
-                .add_((indiv_gw**2).sum(dim=0).view(-1))
-            if self.layer_collection[layer_id].bias is not None:
-                start_p += mod.weight.numel()
-                self.diag_m[start_p:start_p+mod.bias.numel()] \
-                    .add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
         elif mod_class == 'BatchNorm1d':
             self._check_bn_training(mod)
             x_normalized = F.batch_norm(x, mod.running_mean,
@@ -797,14 +779,9 @@ class Jacobian:
         layer_id = self.m_to_l[mod]
         layer = self.layer_collection[layer_id]
         block = self._blocks[layer_id]
-        if mod_class == 'Linear':
+        if mod_class in ['Linear', 'Conv2d']:
             FactoryMap[layer.__class__].layer_block(block,
                 mod, layer, x, gy, bs)
-        elif mod_class == 'Conv2d':
-            gw = per_example_grad_conv(mod, x, gy).view(bs, -1)
-            if self.layer_collection[layer_id].bias is not None:
-                gw = torch.cat([gw, gy.sum(dim=(2, 3)).view(bs, -1)], dim=1)
-            block.add_(torch.mm(gw.t(), gw))
         elif mod_class == 'BatchNorm1d':
             self._check_bn_training(mod)
             x_normalized = F.batch_norm(x, mod.running_mean,
@@ -837,35 +814,13 @@ class Jacobian:
         layer_id = self.m_to_l[mod]
         layer = self.layer_collection[layer_id]
         block = self._blocks[layer_id]
-        if mod_class == 'Linear':
+        if mod_class in ['Linear', 'Conv2d']:
             FactoryMap[layer.__class__].kfac_gg(block[1],
                 mod, layer, x, gy)
             if self.i_output == 0:
                 # do this only once if n_output > 1
                 FactoryMap[layer.__class__].kfac_xx(block[0],
                     mod, layer, x, gy)
-
-        elif mod_class == 'Conv2d':
-            ks = (mod.weight.size(2), mod.weight.size(3))
-            if self.i_output == 0:
-                # do this only once if n_output > 1
-                # A_tilda in KFC
-                A_tilda = F.unfold(x, kernel_size=ks, stride=mod.stride,
-                                   padding=mod.padding, dilation=mod.dilation)
-                # A_tilda is bs * #locations x #parameters
-                A_tilda = A_tilda.permute(0, 2, 1).contiguous() \
-                    .view(-1, A_tilda.size(1))
-                if self.layer_collection[layer_id].bias is not None:
-                    A_tilda = torch.cat([A_tilda,
-                                         torch.ones_like(A_tilda[:, :1])],
-                                        dim=1)
-                # Omega_hat in KFC
-                block[0].add_(torch.mm(A_tilda.t(), A_tilda))
-            spatial_locations = gy.size(2) * gy.size(3)
-            os = gy.size(1)
-            # DS_tilda in KFC
-            DS_tilda = gy.permute(0, 2, 3, 1).contiguous().view(-1, os)
-            block[1].add_(torch.mm(DS_tilda.t(), DS_tilda) / spatial_locations)
         else:
             raise NotImplementedError
 
@@ -882,7 +837,7 @@ class Jacobian:
             x_inner = self.x_inner[mod]
             bs_inner = x_inner.size(0)
             bs_outer = x_outer.size(0)
-            if mod_class == 'Linear':
+            if mod_class in ['Linear', 'Conv2d']:
                 FactoryMap[layer.__class__].kxy(
                     self.G[self.i_output_inner,
                            self.e_inner:self.e_inner+bs_inner,
@@ -890,22 +845,6 @@ class Jacobian:
                            self.e_outer:self.e_outer+bs_outer],
                     mod, layer, x_inner, gy_inner, bs_inner,
                     x_outer, gy_outer, bs_outer)
-            elif mod_class == 'Conv2d':
-                indiv_gw_inner = per_example_grad_conv(mod, x_inner, gy_inner)
-                indiv_gw_outer = per_example_grad_conv(mod, x_outer, gy_outer)
-                self.G[self.i_output_inner,
-                       self.e_inner:self.e_inner+bs_inner,
-                       self.i_output_outer,
-                       self.e_outer:self.e_outer+bs_outer] += \
-                    torch.mm(indiv_gw_inner.view(bs_inner, -1),
-                             indiv_gw_outer.view(bs_outer, -1).t())
-                if self.layer_collection[layer_id].bias is not None:
-                    self.G[self.i_output_inner,
-                           self.e_inner:self.e_inner+bs_inner,
-                           self.i_output_outer,
-                           self.e_outer:self.e_outer+bs_outer] += \
-                        torch.mm(gy_inner.sum(dim=(2, 3)),
-                                 gy_outer.sum(dim=(2, 3)).t())
             elif mod_class == 'BatchNorm1d':
                 self._check_bn_training(mod)
                 x_norm_inner = F.batch_norm(x_inner, mod.running_mean,
@@ -981,32 +920,9 @@ class Jacobian:
         layer = self.layer_collection[layer_id]
         x = self.xs[mod]
         evecs_a, evecs_g = self._kfe[layer_id]
-        if mod_class == 'Linear':
+        if mod_class in ['Linear', 'Conv2d']:
             FactoryMap[layer.__class__].kfe_diag(self._diags[layer_id],
                 mod, layer, x, gy, evecs_a, evecs_g)
-        elif mod_class == 'Conv2d':
-            ks = (mod.weight.size(2), mod.weight.size(3))
-            gy_s = gy.size()
-            bs = gy_s[0]
-            # project x to kfe
-            x_unfold = F.unfold(x, kernel_size=ks, stride=mod.stride,
-                                padding=mod.padding, dilation=mod.dilation)
-            x_unfold_s = x_unfold.size()
-            x_unfold = x_unfold.view(bs, x_unfold_s[1], -1).permute(0, 2, 1)\
-                .contiguous().view(-1, x_unfold_s[1])
-            if mod.bias is not None:
-                x_unfold = torch.cat([x_unfold,
-                                      torch.ones_like(x_unfold[:, :1])], dim=1)
-            x_kfe = torch.mm(x_unfold, evecs_a)
-
-            # project gy to kfe
-            gy = gy.view(bs, gy_s[1], -1).permute(0, 2, 1).contiguous()
-            gy_kfe = torch.mm(gy.view(-1, gy_s[1]), evecs_g)
-            gy_kfe = gy_kfe.view(bs, -1, gy_s[1]).permute(0, 2, 1).contiguous()
-
-            indiv_gw = torch.bmm(gy_kfe.view(bs, gy_s[1], -1),
-                                 x_kfe.view(bs, -1, x_kfe.size(1)))
-            self._diags[layer_id].add_((indiv_gw**2).sum(dim=0).view(-1))
         else:
             raise NotImplementedError
 
@@ -1023,18 +939,10 @@ class Jacobian:
             if layer.bias is not None:
                 v_bias = self._v[layer_id][1]
 
-            if mod_class == 'Linear':
+            if mod_class in ['Linear', 'Conv2d']:
                 FactoryMap[layer.__class__].Jv(
                     self._Jv[self.i_output, self.start:self.start+bs],
                     mod, layer, x, gy, bs, v_weight, v_bias)
-            elif mod_class == 'Conv2d':
-                gy2 = F.conv2d(x, v_weight, stride=mod.stride,
-                               padding=mod.padding, dilation=mod.dilation)
-                self._Jv[self.i_output, self.start:self.start+bs].add_(
-                    (gy * gy2).view(bs, -1).sum(dim=1))
-                if self.layer_collection[layer_id].bias is not None:
-                    self._Jv[self.i_output, self.start:self.start+bs].add_(
-                        torch.mv(gy.sum(dim=(2, 3)), v_bias))
             elif mod_class == 'BatchNorm1d':
                 self._check_bn_training(mod)
                 x_normalized = F.batch_norm(x, mod.running_mean,
@@ -1074,14 +982,9 @@ class Jacobian:
         layer_id = self.m_to_l[mod]
         layer = self.layer_collection.layers[layer_id]
         bs = x.size(0)
-        if mod_class == 'Linear':
+        if mod_class in ['Linear', 'Conv2d']:
             FactoryMap[layer.__class__].trace(
                 self._trace, mod, layer, x, gy, bs)
-        elif mod_class == 'Conv2d':
-            indiv_gw = per_example_grad_conv(mod, x, gy)
-            self._trace += (indiv_gw**2).sum()
-            if mod.bias is not None:
-                self._trace += (gy.sum(dim=(2, 3))**2).sum()
         elif mod_class == 'BatchNorm1d':
             self._check_bn_training(mod)
             x_normalized = F.batch_norm(x, mod.running_mean,
