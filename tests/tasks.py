@@ -385,3 +385,38 @@ def get_fullyconnect_segm_task():
     layer_collection = LayerCollection.from_model(net)
     return (train_loader, layer_collection, net.parameters(),
             net, output_fn, 3)
+
+class ConvNetWithSkipConnection(nn.Module):
+    def __init__(self):
+        super(ConvNetWithSkipConnection, self).__init__()
+        self.conv1 = nn.Conv2d(1, 2, 3, 1, 1)
+        self.conv2 = nn.Conv2d(2, 2, 3, 1, 1)
+        self.conv3 = nn.Conv2d(2, 2, 3, 1, 1)
+        self.conv4 = nn.Conv2d(2, 3, 3, 1, 1)
+
+    def forward(self, x):
+        x_before_skip = tF.relu(self.conv1(x))
+        x_block = tF.relu(self.conv2(x_before_skip))
+        x_after_skip = tF.relu(self.conv3(x_block))
+        x = tF.relu(self.conv4(x_after_skip + x_before_skip))
+        x = x.sum(axis=(2, 3))
+        return x
+
+
+def get_conv_skip_task():
+    train_set = get_mnist()
+    train_set = Subset(train_set, range(1000))
+    train_loader = DataLoader(
+        dataset=train_set,
+        batch_size=300,
+        shuffle=False)
+    net = ConvNetWithSkipConnection()
+    to_device_model(net)
+    net.eval()
+
+    def output_fn(input, target):
+        return net(to_device(input))
+
+    layer_collection = LayerCollection.from_model(net)
+    return (train_loader, layer_collection, net.parameters(),
+            net, output_fn, 3)
