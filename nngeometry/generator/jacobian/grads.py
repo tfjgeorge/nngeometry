@@ -6,25 +6,29 @@ import torch.nn.functional as F
 
 class JacobianFactory:
     @classmethod
-    def diag(cls, buffer, mod, layer, x, gy, bs):
+    def diag(cls, buffer, mod, layer, x, gy):
+        bs = x.size(0)
         buffer_flat = torch.zeros(bs, layer.numel(), device=buffer.device)
-        cls.flat_grad(buffer_flat, mod, layer, x, gy, bs)
+        cls.flat_grad(buffer_flat, mod, layer, x, gy)
         buffer.add_((buffer_flat**2).sum(dim=0))
 
     @classmethod
-    def trace(cls, buffer, mod, layer, x, gy, bs):
+    def trace(cls, buffer, mod, layer, x, gy):
         buffer_diag = torch.zeros(layer.numel(), device=buffer.device)
-        cls.diag(buffer_diag, mod, layer, x, gy, bs)
+        cls.diag(buffer_diag, mod, layer, x, gy)
         buffer.add_(buffer_diag.sum())
 
     @classmethod
-    def layer_block(cls, buffer, mod, layer, x, gy, bs):
+    def layer_block(cls, buffer, mod, layer, x, gy):
+        bs = x.size(0)
         buffer_flat = torch.zeros(bs, layer.numel(), device=buffer.device)
-        cls.flat_grad(buffer_flat, mod, layer, x, gy, bs)
+        cls.flat_grad(buffer_flat, mod, layer, x, gy)
         buffer.add_(torch.mm(buffer_flat.t(), buffer_flat))
 
     @classmethod
-    def kxy(cls, buffer, mod, layer, x_i, gy_i, bs_i, x_o, gy_o, bs_o):
+    def kxy(cls, buffer, mod, layer, x_i, gy_i, x_o, gy_o):
+        bs_i = x_i.size(0)
+        bs_o = x_o.size(0)
         buffer_flat_i = torch.zeros(bs_i, layer.numel(), device=buffer.device)
         buffer_flat_o = torch.zeros(bs_o, layer.numel(), device=buffer.device)
         cls.flat_grad(buffer_flat_i, mod, layer, x_i, gy_i, bs_i)
@@ -32,7 +36,8 @@ class JacobianFactory:
         buffer.add_(torch.mm(buffer_flat_i, buffer_flat_o.t()))
 
     @classmethod
-    def Jv(cls, buffer, mod, layer, x, gy, bs, v, v_bias):
+    def Jv(cls, buffer, mod, layer, x, gy, v, v_bias):
+        bs = x.size(0)
         buffer_flat = torch.zeros(bs, layer.numel(), device=buffer.device)
         cls.flat_grad(buffer_flat, mod, layer, x, gy, bs)
         v = v.view(-1)
@@ -43,7 +48,8 @@ class JacobianFactory:
 
 class LinearJacobianFactory(JacobianFactory):
     @classmethod
-    def flat_grad(cls, buffer, mod, layer, x, gy, bs):
+    def flat_grad(cls, buffer, mod, layer, x, gy):
+        bs = x.size(0)
         w_numel = layer.weight.numel()
         buffer[:, :w_numel] \
             .add_(torch.bmm(gy.unsqueeze(2), x.unsqueeze(1)).view(bs, -1))
@@ -51,27 +57,27 @@ class LinearJacobianFactory(JacobianFactory):
             buffer[:, w_numel:].add_(gy)
 
     @classmethod
-    def diag(cls, buffer, mod, layer, x, gy, bs):
+    def diag(cls, buffer, mod, layer, x, gy):
         w_numel = layer.weight.numel()
         buffer[:w_numel].add_(torch.mm(gy.t()**2, x**2).view(-1))
         if layer.bias is not None:
             buffer[w_numel:].add_((gy**2).sum(dim=0))
 
     @classmethod
-    def kxy(cls, buffer, mod, layer, x_i, gy_i, bs_i, x_o, gy_o, bs_o):
+    def kxy(cls, buffer, mod, layer, x_i, gy_i, x_o, gy_o):
         buffer.add_(torch.mm(x_i, x_o.t()) *
                     torch.mm(gy_i, gy_o.t()))
         if layer.bias is not None:
             buffer.add_(torch.mm(gy_i, gy_o.t()))
 
     @classmethod
-    def Jv(cls, buffer, mod, layer, x, gy, bs, v, v_bias):
+    def Jv(cls, buffer, mod, layer, x, gy, v, v_bias):
         buffer.add_((torch.mm(x, v.t()) * gy).sum(dim=1))
         if layer.bias is not None:
             buffer.add_(torch.mv(gy.contiguous(), v_bias))
 
     @classmethod
-    def trace(cls, buffer, mod, layer, x, gy, bs):
+    def trace(cls, buffer, mod, layer, x, gy):
         buffer.add_(torch.mm(gy.t()**2, x**2).sum())
         if layer.bias is not None:
             buffer.add_((gy**2).sum())
@@ -105,7 +111,8 @@ class LinearJacobianFactory(JacobianFactory):
 
 class Conv2dJacobianFactory(JacobianFactory):
     @classmethod
-    def flat_grad(cls, buffer, mod, layer, x, gy, bs):
+    def flat_grad(cls, buffer, mod, layer, x, gy):
+        bs = x.size(0)
         w_numel = layer.weight.numel()
         indiv_gw = per_example_grad_conv(mod, x, gy)
         buffer[:, :w_numel].add_(indiv_gw.view(bs, -1))
@@ -113,7 +120,8 @@ class Conv2dJacobianFactory(JacobianFactory):
             buffer[:, w_numel:].add_(gy.sum(dim=(2, 3)))
             
     @classmethod
-    def Jv(cls, buffer, mod, layer, x, gy, bs, v, v_bias):
+    def Jv(cls, buffer, mod, layer, x, gy, v, v_bias):
+        bs = x.size(0)
         gy2 = F.conv2d(x, v, stride=mod.stride,
                        padding=mod.padding, dilation=mod.dilation)
         buffer.add_((gy * gy2).view(bs, -1).sum(dim=1))

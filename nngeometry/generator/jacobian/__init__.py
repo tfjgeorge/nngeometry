@@ -655,7 +655,7 @@ class Jacobian:
             FactoryMap[layer.__class__].flat_grad(
                 self.grads[self.i_output, self.start:self.start+bs,
                            start_p:start_p+layer.numel()],
-                mod, layer, x, gy, bs)
+                mod, layer, x, gy)
         elif mod_class == 'BatchNorm1d':
             self._check_bn_training(mod)
             x_normalized = F.batch_norm(x, mod.running_mean,
@@ -706,7 +706,7 @@ class Jacobian:
         if mod_class in ['Linear', 'Conv2d']:
             FactoryMap[layer.__class__].diag(
                 self.diag_m[start_p:start_p+layer.numel()],
-                mod, layer, x, gy, bs)
+                mod, layer, x, gy)
         elif mod_class == 'BatchNorm1d':
             self._check_bn_training(mod)
             x_normalized = F.batch_norm(x, mod.running_mean,
@@ -741,17 +741,13 @@ class Jacobian:
             raise NotImplementedError
 
     def _hook_compute_quasidiag(self, mod, grad_input, grad_output):
-        mod_class = mod.__class__.__name__
         gy = grad_output[0]
         x = self.xs[mod]
         layer_id = self.m_to_l[mod]
         layer = self.layer_collection[layer_id]
         diag, cross = self._blocks[layer_id]
 
-        if mod_class in ['Linear', 'Conv2d']:
-            FactoryMap[layer.__class__].quasidiag(diag, cross, mod, layer, x, gy)
-        else:
-            raise NotImplementedError
+        FactoryMap[layer.__class__].quasidiag(diag, cross, mod, layer, x, gy)
 
     def _hook_compute_layer_blocks(self, mod, grad_input, grad_output):
         mod_class = mod.__class__.__name__
@@ -763,7 +759,7 @@ class Jacobian:
         block = self._blocks[layer_id]
         if mod_class in ['Linear', 'Conv2d']:
             FactoryMap[layer.__class__].layer_block(block,
-                mod, layer, x, gy, bs)
+                mod, layer, x, gy)
         elif mod_class == 'BatchNorm1d':
             self._check_bn_training(mod)
             x_normalized = F.batch_norm(x, mod.running_mean,
@@ -825,8 +821,7 @@ class Jacobian:
                            self.e_inner:self.e_inner+bs_inner,
                            self.i_output_outer,
                            self.e_outer:self.e_outer+bs_outer],
-                    mod, layer, x_inner, gy_inner, bs_inner,
-                    x_outer, gy_outer, bs_outer)
+                    mod, layer, x_inner, gy_inner, x_outer, gy_outer)
             elif mod_class == 'BatchNorm1d':
                 self._check_bn_training(mod)
                 x_norm_inner = F.batch_norm(x_inner, mod.running_mean,
@@ -924,7 +919,7 @@ class Jacobian:
             if mod_class in ['Linear', 'Conv2d']:
                 FactoryMap[layer.__class__].Jv(
                     self._Jv[self.i_output, self.start:self.start+bs],
-                    mod, layer, x, gy, bs, v_weight, v_bias)
+                    mod, layer, x, gy, v_weight, v_bias)
             elif mod_class == 'BatchNorm1d':
                 self._check_bn_training(mod)
                 x_normalized = F.batch_norm(x, mod.running_mean,
@@ -966,7 +961,7 @@ class Jacobian:
         bs = x.size(0)
         if mod_class in ['Linear', 'Conv2d']:
             FactoryMap[layer.__class__].trace(
-                self._trace, mod, layer, x, gy, bs)
+                self._trace, mod, layer, x, gy)
         elif mod_class == 'BatchNorm1d':
             self._check_bn_training(mod)
             x_normalized = F.batch_norm(x, mod.running_mean,
