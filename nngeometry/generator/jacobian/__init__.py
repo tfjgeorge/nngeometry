@@ -621,12 +621,6 @@ class Jacobian:
 
         return FVector(vector_repr=Jv)
 
-    def _check_bn_training(self, mod):
-        # check that BN layers are in eval mode
-        if mod.training:
-            raise NotImplementedError('I don\'t know what to do with BN ' +
-                                      'layers in training mode')
-
     def _add_hooks(self, hook_x, hook_gy, mods):
         handles = []
         for m in mods:
@@ -644,101 +638,26 @@ class Jacobian:
             self.x_inner[mod] = i[0]
 
     def _hook_compute_flat_grad(self, mod, grad_input, grad_output):
-        mod_class = mod.__class__.__name__
         gy = grad_output[0]
         x = self.xs[mod]
         bs = x.size(0)
         layer_id = self.m_to_l[mod]
         layer = self.layer_collection[layer_id]
         start_p = self.layer_collection.p_pos[layer_id]
-        if mod_class in ['Linear', 'Conv2d']:
-            FactoryMap[layer.__class__].flat_grad(
-                self.grads[self.i_output, self.start:self.start+bs,
-                           start_p:start_p+layer.numel()],
-                mod, layer, x, gy)
-        elif mod_class == 'BatchNorm1d':
-            self._check_bn_training(mod)
-            x_normalized = F.batch_norm(x, mod.running_mean,
-                                        mod.running_var,
-                                        None, None, mod.training,
-                                        momentum=0.)
+        FactoryMap[layer.__class__].flat_grad(
             self.grads[self.i_output, self.start:self.start+bs,
-                       start_p:start_p+mod.weight.numel()] \
-                .add_(gy * x_normalized)
-            start_p += mod.weight.numel()
-            self.grads[self.i_output, self.start:self.start+bs,
-                       start_p:start_p+mod.bias.numel()] \
-                .add_(gy)
-        elif mod_class == 'BatchNorm2d':
-            self._check_bn_training(mod)
-            x_normalized = F.batch_norm(x, mod.running_mean,
-                                        mod.running_var,
-                                        None, None, mod.training,
-                                        momentum=0.)
-            self.grads[self.i_output, self.start:self.start+bs,
-                       start_p:start_p+mod.weight.numel()] \
-                .add_((gy * x_normalized).sum(dim=(2, 3)))
-            start_p += mod.weight.numel()
-            self.grads[self.i_output, self.start:self.start+bs,
-                       start_p:start_p+mod.bias.numel()] \
-                .add_(gy.sum(dim=(2, 3)))
-        elif mod_class == 'GroupNorm':
-            x_normalized = F.group_norm(x, mod.num_groups,
-                                        eps=mod.eps)
-            self.grads[self.i_output, self.start:self.start+bs,
-                       start_p:start_p+mod.weight.numel()] \
-                .add_((gy * x_normalized).sum(dim=(2, 3)))
-            start_p += mod.weight.numel()
-            self.grads[self.i_output, self.start:self.start+bs,
-                       start_p:start_p+mod.bias.numel()] \
-                .add_(gy.sum(dim=(2, 3)))
-        else:
-            raise NotImplementedError
+                        start_p:start_p+layer.numel()],
+            mod, layer, x, gy)
 
     def _hook_compute_diag(self, mod, grad_input, grad_output):
-        mod_class = mod.__class__.__name__
         gy = grad_output[0]
         x = self.xs[mod]
-        bs = x.size(0)
         layer_id = self.m_to_l[mod]
         layer = self.layer_collection[layer_id]
         start_p = self.layer_collection.p_pos[layer_id]
-        if mod_class in ['Linear', 'Conv2d']:
-            FactoryMap[layer.__class__].diag(
-                self.diag_m[start_p:start_p+layer.numel()],
-                mod, layer, x, gy)
-        elif mod_class == 'BatchNorm1d':
-            self._check_bn_training(mod)
-            x_normalized = F.batch_norm(x, mod.running_mean,
-                                        mod.running_var,
-                                        None, None, mod.training)
-            self.diag_m[start_p:start_p+mod.weight.numel()] \
-                .add_((gy**2 * x_normalized**2).sum(dim=0).view(-1))
-            start_p += mod.weight.numel()
-            self.diag_m[start_p: start_p+mod.bias.numel()] \
-                .add_((gy**2).sum(dim=0))
-        elif mod_class == 'BatchNorm2d':
-            self._check_bn_training(mod)
-            x_normalized = F.batch_norm(x, mod.running_mean,
-                                        mod.running_var,
-                                        None, None, mod.training)
-            self.diag_m[start_p:start_p+mod.weight.numel()] \
-                .add_(((gy * x_normalized).sum(dim=(2, 3))**2).sum(dim=0)
-                      .view(-1))
-            start_p += mod.weight.numel()
-            self.diag_m[start_p: start_p+mod.bias.numel()] \
-                .add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
-        elif mod_class == 'GroupNorm':
-            x_normalized = F.group_norm(x, mod.num_groups,
-                                        None, None, eps=mod.eps)
-            self.diag_m[start_p:start_p+mod.weight.numel()] \
-                .add_(((gy * x_normalized).sum(dim=(2, 3))**2).sum(dim=0)
-                      .view(-1))
-            start_p += mod.weight.numel()
-            self.diag_m[start_p: start_p+mod.bias.numel()] \
-                .add_((gy.sum(dim=(2, 3))**2).sum(dim=0))
-        else:
-            raise NotImplementedError
+        FactoryMap[layer.__class__].diag(
+            self.diag_m[start_p:start_p+layer.numel()],
+            mod, layer, x, gy)
 
     def _hook_compute_quasidiag(self, mod, grad_input, grad_output):
         gy = grad_output[0]
@@ -746,44 +665,16 @@ class Jacobian:
         layer_id = self.m_to_l[mod]
         layer = self.layer_collection[layer_id]
         diag, cross = self._blocks[layer_id]
-
         FactoryMap[layer.__class__].quasidiag(diag, cross, mod, layer, x, gy)
 
     def _hook_compute_layer_blocks(self, mod, grad_input, grad_output):
-        mod_class = mod.__class__.__name__
         gy = grad_output[0]
         x = self.xs[mod]
-        bs = x.size(0)
         layer_id = self.m_to_l[mod]
         layer = self.layer_collection[layer_id]
         block = self._blocks[layer_id]
-        if mod_class in ['Linear', 'Conv2d']:
-            FactoryMap[layer.__class__].layer_block(block,
-                mod, layer, x, gy)
-        elif mod_class == 'BatchNorm1d':
-            self._check_bn_training(mod)
-            x_normalized = F.batch_norm(x, mod.running_mean,
-                                        mod.running_var,
-                                        None, None, mod.training)
-            gw = gy * x_normalized
-            gw = torch.cat([gw, gy], dim=1)
-            block.add_(torch.mm(gw.t(), gw))
-        elif mod_class == 'BatchNorm2d':
-            self._check_bn_training(mod)
-            x_normalized = F.batch_norm(x, mod.running_mean,
-                                        mod.running_var,
-                                        None, None, mod.training)
-            gw = (gy * x_normalized).sum(dim=(2, 3))
-            gw = torch.cat([gw, gy.sum(dim=(2, 3))], dim=1)
-            block.add_(torch.mm(gw.t(), gw))
-        elif mod_class == 'GroupNorm':
-            x_normalized = F.group_norm(x, mod.num_groups,
-                                        None, None, mod.eps)
-            gw = (gy * x_normalized).sum(dim=(2, 3))
-            gw = torch.cat([gw, gy.sum(dim=(2, 3))], dim=1)
-            block.add_(torch.mm(gw.t(), gw))
-        else:
-            raise NotImplementedError
+        FactoryMap[layer.__class__].layer_block(block,
+            mod, layer, x, gy)
 
     def _hook_compute_kfac_blocks(self, mod, grad_input, grad_output):
         mod_class = mod.__class__.__name__
@@ -802,94 +693,6 @@ class Jacobian:
         else:
             raise NotImplementedError
 
-    def _hook_kxy(self, mod, grad_input, grad_output):
-        if self.outerloop_switch:
-            self.gy_outer[mod] = grad_output[0]
-        else:
-            mod_class = mod.__class__.__name__
-            layer_id = self.m_to_l[mod]
-            layer = self.layer_collection[layer_id]
-            gy_inner = grad_output[0]
-            gy_outer = self.gy_outer[mod]
-            x_outer = self.x_outer[mod]
-            x_inner = self.x_inner[mod]
-            bs_inner = x_inner.size(0)
-            bs_outer = x_outer.size(0)
-            if mod_class in ['Linear', 'Conv2d']:
-                FactoryMap[layer.__class__].kxy(
-                    self.G[self.i_output_inner,
-                           self.e_inner:self.e_inner+bs_inner,
-                           self.i_output_outer,
-                           self.e_outer:self.e_outer+bs_outer],
-                    mod, layer, x_inner, gy_inner, x_outer, gy_outer)
-            elif mod_class == 'BatchNorm1d':
-                self._check_bn_training(mod)
-                x_norm_inner = F.batch_norm(x_inner, mod.running_mean,
-                                            mod.running_var,
-                                            None, None, mod.training,
-                                            momentum=0.)
-                x_norm_outer = F.batch_norm(x_outer, mod.running_mean,
-                                            mod.running_var,
-                                            None, None, mod.training,
-                                            momentum=0.)
-                indiv_gw_inner = x_norm_inner * gy_inner
-                indiv_gw_outer = x_norm_outer * gy_outer
-                self.G[self.i_output_inner,
-                       self.e_inner:self.e_inner+bs_inner,
-                       self.i_output_outer,
-                       self.e_outer:self.e_outer+bs_outer] += \
-                    torch.mm(indiv_gw_inner, indiv_gw_outer.t())
-                self.G[self.i_output_inner,
-                       self.e_inner:self.e_inner+bs_inner,
-                       self.i_output_outer,
-                       self.e_outer:self.e_outer+bs_outer] += \
-                    torch.mm(gy_inner, gy_outer.t())
-            elif mod_class == 'BatchNorm2d':
-                self._check_bn_training(mod)
-                x_norm_inner = F.batch_norm(x_inner, mod.running_mean,
-                                            mod.running_var,
-                                            None, None, mod.training,
-                                            momentum=0.)
-                x_norm_outer = F.batch_norm(x_outer, mod.running_mean,
-                                            mod.running_var,
-                                            None, None, mod.training,
-                                            momentum=0.)
-                indiv_gw_inner = (x_norm_inner * gy_inner).sum(dim=(2, 3))
-                indiv_gw_outer = (x_norm_outer * gy_outer).sum(dim=(2, 3))
-                self.G[self.i_output_inner,
-                       self.e_inner:self.e_inner+bs_inner,
-                       self.i_output_outer,
-                       self.e_outer:self.e_outer+bs_outer] += \
-                    torch.mm(indiv_gw_inner, indiv_gw_outer.t())
-                self.G[self.i_output_inner,
-                       self.e_inner:self.e_inner+bs_inner,
-                       self.i_output_outer,
-                       self.e_outer:self.e_outer+bs_outer] += \
-                    torch.mm(gy_inner.sum(dim=(2, 3)),
-                             gy_outer.sum(dim=(2, 3)).t())
-            elif mod_class == 'GroupNorm':
-                x_norm_inner = F.group_norm(x_inner, mod.num_groups,
-                                            None, None,
-                                            eps=mod.eps)
-                x_norm_outer = F.group_norm(x_outer, mod.num_groups,
-                                            None, None,
-                                            eps=mod.eps)
-                indiv_gw_inner = (x_norm_inner * gy_inner).sum(dim=(2, 3))
-                indiv_gw_outer = (x_norm_outer * gy_outer).sum(dim=(2, 3))
-                self.G[self.i_output_inner,
-                       self.e_inner:self.e_inner+bs_inner,
-                       self.i_output_outer,
-                       self.e_outer:self.e_outer+bs_outer] += \
-                    torch.mm(indiv_gw_inner, indiv_gw_outer.t())
-                self.G[self.i_output_inner,
-                       self.e_inner:self.e_inner+bs_inner,
-                       self.i_output_outer,
-                       self.e_outer:self.e_outer+bs_outer] += \
-                    torch.mm(gy_inner.sum(dim=(2, 3)),
-                             gy_outer.sum(dim=(2, 3)).t())
-            else:
-                raise NotImplementedError
-
     def _hook_compute_kfe_diag(self, mod, grad_input, grad_output):
         mod_class = mod.__class__.__name__
         gy = grad_output[0]
@@ -903,9 +706,27 @@ class Jacobian:
         else:
             raise NotImplementedError
 
+    def _hook_kxy(self, mod, grad_input, grad_output):
+        if self.outerloop_switch:
+            self.gy_outer[mod] = grad_output[0]
+        else:
+            layer_id = self.m_to_l[mod]
+            layer = self.layer_collection[layer_id]
+            gy_inner = grad_output[0]
+            gy_outer = self.gy_outer[mod]
+            x_outer = self.x_outer[mod]
+            x_inner = self.x_inner[mod]
+            bs_inner = x_inner.size(0)
+            bs_outer = x_outer.size(0)
+            FactoryMap[layer.__class__].kxy(
+                self.G[self.i_output_inner,
+                        self.e_inner:self.e_inner+bs_inner,
+                        self.i_output_outer,
+                        self.e_outer:self.e_outer+bs_outer],
+                mod, layer, x_inner, gy_inner, x_outer, gy_outer)
+
     def _hook_compute_Jv(self, mod, grad_input, grad_output):
         if self.compute_switch:
-            mod_class = mod.__class__.__name__
             gy = grad_output[0]
             x = self.xs[mod]
             bs = x.size(0)
@@ -915,74 +736,17 @@ class Jacobian:
             v_bias = None
             if layer.bias is not None:
                 v_bias = self._v[layer_id][1]
-
-            if mod_class in ['Linear', 'Conv2d']:
-                FactoryMap[layer.__class__].Jv(
-                    self._Jv[self.i_output, self.start:self.start+bs],
-                    mod, layer, x, gy, v_weight, v_bias)
-            elif mod_class == 'BatchNorm1d':
-                self._check_bn_training(mod)
-                x_normalized = F.batch_norm(x, mod.running_mean,
-                                            mod.running_var,
-                                            None, None, mod.training,
-                                            momentum=0.)
-                self._Jv[self.i_output, self.start:self.start+bs].add_(
-                    torch.mv(gy * x_normalized, v_weight))
-                self._Jv[self.i_output, self.start:self.start+bs].add_(
-                    torch.mv(gy.contiguous(), v_bias))
-            elif mod_class == 'BatchNorm2d':
-                self._check_bn_training(mod)
-                x_normalized = F.batch_norm(x, mod.running_mean,
-                                            mod.running_var,
-                                            None, None, mod.training,
-                                            momentum=0.)
-                self._Jv[self.i_output, self.start:self.start+bs].add_(
-                    torch.mv((gy * x_normalized).sum(dim=(2, 3)),
-                             v_weight))
-                self._Jv[self.i_output, self.start:self.start+bs].add_(
-                    torch.mv(gy.sum(dim=(2, 3)), v_bias))
-            elif mod_class == 'GroupNorm':
-                x_normalized = F.group_norm(x, mod.num_groups,
-                                            None, None, mod.eps)
-                self._Jv[self.i_output, self.start:self.start+bs].add_(
-                    torch.mv((gy * x_normalized).sum(dim=(2, 3)),
-                             v_weight))
-                self._Jv[self.i_output, self.start:self.start+bs].add_(
-                    torch.mv(gy.sum(dim=(2, 3)), v_bias))
-            else:
-                raise NotImplementedError
+            FactoryMap[layer.__class__].Jv(
+                self._Jv[self.i_output, self.start:self.start+bs],
+                mod, layer, x, gy, v_weight, v_bias)
 
     def _hook_compute_trace(self, mod, grad_input, grad_output):
-        mod_class = mod.__class__.__name__
         gy = grad_output[0]
         x = self.xs[mod]
         layer_id = self.m_to_l[mod]
         layer = self.layer_collection.layers[layer_id]
-        bs = x.size(0)
-        if mod_class in ['Linear', 'Conv2d']:
-            FactoryMap[layer.__class__].trace(
-                self._trace, mod, layer, x, gy)
-        elif mod_class == 'BatchNorm1d':
-            self._check_bn_training(mod)
-            x_normalized = F.batch_norm(x, mod.running_mean,
-                                        mod.running_var,
-                                        None, None, mod.training)
-            self._trace += (gy**2 * x_normalized**2).sum()
-            self._trace += (gy**2).sum()
-        elif mod_class == 'BatchNorm2d':
-            self._check_bn_training(mod)
-            x_normalized = F.batch_norm(x, mod.running_mean,
-                                        mod.running_var,
-                                        None, None, mod.training)
-            self._trace += ((gy * x_normalized).sum(dim=(2, 3))**2).sum()
-            self._trace += (gy.sum(dim=(2, 3))**2).sum()
-        elif mod_class == 'GroupNorm':
-            x_normalized = F.group_norm(x, mod.num_groups,
-                                        None, None, mod.eps)
-            self._trace += ((gy * x_normalized).sum(dim=(2, 3))**2).sum()
-            self._trace += (gy.sum(dim=(2, 3))**2).sum()
-        else:
-            raise NotImplementedError
+        FactoryMap[layer.__class__].trace(
+            self._trace, mod, layer, x, gy)
 
     def _get_dataloader(self, examples):
         if isinstance(examples, DataLoader):

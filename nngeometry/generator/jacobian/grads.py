@@ -1,5 +1,6 @@
 import torch
-from nngeometry.layercollection import (LinearLayer, Conv2dLayer)
+from nngeometry.layercollection import (LinearLayer, Conv2dLayer, BatchNorm1dLayer,
+                                        BatchNorm2dLayer, GroupNormLayer)
 from nngeometry.utils import per_example_grad_conv
 import torch.nn.functional as F
 
@@ -31,15 +32,15 @@ class JacobianFactory:
         bs_o = x_o.size(0)
         buffer_flat_i = torch.zeros(bs_i, layer.numel(), device=buffer.device)
         buffer_flat_o = torch.zeros(bs_o, layer.numel(), device=buffer.device)
-        cls.flat_grad(buffer_flat_i, mod, layer, x_i, gy_i, bs_i)
-        cls.flat_grad(buffer_flat_o, mod, layer, x_o, gy_o, bs_o)
+        cls.flat_grad(buffer_flat_i, mod, layer, x_i, gy_i)
+        cls.flat_grad(buffer_flat_o, mod, layer, x_o, gy_o)
         buffer.add_(torch.mm(buffer_flat_i, buffer_flat_o.t()))
 
     @classmethod
     def Jv(cls, buffer, mod, layer, x, gy, v, v_bias):
         bs = x.size(0)
         buffer_flat = torch.zeros(bs, layer.numel(), device=buffer.device)
-        cls.flat_grad(buffer_flat, mod, layer, x, gy, bs)
+        cls.flat_grad(buffer_flat, mod, layer, x, gy)
         v = v.view(-1)
         if v_bias is not None:
             v = torch.cat((v, v_bias))
@@ -194,7 +195,56 @@ class Conv2dJacobianFactory(JacobianFactory):
             cross_this = cross_this[:, :, :mod.kernel_size[0], :mod.kernel_size[1]]
             buffer_cross.add_(cross_this)
 
+
+def check_bn_training(mod):
+    # check that BN layers are in eval mode
+    if mod.training:
+        raise NotImplementedError('NNGeometry\'s Jacobian generator can' +
+                                  ' only handle BatchNorm in evaluation mode')
+
+
+class BatchNorm1dJacobianFactory(JacobianFactory):
+    @classmethod
+    def flat_grad(cls, buffer, mod, layer, x, gy):
+        check_bn_training(mod)
+        w_numel = layer.weight.numel()
+        x_normalized = F.batch_norm(x, mod.running_mean,
+                                    mod.running_var,
+                                    None, None, mod.training,
+                                    momentum=0.)
+        buffer[:, :w_numel].add_(gy * x_normalized)
+        if layer.bias is not None:
+            buffer[:, w_numel:].add_(gy)
+
+
+class BatchNorm2dJacobianFactory(JacobianFactory):
+    @classmethod
+    def flat_grad(cls, buffer, mod, layer, x, gy):
+        check_bn_training(mod)
+        w_numel = layer.weight.numel()
+        x_normalized = F.batch_norm(x, mod.running_mean,
+                                    mod.running_var,
+                                    None, None, mod.training,
+                                    momentum=0.)
+        buffer[:, :w_numel].add_((gy * x_normalized).sum(dim=(2, 3)))
+        if layer.bias is not None:
+            buffer[:, w_numel:].add_(gy.sum(dim=(2, 3)))
+
+
+class GroupNormJacobianFactory(JacobianFactory):
+    @classmethod
+    def flat_grad(cls, buffer, mod, layer, x, gy):
+        w_numel = layer.weight.numel()
+        x_normalized = F.group_norm(x, mod.num_groups,
+                                    eps=mod.eps)
+        buffer[:, :w_numel].add_((gy * x_normalized).sum(dim=(2, 3)))
+        buffer[:, w_numel:].add_(gy.sum(dim=(2, 3)))
+
+
 FactoryMap = {
     LinearLayer: LinearJacobianFactory,
     Conv2dLayer: Conv2dJacobianFactory,
+    BatchNorm1dLayer: BatchNorm1dJacobianFactory,
+    BatchNorm2dLayer: BatchNorm2dJacobianFactory,
+    GroupNormLayer: GroupNormJacobianFactory,
 }
