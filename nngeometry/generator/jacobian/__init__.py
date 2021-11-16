@@ -625,7 +625,7 @@ class Jacobian:
         handles = []
         for m in mods:
             handles.append(m.register_forward_pre_hook(hook_x))
-            handles.append(m.register_full_backward_hook(hook_gy))
+            handles.append(m.register_backward_hook(hook_gy))
         return handles
 
     def _hook_savex(self, mod, i):
@@ -646,7 +646,7 @@ class Jacobian:
         start_p = self.layer_collection.p_pos[layer_id]
         FactoryMap[layer.__class__].flat_grad(
             self.grads[self.i_output, self.start:self.start+bs,
-                        start_p:start_p+layer.numel()],
+                       start_p:start_p+layer.numel()],
             mod, layer, x, gy)
 
     def _hook_compute_diag(self, mod, grad_input, grad_output):

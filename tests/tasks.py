@@ -4,6 +4,7 @@ import torch.nn.functional as tF
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 from nngeometry.layercollection import LayerCollection
+from nngeometry.layers import WeightNorm1d, WeightNorm2d
 import os
 
 default_datapath = 'tmp'
@@ -31,15 +32,18 @@ else:
 
 class FCNet(nn.Module):
     def __init__(self, out_size=10, normalization='none'):
+        if normalization not in ['none', 'batch_norm', 'weight_norm']:
+            raise NotImplementedError
         super(FCNet, self).__init__()
         layers = []
         sizes = [18*18, 10, 10, out_size]
         for s_in, s_out in zip(sizes[:-1], sizes[1:]):
-            layers.append(nn.Linear(s_in, s_out, bias=(normalization == 'none')))
+            if normalization == 'weight_norm':
+                layers.append(WeightNorm1d(s_in, s_out))
+            else:
+                layers.append(nn.Linear(s_in, s_out, bias=(normalization == 'none')))
             if normalization == 'batch_norm':
                 layers.append(nn.BatchNorm1d(s_out))
-            elif normalization != 'none':
-                raise NotImplementedError
             layers.append(nn.ReLU())
         # remove last nonlinearity:
         layers.pop()
@@ -74,14 +78,20 @@ class ConvNet(nn.Module):
     def __init__(self, normalization='none'):
         super(ConvNet, self).__init__()
         self.normalization = normalization
-        self.conv1 = nn.Conv2d(1, 6, 3, 2, bias=(normalization == 'none'))
+        if False and normalization == 'weight_norm':
+            self.wn1 = WeightNorm2d(1, 6, 3, 2)
+        else:
+            self.conv1 = nn.Conv2d(1, 6, 3, 2, bias=(normalization == 'none'))
         if self.normalization == 'batch_norm':
             self.bn1 = nn.BatchNorm2d(6)
         elif self.normalization == 'group_norm':
             self.gn1 = nn.GroupNorm(2, 6)
         self.conv2 = nn.Conv2d(6, 5, 4, 1)
         self.conv3 = nn.Conv2d(5, 7, 3, 1, 1)
-        self.fc1 = nn.Linear(1*1*7, 4)
+        if self.normalization == 'weight_norm':
+            self.wn2 = WeightNorm1d(7, 4)
+        else:
+            self.fc1 = nn.Linear(7, 4)
         if self.normalization == 'batch_norm':
             self.bn2 = nn.BatchNorm1d(4)
         self.fc2 = nn.Linear(4, 3)
@@ -91,18 +101,40 @@ class ConvNet(nn.Module):
             x = tF.relu(self.bn1(self.conv1(x)))
         elif self.normalization == 'group_norm':
             x = tF.relu(self.gn1(self.conv1(x)))
+        elif False and self.normalization == 'weight_norm':
+            x = tF.relu(self.wn1(x))
         else:
             x = tF.relu(self.conv1(x))
         x = tF.max_pool2d(x, 2, 2)
         x = tF.relu(self.conv2(x))
         x = tF.max_pool2d(x, 2, 2)
         x = tF.relu(self.conv3(x))
-        x = self.fc1(x.view(-1, 1*1*7))
+        x = x.view(-1, 1*1*7)
         if self.normalization == 'batch_norm':
-            x = self.fc2(self.bn2(x))
+            x = self.bn2(self.fc1(x))
+        elif self.normalization == 'weight_norm':
+            x = self.wn2(x)
         else:
-            x = self.fc2(x)
+            x = self.fc1(x)
+
+        x = self.fc2(tF.relu(x))
         return x
+
+
+class SmallConvNet(nn.Module):
+    def __init__(self, normalization='none'):
+        super(SmallConvNet, self).__init__()
+        self.normalization = normalization
+        if normalization == 'weight_norm':
+            self.l1 = WeightNorm2d(1, 6, 3, 2)
+            self.l2 = WeightNorm2d(6, 3, 2, 3)
+        else:
+            raise NotImplementedError
+
+    def forward(self, x):
+        x = tF.relu(self.l1(x))
+        x = tF.relu(self.l2(x))
+        return x.sum(dim=(2, 3))
 
 
 class LinearFCNet(nn.Module):
@@ -331,6 +363,10 @@ def get_fullyconnect_bn_task():
     return get_fullyconnect_task(normalization='batch_norm')
 
 
+def get_fullyconnect_wn_task():
+    return get_fullyconnect_task(normalization='weight_norm')
+
+
 def get_conv_task(normalization='none'):
     train_set = get_mnist()
     train_set = Subset(train_set, range(1000))
@@ -357,6 +393,38 @@ def get_conv_bn_task():
 def get_conv_gn_task():
     return get_conv_task(normalization='group_norm')
 
+
+def get_conv_wn_task():
+    return get_conv_task(normalization='weight_norm')
+
+
+def get_conv_cosine_task():
+    return get_conv_task(normalization='cosine')
+
+def get_conv_task(normalization='none', small=False):
+    train_set = get_mnist()
+    train_set = Subset(train_set, range(1000))
+    train_loader = DataLoader(
+        dataset=train_set,
+        batch_size=300,
+        shuffle=False)
+    if small:
+        net = SmallConvNet(normalization=normalization)
+    else:
+        net = ConvNet(normalization=normalization)
+    to_device_model(net)
+    net.eval()
+
+    def output_fn(input, target):
+        return net(to_device(input))
+
+    layer_collection = LayerCollection.from_model(net)
+    return (train_loader, layer_collection, net.parameters(),
+            net, output_fn, 3)
+
+
+def get_small_conv_wn_task():
+    return get_conv_task(normalization='batch_norm', small=True)
 
 def get_fullyconnect_onlylast_task():
     train_loader, lc_full, _, net, output_fn, n_output = \
