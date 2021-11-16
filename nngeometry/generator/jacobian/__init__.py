@@ -1,10 +1,10 @@
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
-from ..utils import per_example_grad_conv
-from ..object.vector import PVector, FVector
-from ..layercollection import LayerCollection
-
+from nngeometry.utils import per_example_grad_conv
+from nngeometry.object.vector import PVector, FVector
+from nngeometry.layercollection import LayerCollection
+from .grads import FactoryMap
 
 class Jacobian:
     """
@@ -556,10 +556,11 @@ class Jacobian:
                                         self._hook_compute_trace,
                                         self.l_to_m.values())
 
+        device = next(self.model.parameters()).device
         loader = self._get_dataloader(examples)
         n_examples = len(loader.sampler)
 
-        self._trace = 0
+        self._trace = torch.tensor(0., device=device)
         for d in loader:
             inputs = d[0]
             inputs.requires_grad = True
@@ -648,16 +649,13 @@ class Jacobian:
         x = self.xs[mod]
         bs = x.size(0)
         layer_id = self.m_to_l[mod]
+        layer = self.layer_collection[layer_id]
         start_p = self.layer_collection.p_pos[layer_id]
         if mod_class == 'Linear':
-            self.grads[self.i_output, self.start:self.start+bs,
-                       start_p:start_p+mod.weight.numel()] \
-                .add_(torch.bmm(gy.unsqueeze(2), x.unsqueeze(1)).view(bs, -1))
-            if self.layer_collection[layer_id].bias is not None:
-                start_p += mod.weight.numel()
+            FactoryMap[layer.__class__].flat_grad(
                 self.grads[self.i_output, self.start:self.start+bs,
-                           start_p:start_p+mod.bias.numel()] \
-                    .add_(gy)
+                           start_p:start_p+layer.numel()],
+                mod, layer, x, gy, bs)
         elif mod_class == 'Conv2d':
             indiv_gw = per_example_grad_conv(mod, x, gy)
             self.grads[self.i_output, self.start:self.start+bs,
@@ -711,15 +709,14 @@ class Jacobian:
         mod_class = mod.__class__.__name__
         gy = grad_output[0]
         x = self.xs[mod]
+        bs = x.size(0)
         layer_id = self.m_to_l[mod]
+        layer = self.layer_collection[layer_id]
         start_p = self.layer_collection.p_pos[layer_id]
         if mod_class == 'Linear':
-            self.diag_m[start_p:start_p+mod.weight.numel()] \
-                .add_(torch.mm(gy.t()**2, x**2).view(-1))
-            if self.layer_collection[layer_id].bias is not None:
-                start_p += mod.weight.numel()
-                self.diag_m[start_p: start_p+mod.bias.numel()] \
-                    .add_((gy**2).sum(dim=0))
+            FactoryMap[layer.__class__].diag(
+                self.diag_m[start_p:start_p+layer.numel()],
+                mod, layer, x, gy, bs)
         elif mod_class == 'Conv2d':
             indiv_gw = per_example_grad_conv(mod, x, gy)
             self.diag_m[start_p:start_p+mod.weight.numel()] \
@@ -798,12 +795,11 @@ class Jacobian:
         x = self.xs[mod]
         bs = x.size(0)
         layer_id = self.m_to_l[mod]
+        layer = self.layer_collection[layer_id]
         block = self._blocks[layer_id]
         if mod_class == 'Linear':
-            gw = torch.bmm(gy.unsqueeze(2), x.unsqueeze(1)).view(bs, -1)
-            if self.layer_collection[layer_id].bias is not None:
-                gw = torch.cat([gw.view(bs, -1), gy.view(bs, -1)], dim=1)
-            block.add_(torch.mm(gw.t(), gw))
+            FactoryMap[layer.__class__].layer_block(block,
+                mod, layer, x, gy, bs)
         elif mod_class == 'Conv2d':
             gw = per_example_grad_conv(mod, x, gy).view(bs, -1)
             if self.layer_collection[layer_id].bias is not None:
@@ -839,14 +835,16 @@ class Jacobian:
         gy = grad_output[0]
         x = self.xs[mod]
         layer_id = self.m_to_l[mod]
+        layer = self.layer_collection[layer_id]
         block = self._blocks[layer_id]
         if mod_class == 'Linear':
-            block[1].add_(torch.mm(gy.t(), gy))
-            if self.layer_collection[layer_id].bias is not None:
-                x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
+            FactoryMap[layer.__class__].kfac_gg(block[1],
+                mod, layer, x, gy)
             if self.i_output == 0:
                 # do this only once if n_output > 1
-                block[0].add_(torch.mm(x.t(), x))
+                FactoryMap[layer.__class__].kfac_xx(block[0],
+                    mod, layer, x, gy)
+
         elif mod_class == 'Conv2d':
             ks = (mod.weight.size(2), mod.weight.size(3))
             if self.i_output == 0:
@@ -877,6 +875,7 @@ class Jacobian:
         else:
             mod_class = mod.__class__.__name__
             layer_id = self.m_to_l[mod]
+            layer = self.layer_collection[layer_id]
             gy_inner = grad_output[0]
             gy_outer = self.gy_outer[mod]
             x_outer = self.x_outer[mod]
@@ -884,18 +883,13 @@ class Jacobian:
             bs_inner = x_inner.size(0)
             bs_outer = x_outer.size(0)
             if mod_class == 'Linear':
-                self.G[self.i_output_inner,
-                       self.e_inner:self.e_inner+bs_inner,
-                       self.i_output_outer,
-                       self.e_outer:self.e_outer+bs_outer] += \
-                    torch.mm(x_inner, x_outer.t()) * \
-                    torch.mm(gy_inner, gy_outer.t())
-                if self.layer_collection[layer_id].bias is not None:
+                FactoryMap[layer.__class__].kxy(
                     self.G[self.i_output_inner,
                            self.e_inner:self.e_inner+bs_inner,
                            self.i_output_outer,
-                           self.e_outer:self.e_outer+bs_outer] += \
-                        torch.mm(gy_inner, gy_outer.t())
+                           self.e_outer:self.e_outer+bs_outer],
+                    mod, layer, x_inner, gy_inner, bs_inner,
+                    x_outer, gy_outer, bs_outer)
             elif mod_class == 'Conv2d':
                 indiv_gw_inner = per_example_grad_conv(mod, x_inner, gy_inner)
                 indiv_gw_outer = per_example_grad_conv(mod, x_outer, gy_outer)
@@ -984,15 +978,12 @@ class Jacobian:
         mod_class = mod.__class__.__name__
         gy = grad_output[0]
         layer_id = self.m_to_l[mod]
+        layer = self.layer_collection[layer_id]
         x = self.xs[mod]
         evecs_a, evecs_g = self._kfe[layer_id]
         if mod_class == 'Linear':
-            if mod.bias is not None:
-                x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
-            gy_kfe = torch.mm(gy, evecs_g)
-            x_kfe = torch.mm(x, evecs_a)
-            self._diags[layer_id].add_(torch.mm(gy_kfe.t()**2, x_kfe**2)
-                                       .view(-1))
+            FactoryMap[layer.__class__].kfe_diag(self._diags[layer_id],
+                mod, layer, x, gy, evecs_a, evecs_g)
         elif mod_class == 'Conv2d':
             ks = (mod.weight.size(2), mod.weight.size(3))
             gy_s = gy.size()
@@ -1028,15 +1019,14 @@ class Jacobian:
             layer_id = self.m_to_l[mod]
             layer = self.layer_collection.layers[layer_id]
             v_weight = self._v[layer_id][0]
+            v_bias = None
             if layer.bias is not None:
                 v_bias = self._v[layer_id][1]
 
             if mod_class == 'Linear':
-                self._Jv[self.i_output, self.start:self.start+bs].add_(
-                    (torch.mm(x, v_weight.t()) * gy).sum(dim=1))
-                if self.layer_collection[layer_id].bias is not None:
-                    self._Jv[self.i_output, self.start:self.start+bs].add_(
-                        torch.mv(gy.contiguous(), v_bias))
+                FactoryMap[layer.__class__].Jv(
+                    self._Jv[self.i_output, self.start:self.start+bs],
+                    mod, layer, x, gy, bs, v_weight, v_bias)
             elif mod_class == 'Conv2d':
                 gy2 = F.conv2d(x, v_weight, stride=mod.stride,
                                padding=mod.padding, dilation=mod.dilation)
@@ -1081,10 +1071,12 @@ class Jacobian:
         mod_class = mod.__class__.__name__
         gy = grad_output[0]
         x = self.xs[mod]
+        layer_id = self.m_to_l[mod]
+        layer = self.layer_collection.layers[layer_id]
+        bs = x.size(0)
         if mod_class == 'Linear':
-            self._trace += torch.mm(gy.t()**2, x**2).sum()
-            if mod.bias is not None:
-                self._trace += (gy**2).sum()
+            FactoryMap[layer.__class__].trace(
+                self._trace, mod, layer, x, gy, bs)
         elif mod_class == 'Conv2d':
             indiv_gw = per_example_grad_conv(mod, x, gy)
             self._trace += (indiv_gw**2).sum()
