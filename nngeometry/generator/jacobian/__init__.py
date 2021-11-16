@@ -744,30 +744,12 @@ class Jacobian:
         mod_class = mod.__class__.__name__
         gy = grad_output[0]
         x = self.xs[mod]
-        bs = x.size(0)
         layer_id = self.m_to_l[mod]
+        layer = self.layer_collection[layer_id]
         diag, cross = self._blocks[layer_id]
 
-        sw = self.layer_collection[layer_id].weight.numel()
-        if mod_class == 'Linear':
-            diag[:sw].add_(torch.mm(gy.t()**2, x**2).view(-1))
-            if self.layer_collection[layer_id].bias is not None:
-                diag[sw:].add_((gy**2).sum(dim=0))
-                cross.add_(torch.mm(gy.t()**2, x))
-        elif mod_class == 'Conv2d':
-            indiv_gw = per_example_grad_conv(mod, x, gy)
-            diag[:sw].add_((indiv_gw**2).sum(dim=0).view(-1))
-            if self.layer_collection[layer_id].bias is not None:
-                gb_per_example = gy.sum(dim=(2, 3))
-                diag[sw:].add_((gb_per_example**2).sum(dim=0))
-                y = (gy * gb_per_example.unsqueeze(2).unsqueeze(3))
-                cross_this = F.conv2d(x.transpose(0, 1),
-                                    y.transpose(0, 1),
-                                    stride=mod.dilation,
-                                    padding=mod.padding,
-                                    dilation=mod.stride).transpose(0, 1)
-                cross_this = cross_this[:, :, :mod.kernel_size[0], :mod.kernel_size[1]]
-                cross.add_(cross_this)
+        if mod_class in ['Linear', 'Conv2d']:
+            FactoryMap[layer.__class__].quasidiag(diag, cross, mod, layer, x, gy)
         else:
             raise NotImplementedError
 

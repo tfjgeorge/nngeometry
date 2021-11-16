@@ -94,6 +94,14 @@ class LinearJacobianFactory(JacobianFactory):
         x_kfe = torch.mm(x, evecs_a)
         buffer.add_(torch.mm(gy_kfe.t()**2, x_kfe**2).view(-1))
 
+    @classmethod
+    def quasidiag(cls, buffer_diag, buffer_cross, mod, layer, x, gy):
+        w_numel = layer.weight.numel()
+        buffer_diag[:w_numel].add_(torch.mm(gy.t()**2, x**2).view(-1))
+        if layer.bias is not None:
+            buffer_diag[w_numel:].add_((gy**2).sum(dim=0))
+            buffer_cross.add_(torch.mm(gy.t()**2, x))
+
 
 class Conv2dJacobianFactory(JacobianFactory):
     @classmethod
@@ -160,6 +168,23 @@ class Conv2dJacobianFactory(JacobianFactory):
         indiv_gw = torch.bmm(gy_kfe.view(bs, gy_s[1], -1),
                                 x_kfe.view(bs, -1, x_kfe.size(1)))
         buffer.add_((indiv_gw**2).sum(dim=0).view(-1))
+
+    @classmethod
+    def quasidiag(cls, buffer_diag, buffer_cross, mod, layer, x, gy):
+        w_numel = layer.weight.numel()
+        indiv_gw = per_example_grad_conv(mod, x, gy)
+        buffer_diag[:w_numel].add_((indiv_gw**2).sum(dim=0).view(-1))
+        if layer.bias is not None:
+            gb_per_example = gy.sum(dim=(2, 3))
+            buffer_diag[w_numel:].add_((gb_per_example**2).sum(dim=0))
+            y = (gy * gb_per_example.unsqueeze(2).unsqueeze(3))
+            cross_this = F.conv2d(x.transpose(0, 1),
+                                y.transpose(0, 1),
+                                stride=mod.dilation,
+                                padding=mod.padding,
+                                dilation=mod.stride).transpose(0, 1)
+            cross_this = cross_this[:, :, :mod.kernel_size[0], :mod.kernel_size[1]]
+            buffer_cross.add_(cross_this)
 
 FactoryMap = {
     LinearLayer: LinearJacobianFactory,
