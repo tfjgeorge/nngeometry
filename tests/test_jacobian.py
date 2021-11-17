@@ -565,10 +565,11 @@ def test_jacobian_plowrank():
         # We will try to recover mv, which is in the span of the
         # low rank matrix
         regul = 1e-3
+        print(get_task)
         mmv = PMat_lowrank.mv(mv)
-        mv_using_inv = PMat_lowrank.solve(mmv, regul=regul)
+        mv_using_inv = PMat_lowrank.solve(mmv + regul*mv, regul=regul)
         check_tensors(mv.get_flat_representation(),
-                          mv_using_inv.get_flat_representation(), eps=1e-2)
+                      mv_using_inv.get_flat_representation(), eps=1e-2)
         # Test inv TODO
 
         # Test add, sub, rmul
