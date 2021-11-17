@@ -424,7 +424,7 @@ def get_conv_task(normalization='none', small=False):
 
 
 def get_small_conv_wn_task():
-    return get_conv_task(normalization='batch_norm', small=True)
+    return get_conv_task(normalization='weight_norm', small=True)
 
 def get_fullyconnect_onlylast_task():
     train_loader, lc_full, _, net, output_fn, n_output = \

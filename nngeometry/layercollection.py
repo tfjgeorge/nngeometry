@@ -38,7 +38,8 @@ class LayerCollection:
         for layer, mod in model.named_modules():
             mod_class = mod.__class__.__name__
             if mod_class in ['Linear', 'Conv2d', 'BatchNorm1d',
-                             'BatchNorm2d', 'GroupNorm', 'WeightNorm1d']:
+                             'BatchNorm2d', 'GroupNorm', 'WeightNorm1d',
+                             'WeightNorm2d']:
                 lc.add_layer('%s.%s' % (layer, str(mod)),
                              LayerCollection._module_to_layer(mod))
             elif not ignore_unsupported_layers:
