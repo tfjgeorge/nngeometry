@@ -1,5 +1,5 @@
 import torch
-from nngeometry.layercollection import (LinearLayer, Conv2dLayer, BatchNorm1dLayer,
+from nngeometry.layercollection import (Cosine1dLayer, LinearLayer, Conv2dLayer, BatchNorm1dLayer,
                                         BatchNorm2dLayer, GroupNormLayer, WeightNorm1dLayer,
                                         WeightNorm2dLayer)
 from nngeometry.utils import per_example_grad_conv
@@ -267,6 +267,19 @@ class WeightNorm2dJacobianFactory(JacobianFactory):
         buffer.add_(gw.view(bs, -1))
 
 
+class Cosine1dJacobianFactory(JacobianFactory):
+    @classmethod
+    def flat_grad(cls, buffer, mod, layer, x, gy):
+        bs = x.size(0)
+        x = x / torch.norm(x, dim=1, keepdim=True)
+        norm = torch.norm(mod.weight, dim=1, keepdim=True)
+        gw = torch.bmm(gy.unsqueeze(2) / norm,
+                        x.unsqueeze(1))
+        wn2_out = F.linear(x, mod.weight / norm**3)
+        gw -= (gy * wn2_out).unsqueeze(2) * mod.weight.unsqueeze(0)
+        buffer.add_(gw.view(bs, -1))
+
+
 FactoryMap = {
     LinearLayer: LinearJacobianFactory,
     Conv2dLayer: Conv2dJacobianFactory,
@@ -275,4 +288,5 @@ FactoryMap = {
     GroupNormLayer: GroupNormJacobianFactory,
     WeightNorm1dLayer: WeightNorm1dJacobianFactory,
     WeightNorm2dLayer: WeightNorm2dJacobianFactory,
+    Cosine1dLayer: Cosine1dJacobianFactory,
 }

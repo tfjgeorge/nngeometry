@@ -4,7 +4,7 @@ import torch.nn.functional as tF
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 from nngeometry.layercollection import LayerCollection
-from nngeometry.layers import WeightNorm1d, WeightNorm2d
+from nngeometry.layers import Cosine1d, WeightNorm1d, WeightNorm2d
 import os
 
 default_datapath = 'tmp'
@@ -32,7 +32,7 @@ else:
 
 class FCNet(nn.Module):
     def __init__(self, out_size=10, normalization='none'):
-        if normalization not in ['none', 'batch_norm', 'weight_norm']:
+        if normalization not in ['none', 'batch_norm', 'weight_norm', 'cosine']:
             raise NotImplementedError
         super(FCNet, self).__init__()
         layers = []
@@ -40,6 +40,8 @@ class FCNet(nn.Module):
         for s_in, s_out in zip(sizes[:-1], sizes[1:]):
             if normalization == 'weight_norm':
                 layers.append(WeightNorm1d(s_in, s_out))
+            elif normalization == 'cosine':
+                layers.append(Cosine1d(s_in, s_out))
             else:
                 layers.append(nn.Linear(s_in, s_out, bias=(normalization == 'none')))
             if normalization == 'batch_norm':
@@ -78,7 +80,7 @@ class ConvNet(nn.Module):
     def __init__(self, normalization='none'):
         super(ConvNet, self).__init__()
         self.normalization = normalization
-        if False and normalization == 'weight_norm':
+        if normalization == 'weight_norm':
             self.wn1 = WeightNorm2d(1, 6, 3, 2)
         else:
             self.conv1 = nn.Conv2d(1, 6, 3, 2, bias=(normalization == 'none'))
@@ -101,7 +103,7 @@ class ConvNet(nn.Module):
             x = tF.relu(self.bn1(self.conv1(x)))
         elif self.normalization == 'group_norm':
             x = tF.relu(self.gn1(self.conv1(x)))
-        elif False and self.normalization == 'weight_norm':
+        elif self.normalization == 'weight_norm':
             x = tF.relu(self.wn1(x))
         else:
             x = tF.relu(self.conv1(x))
@@ -365,6 +367,10 @@ def get_fullyconnect_bn_task():
 
 def get_fullyconnect_wn_task():
     return get_fullyconnect_task(normalization='weight_norm')
+
+
+def get_fullyconnect_cosine_task():
+    return get_fullyconnect_task(normalization='cosine')
 
 
 def get_conv_task(normalization='none'):
