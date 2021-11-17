@@ -39,7 +39,7 @@ class LayerCollection:
             mod_class = mod.__class__.__name__
             if mod_class in ['Linear', 'Conv2d', 'BatchNorm1d',
                              'BatchNorm2d', 'GroupNorm', 'WeightNorm1d',
-                             'WeightNorm2d', 'Cosine1d']:
+                             'WeightNorm2d', 'Cosine1d', 'Affine1d']:
                 lc.add_layer('%s.%s' % (layer, str(mod)),
                              LayerCollection._module_to_layer(mod))
             elif not ignore_unsupported_layers:
@@ -73,7 +73,8 @@ class LayerCollection:
         """
         if module.__class__.__name__ not in \
                 ['Linear', 'Conv2d', 'BatchNorm1d',
-                 'BatchNorm2d', 'GroupNorm', 'WeightNorm1d']:
+                 'BatchNorm2d', 'GroupNorm', 'WeightNorm1d',
+                 'WeightNorm2d', 'Cosine1d', 'Affine1d']:
             raise NotImplementedError
         for layer, mod in model.named_modules():
             if mod is module:
@@ -108,6 +109,9 @@ class LayerCollection:
         elif mod_class == 'Cosine1d':
             return Cosine1dLayer(in_features=mod.in_features,
                                  out_features=mod.out_features)
+        elif mod_class == 'Affine1d':
+            return Affine1dLayer(num_features=mod.num_features,
+                                 bias=(mod.bias is not None))
 
     def numel(self):
         """
@@ -257,7 +261,6 @@ class WeightNorm2dLayer(AbstractLayer):
         self.kernel_size = kernel_size
         self.weight = Parameter(out_channels, in_channels, kernel_size[0],
                                 kernel_size[1])
-        self.bias = None
 
     def numel(self):
         return self.weight.numel()
@@ -274,7 +277,6 @@ class Cosine1dLayer(AbstractLayer):
         self.in_features = in_features
         self.out_features = out_features
         self.weight = Parameter(out_features, in_features)
-        self.bias = None
 
     def numel(self):
         return self.weight.numel()
@@ -282,6 +284,26 @@ class Cosine1dLayer(AbstractLayer):
     def __eq__(self, other):
         return (self.in_features == other.in_features and
                 self.out_features == other.out_features)
+
+
+class Affine1dLayer(AbstractLayer):
+
+    def __init__(self, num_features, bias=True):
+        self.num_features = num_features
+        self.weight = Parameter(num_features)
+        if bias:
+            self.bias = Parameter(num_features)
+        else:
+            self.bias = None
+
+    def numel(self):
+        if self.bias is not None:
+            return self.weight.numel() + self.bias.numel()
+        else:
+            return self.weight.numel()
+
+    def __eq__(self, other):
+        return self.num_features == other.num_features
 
 
 class Parameter(object):

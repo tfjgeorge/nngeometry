@@ -4,7 +4,7 @@ import torch.nn.functional as tF
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 from nngeometry.layercollection import LayerCollection
-from nngeometry.layers import Cosine1d, WeightNorm1d, WeightNorm2d
+from nngeometry.layers import Affine1d, Cosine1d, WeightNorm1d, WeightNorm2d
 import os
 
 default_datapath = 'tmp'
@@ -32,12 +32,12 @@ else:
 
 class FCNet(nn.Module):
     def __init__(self, out_size=10, normalization='none'):
-        if normalization not in ['none', 'batch_norm', 'weight_norm', 'cosine']:
+        if normalization not in ['none', 'batch_norm', 'weight_norm', 'cosine', 'affine']:
             raise NotImplementedError
         super(FCNet, self).__init__()
         layers = []
         sizes = [18*18, 10, 10, out_size]
-        for s_in, s_out in zip(sizes[:-1], sizes[1:]):
+        for i, (s_in, s_out) in enumerate(zip(sizes[:-1], sizes[1:])):
             if normalization == 'weight_norm':
                 layers.append(WeightNorm1d(s_in, s_out))
             elif normalization == 'cosine':
@@ -46,6 +46,8 @@ class FCNet(nn.Module):
                 layers.append(nn.Linear(s_in, s_out, bias=(normalization == 'none')))
             if normalization == 'batch_norm':
                 layers.append(nn.BatchNorm1d(s_out))
+            elif normalization == 'affine':
+                layers.append(Affine1d(s_out, bias=(i%2 == 0)))
             layers.append(nn.ReLU())
         # remove last nonlinearity:
         layers.pop()
@@ -371,6 +373,10 @@ def get_fullyconnect_wn_task():
 
 def get_fullyconnect_cosine_task():
     return get_fullyconnect_task(normalization='cosine')
+
+
+def get_fullyconnect_affine_task():
+    return get_fullyconnect_task(normalization='affine')
 
 
 def get_conv_task(normalization='none'):

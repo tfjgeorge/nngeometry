@@ -56,14 +56,14 @@ class Affine1d(Module):
     scaling and translation given by parameters gamma and beta in batch norm
 
     """
-    def __init__(self, n_features: int, bias: bool = True,
+    def __init__(self, num_features: int, bias: bool = True,
                  device=None, dtype=None) -> None:
         factory_kwargs = {'device': device, 'dtype': dtype}
         super(Affine1d, self).__init__()
-        self.n_features = n_features
-        self.weight = Parameter(torch.empty(n_features, **factory_kwargs))
+        self.num_features = num_features
+        self.weight = Parameter(torch.empty(num_features, **factory_kwargs))
         if bias:
-            self.bias = Parameter(torch.empty(n_features, **factory_kwargs))
+            self.bias = Parameter(torch.empty(num_features, **factory_kwargs))
         else:
             self.register_parameter('bias', None)
         self.reset_parameters()
@@ -80,6 +80,6 @@ class Affine1d(Module):
             return input * self.weight.unsqueeze(0)
 
     def extra_repr(self) -> str:
-        return 'n_features={}, bias={}'.format(
-            self.n_features, self.bias is not None
+        return 'num_features={}, bias={}'.format(
+            self.num_features, self.bias is not None
         )

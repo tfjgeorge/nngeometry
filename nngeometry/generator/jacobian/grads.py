@@ -1,5 +1,5 @@
 import torch
-from nngeometry.layercollection import (Cosine1dLayer, LinearLayer, Conv2dLayer, BatchNorm1dLayer,
+from nngeometry.layercollection import (Affine1dLayer, Cosine1dLayer, LinearLayer, Conv2dLayer, BatchNorm1dLayer,
                                         BatchNorm2dLayer, GroupNormLayer, WeightNorm1dLayer,
                                         WeightNorm2dLayer)
 from nngeometry.utils import per_example_grad_conv
@@ -280,6 +280,15 @@ class Cosine1dJacobianFactory(JacobianFactory):
         buffer.add_(gw.view(bs, -1))
 
 
+class Affine1dJacobianFactory(JacobianFactory):
+    @classmethod
+    def flat_grad(cls, buffer, mod, layer, x, gy):
+        w_numel = layer.weight.numel()
+        buffer[:, :w_numel].add_(gy * x)
+        if layer.bias is not None:
+            buffer[:, w_numel:].add_(gy)
+
+
 FactoryMap = {
     LinearLayer: LinearJacobianFactory,
     Conv2dLayer: Conv2dJacobianFactory,
@@ -289,4 +298,5 @@ FactoryMap = {
     WeightNorm1dLayer: WeightNorm1dJacobianFactory,
     WeightNorm2dLayer: WeightNorm2dJacobianFactory,
     Cosine1dLayer: Cosine1dJacobianFactory,
+    Affine1dLayer: Affine1dJacobianFactory,
 }
