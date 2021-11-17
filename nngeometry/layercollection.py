@@ -13,6 +13,10 @@ class LayerCollection:
     :param layers:
     """
 
+    _known_modules = ['Linear', 'Conv2d', 'BatchNorm1d',
+                      'BatchNorm2d', 'GroupNorm', 'WeightNorm1d',
+                      'WeightNorm2d', 'Cosine1d', 'Affine1d']
+
     def __init__(self, layers=None):
         if layers is None:
             self.layers = OrderedDict()
@@ -37,9 +41,7 @@ class LayerCollection:
         lc = LayerCollection()
         for layer, mod in model.named_modules():
             mod_class = mod.__class__.__name__
-            if mod_class in ['Linear', 'Conv2d', 'BatchNorm1d',
-                             'BatchNorm2d', 'GroupNorm', 'WeightNorm1d',
-                             'WeightNorm2d', 'Cosine1d', 'Affine1d']:
+            if mod_class in LayerCollection._known_modules:
                 lc.add_layer('%s.%s' % (layer, str(mod)),
                              LayerCollection._module_to_layer(mod))
             elif not ignore_unsupported_layers:
@@ -71,10 +73,7 @@ class LayerCollection:
         :param model: The model defining the neural network
         :param module: The layer to be added
         """
-        if module.__class__.__name__ not in \
-                ['Linear', 'Conv2d', 'BatchNorm1d',
-                 'BatchNorm2d', 'GroupNorm', 'WeightNorm1d',
-                 'WeightNorm2d', 'Cosine1d', 'Affine1d']:
+        if module.__class__.__name__ not in LayerCollection._known_modules:
             raise NotImplementedError
         for layer, mod in model.named_modules():
             if mod is module:
