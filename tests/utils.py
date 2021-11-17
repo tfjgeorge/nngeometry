@@ -2,7 +2,10 @@ import torch
 
 
 def check_ratio(vref, v2, eps=1e-3):
-    ratio = (v2 - vref) / vref
+    if vref == 0:
+        ratio = v2
+    else:
+        ratio = (v2 - vref) / vref
     assert ratio < eps and -ratio < eps
 
 

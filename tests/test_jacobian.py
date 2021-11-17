@@ -6,7 +6,10 @@ from tasks import (get_linear_fc_task, get_linear_conv_task,
                    get_fullyconnect_task, get_fullyconnect_bn_task,
                    get_batchnorm_nonlinear_task,
                    get_conv_task, get_conv_bn_task, get_conv_gn_task,
-                   get_conv_skip_task)
+                   get_conv_wn_task, get_small_conv_wn_task, get_fullyconnect_wn_task,
+                   get_fullyconnect_cosine_task, get_conv_skip_task,
+                   get_fullyconnect_affine_task)
+
 from nngeometry.object.map import (PushForwardDense, PushForwardImplicit,
                                    PullBackDense)
 from nngeometry.object.fspace import FMatDense
@@ -22,7 +25,10 @@ linear_tasks = [get_linear_fc_task, get_linear_conv_task,
                 get_batchnorm_fc_linear_task, get_batchnorm_conv_linear_task,
                 get_fullyconnect_onlylast_task]
 
-nonlinear_tasks = [get_conv_skip_task, get_conv_gn_task, get_fullyconnect_task, get_conv_task]
+nonlinear_tasks = [get_fullyconnect_affine_task, get_fullyconnect_cosine_task,
+                   get_conv_skip_task, get_fullyconnect_wn_task, get_small_conv_wn_task,
+                   get_conv_gn_task, get_fullyconnect_task,
+                   get_conv_task]
 
 if torch.cuda.is_available():
     device = 'cuda'
@@ -559,10 +565,11 @@ def test_jacobian_plowrank():
         # We will try to recover mv, which is in the span of the
         # low rank matrix
         regul = 1e-3
+        print(get_task)
         mmv = PMat_lowrank.mv(mv)
-        mv_using_inv = PMat_lowrank.solve(mmv, regul=regul)
+        mv_using_inv = PMat_lowrank.solve(mmv + regul*mv, regul=regul)
         check_tensors(mv.get_flat_representation(),
-                          mv_using_inv.get_flat_representation(), eps=1e-2)
+                      mv_using_inv.get_flat_representation(), eps=1e-2)
         # Test inv TODO
 
         # Test add, sub, rmul
