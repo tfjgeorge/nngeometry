@@ -246,10 +246,10 @@ class WeightNorm1dJacobianFactory(JacobianFactory):
     @classmethod
     def flat_grad(cls, buffer, mod, layer, x, gy):
         bs = x.size(0)
-        norm = torch.norm(mod.weight, dim=1, keepdim=True)
-        gw = torch.bmm(gy.unsqueeze(2) / norm,
+        norm2 = (mod.weight**2).sum(dim=1, keepdim=True) + mod.eps
+        gw = torch.bmm(gy.unsqueeze(2) / torch.sqrt(norm2),
                         x.unsqueeze(1))
-        wn2_out = F.linear(x, mod.weight / norm**3)
+        wn2_out = F.linear(x, mod.weight / norm2**1.5)
         gw -= (gy * wn2_out).unsqueeze(2) * mod.weight.unsqueeze(0)
         buffer.add_(gw.view(bs, -1))
 
@@ -259,9 +259,9 @@ class WeightNorm2dJacobianFactory(JacobianFactory):
     def flat_grad(cls, buffer, mod, layer, x, gy):
         bs = x.size(0)
         out_dim = mod.weight.size(0)
-        norm = torch.norm(mod.weight.view(out_dim, -1), dim=1)
-        gw = per_example_grad_conv(mod, x, gy / norm.view(1, out_dim, 1, 1))
-        wn2_out = F.conv2d(x, mod.weight / norm.view(out_dim, 1, 1, 1)**3, None,
+        norm2 = (mod.weight**2).sum(dim=(1, 2, 3)) + mod.eps
+        gw = per_example_grad_conv(mod, x, gy / torch.sqrt(norm2).view(1, out_dim, 1, 1))
+        wn2_out = F.conv2d(x, mod.weight / norm2.view(out_dim, 1, 1, 1)**1.5, None,
                            stride=mod.stride, padding=mod.padding, dilation=mod.dilation)
         gw -= (gy * wn2_out).sum(dim=(2, 3)).view(bs, out_dim, 1) * mod.weight.view(1, out_dim, -1)
         buffer.add_(gw.view(bs, -1))
@@ -271,11 +271,12 @@ class Cosine1dJacobianFactory(JacobianFactory):
     @classmethod
     def flat_grad(cls, buffer, mod, layer, x, gy):
         bs = x.size(0)
-        x = x / torch.norm(x, dim=1, keepdim=True)
-        norm = torch.norm(mod.weight, dim=1, keepdim=True)
-        gw = torch.bmm(gy.unsqueeze(2) / norm,
+        norm2_w = (mod.weight**2).sum(dim=1, keepdim=True) + mod.eps
+        norm2_x = (x**2).sum(dim=1, keepdim=True) + mod.eps
+        x = x / torch.sqrt(norm2_x)
+        gw = torch.bmm(gy.unsqueeze(2) / torch.sqrt(norm2_w),
                         x.unsqueeze(1))
-        wn2_out = F.linear(x, mod.weight / norm**3)
+        wn2_out = F.linear(x, mod.weight / norm2_w**1.5)
         gw -= (gy * wn2_out).unsqueeze(2) * mod.weight.unsqueeze(0)
         buffer.add_(gw.view(bs, -1))
 

@@ -9,14 +9,17 @@ class Cosine1d(Linear):
     and the incoming data
     """
 
-    def __init__(self, in_features: int, out_features: int) -> None:
+    def __init__(self, in_features: int, out_features: int, eps=1e-05) -> None:
         super(Cosine1d, self).__init__(in_features=in_features,
                                      out_features=out_features,
                                      bias=False)
+        self.eps = eps
 
     def forward(self, input: Tensor) -> Tensor:
-        return F.linear(input / torch.norm(input, dim=1, keepdim=True),
-                        self.weight / torch.norm(self.weight, dim=1, keepdim=True))
+        norm2_w = (self.weight**2).sum(dim=1, keepdim=True) + self.eps
+        norm2_x = (input**2).sum(dim=1, keepdim=True) + self.eps
+        return F.linear(input / torch.sqrt(norm2_x),
+                        self.weight / torch.sqrt(norm2_w))
 
 
 class WeightNorm1d(Linear):
@@ -24,29 +27,31 @@ class WeightNorm1d(Linear):
     with rows normalized with norm 1
     """
 
-    def __init__(self, in_features: int, out_features: int) -> None:
+    def __init__(self, in_features: int, out_features: int, eps=1e-05) -> None:
         super(WeightNorm1d, self).__init__(in_features=in_features,
                                      out_features=out_features,
                                      bias=False)
+        self.eps = eps
 
     def forward(self, input: Tensor) -> Tensor:
+        norm2 = (self.weight**2).sum(dim=1, keepdim=True) + self.eps
         return F.linear(input,
-                        self.weight / torch.norm(self.weight, dim=1, keepdim=True))
+                        self.weight / torch.sqrt(norm2))
 
 
 class WeightNorm2d(Conv2d):
-    """Computes an 2d convolution using a kernel weight matrix
+    """Computes a 2d convolution using a kernel weight matrix
     with rows normalized with norm 1
     """
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args, eps=1e-05, **kwargs) -> None:
         assert 'bias' not in kwargs or kwargs['bias'] is False
         super(WeightNorm2d, self).__init__(*args, bias=False, **kwargs)
+        self.eps = eps
 
     def forward(self, input: Tensor) -> Tensor:
-        out_dim = self.weight.size(0)
-        return self._conv_forward(input,
-                                  self.weight / torch.norm(self.weight.view(out_dim, -1), dim=1).view(out_dim, 1, 1, 1),
+        norm2 = (self.weight**2).sum(dim=(1, 2, 3), keepdim=True) + self.eps
+        return self._conv_forward(input, self.weight / torch.sqrt(norm2),
                                   None)
 
 

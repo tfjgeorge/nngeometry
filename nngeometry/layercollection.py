@@ -261,6 +261,7 @@ class WeightNorm2dLayer(AbstractLayer):
         self.kernel_size = kernel_size
         self.weight = Parameter(out_channels, in_channels, kernel_size[0],
                                 kernel_size[1])
+        self.bias = None
 
     def numel(self):
         return self.weight.numel()
@@ -277,6 +278,7 @@ class Cosine1dLayer(AbstractLayer):
         self.in_features = in_features
         self.out_features = out_features
         self.weight = Parameter(out_features, in_features)
+        self.bias = None
 
     def numel(self):
         return self.weight.numel()
