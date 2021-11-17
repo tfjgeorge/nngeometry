@@ -24,7 +24,7 @@ linear_tasks = [get_linear_fc_task, get_linear_conv_task,
                 get_batchnorm_fc_linear_task, get_batchnorm_conv_linear_task,
                 get_fullyconnect_onlylast_task]
 
-nonlinear_tasks = [get_conv_skip_task, get_fullyconnect_wn_task, #get_small_conv_wn_task,
+nonlinear_tasks = [get_conv_skip_task, get_fullyconnect_wn_task, get_small_conv_wn_task,
                    get_conv_gn_task, get_fullyconnect_task,
                    get_conv_task]
 

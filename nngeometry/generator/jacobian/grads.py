@@ -1,6 +1,7 @@
 import torch
 from nngeometry.layercollection import (LinearLayer, Conv2dLayer, BatchNorm1dLayer,
-                                        BatchNorm2dLayer, GroupNormLayer)
+                                        BatchNorm2dLayer, GroupNormLayer, WeightNorm1dLayer,
+                                        WeightNorm2dLayer)
 from nngeometry.utils import per_example_grad_conv
 import torch.nn.functional as F
 
@@ -241,10 +242,37 @@ class GroupNormJacobianFactory(JacobianFactory):
         buffer[:, w_numel:].add_(gy.sum(dim=(2, 3)))
 
 
+class WeightNorm1dJacobianFactory(JacobianFactory):
+    @classmethod
+    def flat_grad(cls, buffer, mod, layer, x, gy):
+        bs = x.size(0)
+        norm = torch.norm(mod.weight, dim=1, keepdim=True)
+        gw = torch.bmm(gy.unsqueeze(2) / norm,
+                        x.unsqueeze(1))
+        wn2_out = F.linear(x, mod.weight / norm**3)
+        gw -= (gy * wn2_out).unsqueeze(2) * mod.weight.unsqueeze(0)
+        buffer.add_(gw.view(bs, -1))
+
+
+class WeightNorm2dJacobianFactory(JacobianFactory):
+    @classmethod
+    def flat_grad(cls, buffer, mod, layer, x, gy):
+        bs = x.size(0)
+        out_dim = mod.weight.size(0)
+        norm = torch.norm(mod.weight.view(out_dim, -1), dim=1)
+        gw = per_example_grad_conv(mod, x, gy / norm.view(1, out_dim, 1, 1))
+        wn2_out = F.conv2d(x, mod.weight / norm.view(out_dim, 1, 1, 1)**3, None,
+                           stride=mod.stride, padding=mod.padding, dilation=mod.dilation)
+        gw -= (gy * wn2_out).sum(dim=(2, 3)).view(bs, out_dim, 1) * mod.weight.view(1, out_dim, -1)
+        buffer.add_(gw.view(bs, -1))
+
+
 FactoryMap = {
     LinearLayer: LinearJacobianFactory,
     Conv2dLayer: Conv2dJacobianFactory,
     BatchNorm1dLayer: BatchNorm1dJacobianFactory,
     BatchNorm2dLayer: BatchNorm2dJacobianFactory,
     GroupNormLayer: GroupNormJacobianFactory,
+    WeightNorm1dLayer: WeightNorm1dJacobianFactory,
+    WeightNorm2dLayer: WeightNorm2dJacobianFactory,
 }

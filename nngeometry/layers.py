@@ -41,12 +41,13 @@ class WeightNorm2d(Conv2d):
 
     def __init__(self, *args, **kwargs) -> None:
         assert 'bias' not in kwargs or kwargs['bias'] is False
-        super(WeightNorm2d, self).__init__(*args, **kwargs)
+        super(WeightNorm2d, self).__init__(*args, bias=False, **kwargs)
 
     def forward(self, input: Tensor) -> Tensor:
+        out_dim = self.weight.size(0)
         return self._conv_forward(input,
-                                  self.weight / torch.norm(self.weight, dim=(1, 2, 3),
-                                                           keepdim=True))
+                                  self.weight / torch.norm(self.weight.view(out_dim, -1), dim=1).view(out_dim, 1, 1, 1),
+                                  None)
 
 
 class Affine1d(Module):
