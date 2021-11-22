@@ -35,8 +35,8 @@ Computing the FIM requires the following arguments:
         >>> Fv = F_kfac.mv(v)
 
  Note that switching from the :class:`.object.PMatKFAC` representation to any other representation such as :class:`.object.PMatDense` is as simple as passing ``representation=PMatDense`` when building the ``F_kfac`` object.
- 
- More examples
- =============
- 
- More notebook examples can be found at https://github.com/tfjgeorge/nngeometry/tree/master/examples
+
+More examples
+=============
+
+More notebook examples can be found at https://github.com/tfjgeorge/nngeometry/tree/master/examples
