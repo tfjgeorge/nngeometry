@@ -56,7 +56,6 @@ extensions = [
     'sphinx.ext.graphviz',
     'sphinx.ext.intersphinx',
     # 'sphinx.ext.linkcode'
-    'torch',
     'sphinxcontrib.bibtex'
 ]
 
