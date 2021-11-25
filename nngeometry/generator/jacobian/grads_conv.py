@@ -70,10 +70,7 @@ def conv_backward(input, grad_output, in_channels, out_channels, kernel_size,
 
 
 def conv1d_backward(*args, **kwargs):
-    '''Computes per-example gradients for nn.Conv1d layers.
-
-    This function is used in the internal behaviour of bnn.Linear.
-    '''
+    '''Computes per-example gradients for nn.Conv1d layers.'''
     return conv_backward(*args, nd=1, **kwargs)
 
 

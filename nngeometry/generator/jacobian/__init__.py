@@ -1,7 +1,6 @@
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
-from nngeometry.utils import per_example_grad_conv
 from nngeometry.object.vector import PVector, FVector
 from nngeometry.layercollection import LayerCollection
 from .grads import FactoryMap
