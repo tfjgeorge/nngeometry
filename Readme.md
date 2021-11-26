@@ -52,3 +52,8 @@ If you use NNGeometry in a published project, please cite our work using the fol
   url          = {https://doi.org/10.5281/zenodo.4532597}
 }
 ```
+
+## License
+
+This project is distributed under the MIT license (see LICENSE file).
+This project also includes code licensed under the BSD 3 clause as it borrows some code from https://github.com/owkin/grad-cnns.
