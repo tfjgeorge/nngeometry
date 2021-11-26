@@ -2,7 +2,8 @@ import torch
 from nngeometry.layercollection import (Affine1dLayer, Cosine1dLayer, LinearLayer, Conv2dLayer, BatchNorm1dLayer,
                                         BatchNorm2dLayer, GroupNormLayer, WeightNorm1dLayer,
                                         WeightNorm2dLayer)
-from nngeometry.utils import per_example_grad_conv
+from .grads_conv import conv2d_backward as per_example_grad_conv
+
 import torch.nn.functional as F
 
 
@@ -261,8 +262,11 @@ class WeightNorm2dJacobianFactory(JacobianFactory):
         out_dim = mod.weight.size(0)
         norm2 = (mod.weight**2).sum(dim=(1, 2, 3)) + mod.eps
         gw = per_example_grad_conv(mod, x, gy / torch.sqrt(norm2).view(1, out_dim, 1, 1))
+        gw = gw.view(bs, out_dim, -1)
         wn2_out = F.conv2d(x, mod.weight / norm2.view(out_dim, 1, 1, 1)**1.5, None,
                            stride=mod.stride, padding=mod.padding, dilation=mod.dilation)
+        t = (gy * wn2_out).sum(dim=(2, 3)).view(bs, out_dim, 1) * mod.weight.view(1, out_dim, -1)
+        print(gw.size(), t.size())
         gw -= (gy * wn2_out).sum(dim=(2, 3)).view(bs, out_dim, 1) * mod.weight.view(1, out_dim, -1)
         buffer.add_(gw.view(bs, -1))
 
