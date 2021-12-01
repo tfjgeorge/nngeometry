@@ -3,9 +3,8 @@
 # These functions are borrowed from https://github.com/owkin/grad-cnns
 
 import numpy as np
-import torch.nn as nn
+import torch
 import torch.nn.functional as F
-
 
 def conv_backward(input, grad_output, in_channels, out_channels, kernel_size,
                   stride=1, dilation=1, padding=0, groups=1, nd=1):
@@ -74,7 +73,7 @@ def conv1d_backward(*args, **kwargs):
     return conv_backward(*args, nd=1, **kwargs)
 
 
-def conv2d_backward(mod, x, gy):
+def conv2d_backward_using_conv(mod, x, gy):
     '''Computes per-example gradients for nn.Conv2d layers.'''
     return conv_backward(x, gy, nd=2,
                          in_channels=mod.in_channels, 
@@ -84,3 +83,37 @@ def conv2d_backward(mod, x, gy):
                          dilation=mod.dilation,
                          padding=mod.padding,
                          groups=mod.groups)
+
+
+def conv2d_backward_using_unfold(mod, x, gy):
+    '''Computes per-example gradients for nn.Conv2d layers.'''
+    ks = (mod.weight.size(2), mod.weight.size(3))
+    gy_s = gy.size()
+    bs = gy_s[0]
+    x_unfold = F.unfold(x, kernel_size=ks, stride=mod.stride,
+                        padding=mod.padding, dilation=mod.dilation)
+    x_unfold_s = x_unfold.size()
+    return torch.bmm(gy.view(bs, gy_s[1], -1),
+                     x_unfold.view(bs, x_unfold_s[1], -1).permute(0, 2, 1))
+
+
+def conv2d_backward(*args, **kwargs):
+    return _conv_grad_impl.get_impl()(*args, **kwargs)
+
+
+class ConvGradImplManager:
+
+    def __init__(self):
+        self._use_unfold = True
+    
+    def use_unfold(self, choice=True):
+        self._use_unfold = choice
+
+    def get_impl(self):
+        if self._use_unfold:
+            return conv2d_backward_using_unfold
+        else:
+            return conv2d_backward_using_conv
+
+
+_conv_grad_impl = ConvGradImplManager()
