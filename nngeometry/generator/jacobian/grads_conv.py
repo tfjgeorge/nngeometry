@@ -117,3 +117,21 @@ class ConvGradImplManager:
 
 
 _conv_grad_impl = ConvGradImplManager()
+
+class use_unfold_impl_for_convs:
+
+    def __enter__(self):
+        self.prev = _conv_grad_impl._use_unfold
+        _conv_grad_impl.use_unfold(True)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        _conv_grad_impl._use_unfold = self.prev
+
+class use_conv_impl_for_convs:
+
+    def __enter__(self):
+        self.prev = _conv_grad_impl._use_unfold
+        _conv_grad_impl.use_unfold(False)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        _conv_grad_impl._use_unfold = self.prev

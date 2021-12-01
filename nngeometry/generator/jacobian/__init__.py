@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from nngeometry.object.vector import PVector, FVector
 from nngeometry.layercollection import LayerCollection
 from .grads import FactoryMap
+from .grads_conv import use_conv_impl_for_convs, use_unfold_impl_for_convs
 
 class Jacobian:
     """
