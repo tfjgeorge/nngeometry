@@ -9,6 +9,7 @@ setup(name='nngeometry',
       license='MIT',
       packages=['nngeometry',
                 'nngeometry.generator',
+                'nngeometry.generator.jacobian',
                 'nngeometry.object'],
       install_requires=['torch>=1.0.0'],
       zip_safe=False)
