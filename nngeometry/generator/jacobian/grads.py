@@ -266,7 +266,6 @@ class WeightNorm2dJacobianFactory(JacobianFactory):
         wn2_out = F.conv2d(x, mod.weight / norm2.view(out_dim, 1, 1, 1)**1.5, None,
                            stride=mod.stride, padding=mod.padding, dilation=mod.dilation)
         t = (gy * wn2_out).sum(dim=(2, 3)).view(bs, out_dim, 1) * mod.weight.view(1, out_dim, -1)
-        print(gw.size(), t.size())
         gw -= (gy * wn2_out).sum(dim=(2, 3)).view(bs, out_dim, 1) * mod.weight.view(1, out_dim, -1)
         buffer.add_(gw.view(bs, -1))
 

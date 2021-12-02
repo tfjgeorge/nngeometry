@@ -144,7 +144,6 @@ def test_jacobian_pullback_dense():
 
 def test_jacobian_fdense_vs_pullback():
     for get_task in linear_tasks + nonlinear_tasks:
-        print(get_task)
         for centering in [True, False]:
             loader, lc, parameters, model, function, n_output = get_task()
             generator = Jacobian(layer_collection=lc,
@@ -565,7 +564,6 @@ def test_jacobian_plowrank():
         # We will try to recover mv, which is in the span of the
         # low rank matrix
         regul = 1e-3
-        print(get_task)
         mmv = PMat_lowrank.mv(mv)
         mv_using_inv = PMat_lowrank.solve(mmv + regul*mv, regul=regul)
         check_tensors(mv.get_flat_representation(),
