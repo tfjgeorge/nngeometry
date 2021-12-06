@@ -623,9 +623,13 @@ class Jacobian:
 
     def _add_hooks(self, hook_x, hook_gy, mods):
         handles = []
+
+        def _hook_x(mod, i, o):
+            hook_x(mod, i)
+            o.register_hook(lambda g_o: hook_gy(mod, g_o))
+
         for m in mods:
-            handles.append(m.register_forward_pre_hook(hook_x))
-            handles.append(m.register_full_backward_hook(hook_gy))
+            handles.append(m.register_forward_hook(_hook_x))
         return handles
 
     def _hook_savex(self, mod, i):
@@ -637,8 +641,7 @@ class Jacobian:
         else:
             self.x_inner[mod] = i[0]
 
-    def _hook_compute_flat_grad(self, mod, grad_input, grad_output):
-        gy = grad_output[0]
+    def _hook_compute_flat_grad(self, mod, gy):
         x = self.xs[mod]
         bs = x.size(0)
         layer_id = self.m_to_l[mod]
@@ -649,8 +652,7 @@ class Jacobian:
                        start_p:start_p+layer.numel()],
             mod, layer, x, gy)
 
-    def _hook_compute_diag(self, mod, grad_input, grad_output):
-        gy = grad_output[0]
+    def _hook_compute_diag(self, mod, gy):
         x = self.xs[mod]
         layer_id = self.m_to_l[mod]
         layer = self.layer_collection[layer_id]
@@ -659,16 +661,14 @@ class Jacobian:
             self.diag_m[start_p:start_p+layer.numel()],
             mod, layer, x, gy)
 
-    def _hook_compute_quasidiag(self, mod, grad_input, grad_output):
-        gy = grad_output[0]
+    def _hook_compute_quasidiag(self, mod, gy):
         x = self.xs[mod]
         layer_id = self.m_to_l[mod]
         layer = self.layer_collection[layer_id]
         diag, cross = self._blocks[layer_id]
         FactoryMap[layer.__class__].quasidiag(diag, cross, mod, layer, x, gy)
 
-    def _hook_compute_layer_blocks(self, mod, grad_input, grad_output):
-        gy = grad_output[0]
+    def _hook_compute_layer_blocks(self, mod, gy):
         x = self.xs[mod]
         layer_id = self.m_to_l[mod]
         layer = self.layer_collection[layer_id]
@@ -676,9 +676,8 @@ class Jacobian:
         FactoryMap[layer.__class__].layer_block(block,
             mod, layer, x, gy)
 
-    def _hook_compute_kfac_blocks(self, mod, grad_input, grad_output):
+    def _hook_compute_kfac_blocks(self, mod, gy):
         mod_class = mod.__class__.__name__
-        gy = grad_output[0]
         x = self.xs[mod]
         layer_id = self.m_to_l[mod]
         layer = self.layer_collection[layer_id]
@@ -693,9 +692,8 @@ class Jacobian:
         else:
             raise NotImplementedError
 
-    def _hook_compute_kfe_diag(self, mod, grad_input, grad_output):
+    def _hook_compute_kfe_diag(self, mod, gy):
         mod_class = mod.__class__.__name__
-        gy = grad_output[0]
         layer_id = self.m_to_l[mod]
         layer = self.layer_collection[layer_id]
         x = self.xs[mod]
@@ -706,13 +704,13 @@ class Jacobian:
         else:
             raise NotImplementedError
 
-    def _hook_kxy(self, mod, grad_input, grad_output):
+    def _hook_kxy(self, mod, gy):
         if self.outerloop_switch:
-            self.gy_outer[mod] = grad_output[0]
+            self.gy_outer[mod] = gy
         else:
             layer_id = self.m_to_l[mod]
             layer = self.layer_collection[layer_id]
-            gy_inner = grad_output[0]
+            gy_inner = gy
             gy_outer = self.gy_outer[mod]
             x_outer = self.x_outer[mod]
             x_inner = self.x_inner[mod]
@@ -725,9 +723,8 @@ class Jacobian:
                         self.e_outer:self.e_outer+bs_outer],
                 mod, layer, x_inner, gy_inner, x_outer, gy_outer)
 
-    def _hook_compute_Jv(self, mod, grad_input, grad_output):
+    def _hook_compute_Jv(self, mod, gy):
         if self.compute_switch:
-            gy = grad_output[0]
             x = self.xs[mod]
             bs = x.size(0)
             layer_id = self.m_to_l[mod]
@@ -740,8 +737,7 @@ class Jacobian:
                 self._Jv[self.i_output, self.start:self.start+bs],
                 mod, layer, x, gy, v_weight, v_bias)
 
-    def _hook_compute_trace(self, mod, grad_input, grad_output):
-        gy = grad_output[0]
+    def _hook_compute_trace(self, mod, gy):
         x = self.xs[mod]
         layer_id = self.m_to_l[mod]
         layer = self.layer_collection.layers[layer_id]

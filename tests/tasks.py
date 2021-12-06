@@ -112,7 +112,7 @@ class ConvNet(nn.Module):
         x = tF.max_pool2d(x, 2, 2)
         x = tF.relu(self.conv2(x))
         x = tF.max_pool2d(x, 2, 2)
-        x = tF.relu(self.conv3(x))
+        x = tF.relu(self.conv3(x), inplace=True)
         x = x.view(-1, 1*1*7)
         if self.normalization == 'batch_norm':
             x = self.bn2(self.fc1(x))
