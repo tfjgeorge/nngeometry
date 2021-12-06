@@ -140,6 +140,7 @@ class SmallConvNet(nn.Module):
             raise NotImplementedError
 
     def forward(self, x):
+        x = x[:, :, 5:-5, 5:-5]
         x = tF.relu(self.l1(x))
         x = tF.relu(self.l2(x))
         return x.sum(dim=(2, 3))
