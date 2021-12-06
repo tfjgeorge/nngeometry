@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as tF
+from torch.nn.modules.conv import ConvTranspose2d
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 from nngeometry.layercollection import LayerCollection
@@ -90,12 +91,12 @@ class ConvNet(nn.Module):
             self.bn1 = nn.BatchNorm2d(6)
         elif self.normalization == 'group_norm':
             self.gn1 = nn.GroupNorm(2, 6)
-        self.conv2 = nn.ConvTranspose2d(6, 5, 4, 1)
+        self.conv2 = nn.Conv2d(6, 5, 4, 1)
         self.conv3 = nn.Conv2d(5, 7, 3, 1, 1)
         if self.normalization == 'weight_norm':
-            self.wn2 = WeightNorm1d(2*2*7, 4)
+            self.wn2 = WeightNorm1d(7, 4)
         else:
-            self.fc1 = nn.Linear(2*2*7, 4)
+            self.fc1 = nn.Linear(7, 4)
         if self.normalization == 'batch_norm':
             self.bn2 = nn.BatchNorm1d(4)
         self.fc2 = nn.Linear(4, 3)
@@ -109,14 +110,11 @@ class ConvNet(nn.Module):
             x = tF.relu(self.wn1(x))
         else:
             x = tF.relu(self.conv1(x))
-        x = tF.max_pool2d(x, 2, 2)
-        print('before', x.size())
+        x = tF.avg_pool2d(x, 2, 2)
         x = tF.relu(self.conv2(x))
-        print('after', x.size())
-        x = tF.max_pool2d(x, 2, 2)
+        x = tF.avg_pool2d(x, 2, 2)
         x = tF.relu(self.conv3(x), inplace=True)
-        x = tF.max_pool2d(x, 2, 2)
-        x = x.view(-1, 2*2*7)
+        x = x.view(-1, 7)
         if self.normalization == 'batch_norm':
             x = self.bn2(self.fc1(x))
         elif self.normalization == 'weight_norm':
@@ -135,6 +133,9 @@ class SmallConvNet(nn.Module):
         if normalization == 'weight_norm':
             self.l1 = WeightNorm2d(1, 6, 3, 2)
             self.l2 = WeightNorm2d(6, 3, 2, 3)
+        elif normalization == 'transpose':
+            self.l1 = ConvTranspose2d(1, 6, (3, 2), 2)
+            self.l2 = ConvTranspose2d(6, 3, (2, 3), 3, bias=False)
         else:
             raise NotImplementedError
 
@@ -416,6 +417,7 @@ def get_conv_wn_task():
 def get_conv_cosine_task():
     return get_conv_task(normalization='cosine')
 
+
 def get_conv_task(normalization='none', small=False):
     train_set = get_mnist()
     train_set = Subset(train_set, range(1000))
@@ -440,6 +442,10 @@ def get_conv_task(normalization='none', small=False):
 
 def get_small_conv_wn_task():
     return get_conv_task(normalization='weight_norm', small=True)
+
+
+def get_small_conv_transpose_task():
+    return get_conv_task(normalization='transpose', small=True)
 
 def get_fullyconnect_onlylast_task():
     train_loader, lc_full, _, net, output_fn, n_output = \

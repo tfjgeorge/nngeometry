@@ -8,7 +8,7 @@ from tasks import (get_linear_fc_task, get_linear_conv_task,
                    get_conv_task, get_conv_bn_task, get_conv_gn_task,
                    get_conv_wn_task, get_small_conv_wn_task, get_fullyconnect_wn_task,
                    get_fullyconnect_cosine_task, get_conv_skip_task,
-                   get_fullyconnect_affine_task)
+                   get_fullyconnect_affine_task, get_small_conv_transpose_task)
 
 from nngeometry.object.map import (PushForwardDense, PushForwardImplicit,
                                    PullBackDense)
@@ -25,7 +25,7 @@ linear_tasks = [get_linear_fc_task, get_linear_conv_task,
                 get_batchnorm_fc_linear_task, get_batchnorm_conv_linear_task,
                 get_fullyconnect_onlylast_task]
 
-nonlinear_tasks = [get_conv_task, get_fullyconnect_affine_task, get_fullyconnect_cosine_task,
+nonlinear_tasks = [get_small_conv_transpose_task, get_conv_task, get_fullyconnect_affine_task, get_fullyconnect_cosine_task,
                    get_conv_skip_task, get_fullyconnect_wn_task, get_small_conv_wn_task,
                    get_conv_gn_task, get_fullyconnect_task]
 
@@ -81,6 +81,7 @@ def test_jacobian_pushforward_dense_linear():
 def test_jacobian_pushforward_dense_nonlinear():
     for get_task in nonlinear_tasks:
         loader, lc, parameters, model, function, n_output = get_task()
+        print(get_task)
         generator = Jacobian(layer_collection=lc,
                              model=model,
                              function=function,
@@ -99,7 +100,7 @@ def test_jacobian_pushforward_dense_nonlinear():
         # This is non linear, so we don't expect the finite difference
         # estimate to be very accurate. We use a larger eps value
         check_tensors(output_after - output_before,
-                      doutput_lin.get_flat_representation().t(), eps=5e-2)
+                      doutput_lin.get_flat_representation().t(), eps=5e-3, only_print_diff=True)
 
 
 def test_jacobian_pushforward_implicit():

@@ -2,7 +2,7 @@ import torch
 from nngeometry.layercollection import (Affine1dLayer, Cosine1dLayer, LinearLayer, Conv2dLayer, BatchNorm1dLayer,
                                         BatchNorm2dLayer, GroupNormLayer, WeightNorm1dLayer,
                                         WeightNorm2dLayer, ConvTranspose2dLayer)
-from .grads_conv import conv2d_backward, convtranspose2d_backward
+from .grads_conv import conv2d_backward, convtranspose2d_backward, unfold_transpose_conv2d
 
 import torch.nn.functional as F
 
@@ -142,7 +142,7 @@ class Conv2dJacobianFactory(JacobianFactory):
             .view(-1, A_tilda.size(1))
         if layer.bias is not None:
             A_tilda = torch.cat([A_tilda,
-                                    torch.ones_like(A_tilda[:, :1])],
+                                 torch.ones_like(A_tilda[:, :1])],
                                 dim=1)
         # Omega_hat in KFC
         buffer.add_(torch.mm(A_tilda.t(), A_tilda))
@@ -190,10 +190,10 @@ class Conv2dJacobianFactory(JacobianFactory):
             buffer_diag[w_numel:].add_((gb_per_example**2).sum(dim=0))
             y = (gy * gb_per_example.unsqueeze(2).unsqueeze(3))
             cross_this = F.conv2d(x.transpose(0, 1),
-                                y.transpose(0, 1),
-                                stride=mod.dilation,
-                                padding=mod.padding,
-                                dilation=mod.stride).transpose(0, 1)
+                                  y.transpose(0, 1),
+                                  stride=mod.dilation,
+                                  padding=mod.padding,
+                                  dilation=mod.stride).transpose(0, 1)
             cross_this = cross_this[:, :, :mod.kernel_size[0], :mod.kernel_size[1]]
             buffer_cross.add_(cross_this)
 
@@ -207,6 +207,29 @@ class ConvTranspose2dJacobianFactory(JacobianFactory):
         buffer[:, :w_numel].add_(indiv_gw.view(bs, -1))
         if layer.bias is not None:
             buffer[:, w_numel:].add_(gy.sum(dim=(2, 3)))
+
+    @classmethod
+    def kfac_xx(cls, buffer, mod, layer, x, gy):
+        ks = (mod.weight.size(2), mod.weight.size(3))
+        # A_tilda in KFC
+        A_tilda = unfold_transpose_conv2d(x, mod)
+        # A_tilda is bs * #locations x #parameters
+        A_tilda = A_tilda.permute(0, 2, 1).contiguous() \
+            .view(-1, A_tilda.size(1))
+        if layer.bias is not None:
+            A_tilda = torch.cat([A_tilda,
+                                 torch.ones_like(A_tilda[:, :1])],
+                                dim=1)
+        # Omega_hat in KFC
+        buffer.add_(torch.mm(A_tilda.t(), A_tilda))
+
+    @classmethod
+    def kfac_gg(cls, buffer, mod, layer, x, gy):
+        spatial_locations = gy.size(2) * gy.size(3)
+        os = gy.size(1)
+        # DS_tilda in KFC
+        DS_tilda = gy.permute(0, 2, 3, 1).contiguous().view(-1, os)
+        buffer.add_(torch.mm(DS_tilda.t(), DS_tilda) / spatial_locations)
 
 
 def check_bn_training(mod):
