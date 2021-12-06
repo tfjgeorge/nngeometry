@@ -386,7 +386,7 @@ def get_fullyconnect_affine_task():
 
 def get_conv_task(normalization='none'):
     train_set = get_mnist()
-    train_set = Subset(train_set, range(1000))
+    train_set = Subset(train_set, range(700))
     train_loader = DataLoader(
         dataset=train_set,
         batch_size=300,
