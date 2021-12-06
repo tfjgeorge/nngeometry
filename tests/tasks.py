@@ -90,12 +90,12 @@ class ConvNet(nn.Module):
             self.bn1 = nn.BatchNorm2d(6)
         elif self.normalization == 'group_norm':
             self.gn1 = nn.GroupNorm(2, 6)
-        self.conv2 = nn.Conv2d(6, 5, 4, 1)
+        self.conv2 = nn.ConvTranspose2d(6, 5, 4, 1)
         self.conv3 = nn.Conv2d(5, 7, 3, 1, 1)
         if self.normalization == 'weight_norm':
-            self.wn2 = WeightNorm1d(7, 4)
+            self.wn2 = WeightNorm1d(2*2*7, 4)
         else:
-            self.fc1 = nn.Linear(7, 4)
+            self.fc1 = nn.Linear(2*2*7, 4)
         if self.normalization == 'batch_norm':
             self.bn2 = nn.BatchNorm1d(4)
         self.fc2 = nn.Linear(4, 3)
@@ -110,10 +110,13 @@ class ConvNet(nn.Module):
         else:
             x = tF.relu(self.conv1(x))
         x = tF.max_pool2d(x, 2, 2)
+        print('before', x.size())
         x = tF.relu(self.conv2(x))
+        print('after', x.size())
         x = tF.max_pool2d(x, 2, 2)
         x = tF.relu(self.conv3(x), inplace=True)
-        x = x.view(-1, 1*1*7)
+        x = tF.max_pool2d(x, 2, 2)
+        x = x.view(-1, 2*2*7)
         if self.normalization == 'batch_norm':
             x = self.bn2(self.fc1(x))
         elif self.normalization == 'weight_norm':

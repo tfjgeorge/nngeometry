@@ -135,3 +135,28 @@ class use_conv_impl_for_convs:
 
     def __exit__(self, exc_type, exc_value, traceback):
         _conv_grad_impl._use_unfold = self.prev
+
+
+def convtranspose2d_backward(mod, x, gy):
+    '''Computes per-example gradients for nn.ConvTranspose2d layers.'''
+    ks = (mod.weight.size(2), mod.weight.size(3))
+    gy_s = gy.size()
+    bs = gy_s[0]
+    x_unfold = unfold_transpose_conv(mod, x)
+    x_unfold_s = x_unfold.size()
+    return torch.bmm(gy.view(bs, gy_s[1], -1),
+                     x_unfold.view(bs, x_unfold_s[1], -1).permute(0, 2, 1))
+
+
+def unfold_transpose_conv(mod, x):
+    kw, kh = mod.kernel_size
+    unfold_filter = mod.weight.data.new(mod.in_channels, mod.in_channels * kw * kh, kw, kh)
+    unfold_filter.fill_(0)
+    for i in range(mod.out_channels):
+        for j in range(kw):
+            for k in range(kh):
+                unfold_filter[i, k + kh*j + kw*kh*i, j, k] = 1
+
+    return F.conv_transpose2d(x, unfold_filter, stride=mod.stride, padding=mod.padding,
+                              output_padding=mod.output_padding, groups=mod.groups,
+                              dilation=mod.dilation)
