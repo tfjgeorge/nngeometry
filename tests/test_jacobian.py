@@ -142,6 +142,7 @@ def test_jacobian_pullback_dense():
                               dinput_lin.get_flat_representation()),
                     torch.norm(doutput_lin.get_flat_representation())**2)
 
+
 def test_jacobian_fdense_vs_pullback():
     for get_task in linear_tasks + nonlinear_tasks:
         for centering in [True, False]:

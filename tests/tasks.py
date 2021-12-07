@@ -162,10 +162,10 @@ class LinearFCNet(nn.Module):
 
 def get_linear_fc_task():
     train_set = get_mnist()
-    train_set = Subset(train_set, range(1000))
+    train_set = Subset(train_set, range(70))
     train_loader = DataLoader(
         dataset=train_set,
-        batch_size=300,
+        batch_size=30,
         shuffle=False)
     net = LinearFCNet()
     to_device_model(net)
@@ -195,10 +195,10 @@ class LinearConvNet(nn.Module):
 
 def get_linear_conv_task():
     train_set = get_mnist()
-    train_set = Subset(train_set, range(1000))
+    train_set = Subset(train_set, range(70))
     train_loader = DataLoader(
         dataset=train_set,
-        batch_size=300,
+        batch_size=30,
         shuffle=False)
     net = LinearConvNet()
     to_device_model(net)
@@ -230,10 +230,10 @@ class BatchNormFCLinearNet(nn.Module):
 
 def get_batchnorm_fc_linear_task():
     train_set = get_mnist()
-    train_set = Subset(train_set, range(1000))
+    train_set = Subset(train_set, range(70))
     train_loader = DataLoader(
         dataset=train_set,
-        batch_size=300,
+        batch_size=30,
         shuffle=False)
     net = BatchNormFCLinearNet()
     to_device_model(net)
@@ -272,10 +272,10 @@ class BatchNormConvLinearNet(nn.Module):
 
 def get_batchnorm_conv_linear_task():
     train_set = get_mnist()
-    train_set = Subset(train_set, range(1000))
+    train_set = Subset(train_set, range(70))
     train_loader = DataLoader(
         dataset=train_set,
-        batch_size=300,
+        batch_size=30,
         shuffle=False)
     net = BatchNormConvLinearNet()
     to_device_model(net)
@@ -325,10 +325,10 @@ class BatchNormNonLinearNet(nn.Module):
 
 def get_batchnorm_nonlinear_task():
     train_set = get_mnist()
-    train_set = Subset(train_set, range(1000))
+    train_set = Subset(train_set, range(70))
     train_loader = DataLoader(
         dataset=train_set,
-        batch_size=1000,
+        batch_size=30,
         shuffle=False)
     net = BatchNormNonLinearNet()
     to_device_model(net)
@@ -351,10 +351,10 @@ def get_mnist():
 
 def get_fullyconnect_task(normalization='none'):
     train_set = get_mnist()
-    train_set = Subset(train_set, range(1000))
+    train_set = Subset(train_set, range(70))
     train_loader = DataLoader(
         dataset=train_set,
-        batch_size=300,
+        batch_size=30,
         shuffle=False)
     net = FCNet(out_size=3, normalization=normalization)
     to_device_model(net)
@@ -386,10 +386,10 @@ def get_fullyconnect_affine_task():
 
 def get_conv_task(normalization='none'):
     train_set = get_mnist()
-    train_set = Subset(train_set, range(700))
+    train_set = Subset(train_set, range(70))
     train_loader = DataLoader(
         dataset=train_set,
-        batch_size=300,
+        batch_size=30,
         shuffle=False)
     net = ConvNet(normalization=normalization)
     to_device_model(net)
@@ -421,10 +421,10 @@ def get_conv_cosine_task():
 
 def get_conv_task(normalization='none', small=False):
     train_set = get_mnist()
-    train_set = Subset(train_set, range(1000))
+    train_set = Subset(train_set, range(70))
     train_loader = DataLoader(
         dataset=train_set,
-        batch_size=300,
+        batch_size=30,
         shuffle=False)
     if small:
         net = SmallConvNet(normalization=normalization)
@@ -460,10 +460,10 @@ def get_fullyconnect_onlylast_task():
 
 def get_fullyconnect_segm_task():
     train_set = get_mnist()
-    train_set = Subset(train_set, range(1000))
+    train_set = Subset(train_set, range(70))
     train_loader = DataLoader(
         dataset=train_set,
-        batch_size=300,
+        batch_size=30,
         shuffle=False)
     net = FCNetSegmentation(out_size=3)
     to_device_model(net)
@@ -495,10 +495,10 @@ class ConvNetWithSkipConnection(nn.Module):
 
 def get_conv_skip_task():
     train_set = get_mnist()
-    train_set = Subset(train_set, range(1000))
+    train_set = Subset(train_set, range(70))
     train_loader = DataLoader(
         dataset=train_set,
-        batch_size=300,
+        batch_size=30,
         shuffle=False)
     net = ConvNetWithSkipConnection()
     to_device_model(net)
