@@ -81,7 +81,6 @@ def test_jacobian_pushforward_dense_linear():
 def test_jacobian_pushforward_dense_nonlinear():
     for get_task in nonlinear_tasks:
         loader, lc, parameters, model, function, n_output = get_task()
-        print(get_task)
         generator = Jacobian(layer_collection=lc,
                              model=model,
                              function=function,
@@ -100,7 +99,7 @@ def test_jacobian_pushforward_dense_nonlinear():
         # This is non linear, so we don't expect the finite difference
         # estimate to be very accurate. We use a larger eps value
         check_tensors(output_after - output_before,
-                      doutput_lin.get_flat_representation().t(), eps=5e-3, only_print_diff=True)
+                      doutput_lin.get_flat_representation().t(), eps=5e-3)
 
 
 def test_jacobian_pushforward_implicit():
