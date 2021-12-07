@@ -1,8 +1,8 @@
 import torch
 from nngeometry.layercollection import (Affine1dLayer, Cosine1dLayer, LinearLayer, Conv2dLayer, BatchNorm1dLayer,
                                         BatchNorm2dLayer, GroupNormLayer, WeightNorm1dLayer,
-                                        WeightNorm2dLayer)
-from .grads_conv import conv2d_backward as per_example_grad_conv
+                                        WeightNorm2dLayer, ConvTranspose2dLayer)
+from .grads_conv import conv2d_backward, convtranspose2d_backward, unfold_transpose_conv2d
 
 import torch.nn.functional as F
 
@@ -117,7 +117,7 @@ class Conv2dJacobianFactory(JacobianFactory):
     def flat_grad(cls, buffer, mod, layer, x, gy):
         bs = x.size(0)
         w_numel = layer.weight.numel()
-        indiv_gw = per_example_grad_conv(mod, x, gy)
+        indiv_gw = conv2d_backward(mod, x, gy)
         buffer[:, :w_numel].add_(indiv_gw.view(bs, -1))
         if layer.bias is not None:
             buffer[:, w_numel:].add_(gy.sum(dim=(2, 3)))
@@ -142,7 +142,7 @@ class Conv2dJacobianFactory(JacobianFactory):
             .view(-1, A_tilda.size(1))
         if layer.bias is not None:
             A_tilda = torch.cat([A_tilda,
-                                    torch.ones_like(A_tilda[:, :1])],
+                                 torch.ones_like(A_tilda[:, :1])],
                                 dim=1)
         # Omega_hat in KFC
         buffer.add_(torch.mm(A_tilda.t(), A_tilda))
@@ -183,19 +183,30 @@ class Conv2dJacobianFactory(JacobianFactory):
     @classmethod
     def quasidiag(cls, buffer_diag, buffer_cross, mod, layer, x, gy):
         w_numel = layer.weight.numel()
-        indiv_gw = per_example_grad_conv(mod, x, gy)
+        indiv_gw = conv2d_backward(mod, x, gy)
         buffer_diag[:w_numel].add_((indiv_gw**2).sum(dim=0).view(-1))
         if layer.bias is not None:
             gb_per_example = gy.sum(dim=(2, 3))
             buffer_diag[w_numel:].add_((gb_per_example**2).sum(dim=0))
             y = (gy * gb_per_example.unsqueeze(2).unsqueeze(3))
             cross_this = F.conv2d(x.transpose(0, 1),
-                                y.transpose(0, 1),
-                                stride=mod.dilation,
-                                padding=mod.padding,
-                                dilation=mod.stride).transpose(0, 1)
+                                  y.transpose(0, 1),
+                                  stride=mod.dilation,
+                                  padding=mod.padding,
+                                  dilation=mod.stride).transpose(0, 1)
             cross_this = cross_this[:, :, :mod.kernel_size[0], :mod.kernel_size[1]]
             buffer_cross.add_(cross_this)
+
+
+class ConvTranspose2dJacobianFactory(JacobianFactory):
+    @classmethod
+    def flat_grad(cls, buffer, mod, layer, x, gy):
+        bs = x.size(0)
+        w_numel = layer.weight.numel()
+        indiv_gw = convtranspose2d_backward(mod, x, gy)
+        buffer[:, :w_numel].add_(indiv_gw.view(bs, -1))
+        if layer.bias is not None:
+            buffer[:, w_numel:].add_(gy.sum(dim=(2, 3)))
 
 
 def check_bn_training(mod):
@@ -261,7 +272,7 @@ class WeightNorm2dJacobianFactory(JacobianFactory):
         bs = x.size(0)
         out_dim = mod.weight.size(0)
         norm2 = (mod.weight**2).sum(dim=(1, 2, 3)) + mod.eps
-        gw = per_example_grad_conv(mod, x, gy / torch.sqrt(norm2).view(1, out_dim, 1, 1))
+        gw = conv2d_backward(mod, x, gy / torch.sqrt(norm2).view(1, out_dim, 1, 1))
         gw = gw.view(bs, out_dim, -1)
         wn2_out = F.conv2d(x, mod.weight / norm2.view(out_dim, 1, 1, 1)**1.5, None,
                            stride=mod.stride, padding=mod.padding, dilation=mod.dilation)
@@ -296,6 +307,7 @@ class Affine1dJacobianFactory(JacobianFactory):
 FactoryMap = {
     LinearLayer: LinearJacobianFactory,
     Conv2dLayer: Conv2dJacobianFactory,
+    ConvTranspose2dLayer: ConvTranspose2dJacobianFactory,
     BatchNorm1dLayer: BatchNorm1dJacobianFactory,
     BatchNorm2dLayer: BatchNorm2dJacobianFactory,
     GroupNormLayer: GroupNormJacobianFactory,

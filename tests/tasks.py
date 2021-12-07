@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as tF
+from torch.nn.modules.conv import ConvTranspose2d
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 from nngeometry.layercollection import LayerCollection
@@ -109,11 +110,11 @@ class ConvNet(nn.Module):
             x = tF.relu(self.wn1(x))
         else:
             x = tF.relu(self.conv1(x))
-        x = tF.max_pool2d(x, 2, 2)
+        x = tF.avg_pool2d(x, 2, 2)
         x = tF.relu(self.conv2(x))
-        x = tF.max_pool2d(x, 2, 2)
+        x = tF.avg_pool2d(x, 2, 2)
         x = tF.relu(self.conv3(x), inplace=True)
-        x = x.view(-1, 1*1*7)
+        x = x.view(-1, 7)
         if self.normalization == 'batch_norm':
             x = self.bn2(self.fc1(x))
         elif self.normalization == 'weight_norm':
@@ -132,10 +133,14 @@ class SmallConvNet(nn.Module):
         if normalization == 'weight_norm':
             self.l1 = WeightNorm2d(1, 6, 3, 2)
             self.l2 = WeightNorm2d(6, 3, 2, 3)
+        elif normalization == 'transpose':
+            self.l1 = ConvTranspose2d(1, 6, (3, 2), 2)
+            self.l2 = ConvTranspose2d(6, 3, (2, 3), 3, bias=False)
         else:
             raise NotImplementedError
 
     def forward(self, x):
+        x = x[:, :, 5:-5, 5:-5]
         x = tF.relu(self.l1(x))
         x = tF.relu(self.l2(x))
         return x.sum(dim=(2, 3))
@@ -157,10 +162,10 @@ class LinearFCNet(nn.Module):
 
 def get_linear_fc_task():
     train_set = get_mnist()
-    train_set = Subset(train_set, range(1000))
+    train_set = Subset(train_set, range(70))
     train_loader = DataLoader(
         dataset=train_set,
-        batch_size=300,
+        batch_size=30,
         shuffle=False)
     net = LinearFCNet()
     to_device_model(net)
@@ -190,10 +195,10 @@ class LinearConvNet(nn.Module):
 
 def get_linear_conv_task():
     train_set = get_mnist()
-    train_set = Subset(train_set, range(1000))
+    train_set = Subset(train_set, range(70))
     train_loader = DataLoader(
         dataset=train_set,
-        batch_size=300,
+        batch_size=30,
         shuffle=False)
     net = LinearConvNet()
     to_device_model(net)
@@ -225,10 +230,10 @@ class BatchNormFCLinearNet(nn.Module):
 
 def get_batchnorm_fc_linear_task():
     train_set = get_mnist()
-    train_set = Subset(train_set, range(1000))
+    train_set = Subset(train_set, range(70))
     train_loader = DataLoader(
         dataset=train_set,
-        batch_size=300,
+        batch_size=30,
         shuffle=False)
     net = BatchNormFCLinearNet()
     to_device_model(net)
@@ -267,10 +272,10 @@ class BatchNormConvLinearNet(nn.Module):
 
 def get_batchnorm_conv_linear_task():
     train_set = get_mnist()
-    train_set = Subset(train_set, range(1000))
+    train_set = Subset(train_set, range(70))
     train_loader = DataLoader(
         dataset=train_set,
-        batch_size=300,
+        batch_size=30,
         shuffle=False)
     net = BatchNormConvLinearNet()
     to_device_model(net)
@@ -320,10 +325,10 @@ class BatchNormNonLinearNet(nn.Module):
 
 def get_batchnorm_nonlinear_task():
     train_set = get_mnist()
-    train_set = Subset(train_set, range(1000))
+    train_set = Subset(train_set, range(70))
     train_loader = DataLoader(
         dataset=train_set,
-        batch_size=1000,
+        batch_size=30,
         shuffle=False)
     net = BatchNormNonLinearNet()
     to_device_model(net)
@@ -346,10 +351,10 @@ def get_mnist():
 
 def get_fullyconnect_task(normalization='none'):
     train_set = get_mnist()
-    train_set = Subset(train_set, range(1000))
+    train_set = Subset(train_set, range(70))
     train_loader = DataLoader(
         dataset=train_set,
-        batch_size=300,
+        batch_size=30,
         shuffle=False)
     net = FCNet(out_size=3, normalization=normalization)
     to_device_model(net)
@@ -381,10 +386,10 @@ def get_fullyconnect_affine_task():
 
 def get_conv_task(normalization='none'):
     train_set = get_mnist()
-    train_set = Subset(train_set, range(1000))
+    train_set = Subset(train_set, range(70))
     train_loader = DataLoader(
         dataset=train_set,
-        batch_size=300,
+        batch_size=30,
         shuffle=False)
     net = ConvNet(normalization=normalization)
     to_device_model(net)
@@ -413,12 +418,13 @@ def get_conv_wn_task():
 def get_conv_cosine_task():
     return get_conv_task(normalization='cosine')
 
+
 def get_conv_task(normalization='none', small=False):
     train_set = get_mnist()
-    train_set = Subset(train_set, range(1000))
+    train_set = Subset(train_set, range(70))
     train_loader = DataLoader(
         dataset=train_set,
-        batch_size=300,
+        batch_size=30,
         shuffle=False)
     if small:
         net = SmallConvNet(normalization=normalization)
@@ -438,6 +444,10 @@ def get_conv_task(normalization='none', small=False):
 def get_small_conv_wn_task():
     return get_conv_task(normalization='weight_norm', small=True)
 
+
+def get_small_conv_transpose_task():
+    return get_conv_task(normalization='transpose', small=True)
+
 def get_fullyconnect_onlylast_task():
     train_loader, lc_full, _, net, output_fn, n_output = \
         get_fullyconnect_task()
@@ -450,10 +460,10 @@ def get_fullyconnect_onlylast_task():
 
 def get_fullyconnect_segm_task():
     train_set = get_mnist()
-    train_set = Subset(train_set, range(1000))
+    train_set = Subset(train_set, range(70))
     train_loader = DataLoader(
         dataset=train_set,
-        batch_size=300,
+        batch_size=30,
         shuffle=False)
     net = FCNetSegmentation(out_size=3)
     to_device_model(net)
@@ -485,10 +495,10 @@ class ConvNetWithSkipConnection(nn.Module):
 
 def get_conv_skip_task():
     train_set = get_mnist()
-    train_set = Subset(train_set, range(1000))
+    train_set = Subset(train_set, range(70))
     train_loader = DataLoader(
         dataset=train_set,
-        batch_size=300,
+        batch_size=30,
         shuffle=False)
     net = ConvNetWithSkipConnection()
     to_device_model(net)

@@ -4,6 +4,7 @@
 
 import numpy as np
 import torch
+from torch._C import unify_type_list
 import torch.nn.functional as F
 
 def conv_backward(input, grad_output, in_channels, out_channels, kernel_size,
@@ -135,3 +136,45 @@ class use_conv_impl_for_convs:
 
     def __exit__(self, exc_type, exc_value, traceback):
         _conv_grad_impl._use_unfold = self.prev
+
+
+def convtranspose2d_backward(mod, x, gy):
+    '''Computes per-example gradients for nn.ConvTranspose2d layers.'''
+    bs = gy.size(0)
+    s_i, s_o, k_h, k_w = mod.weight.size()
+    x_unfold = unfold_transpose_conv2d(mod, x)
+
+    x_perm = x_unfold.view(bs, s_i*k_w*k_h, -1).permute(0, 2, 1)
+    o = torch.bmm(gy.view(bs, s_o, -1), x_perm)
+    o = o.view(bs, s_o, s_i, k_h, k_w).permute(0, 2, 1, 3, 4)
+    o = o.contiguous()
+    return o
+
+
+def unfold_transpose_conv2d(mod, x):
+    unfold_filter = _filter_bank.get(mod)
+    return F.conv_transpose2d(x, unfold_filter, stride=mod.stride, padding=mod.padding,
+                              output_padding=mod.output_padding, groups=mod.in_channels,
+                              dilation=mod.dilation)
+
+class TransposeConv_Unfold_Filter_Bank:
+
+    def __init__(self):
+        self.filters = dict()
+
+    def get(self, mod):
+        if mod not in self.filters:
+            self.filters[mod] = self._create_unfold_filter(mod)
+        return self.filters[mod]
+
+    def _create_unfold_filter(self, mod):
+        kw, kh = mod.kernel_size
+        unfold_filter = mod.weight.data.new(mod.in_channels, kw * kh, kw, kh)
+        unfold_filter.fill_(0)
+        for i in range(mod.in_channels):
+            for j in range(kw):
+                for k in range(kh):
+                    unfold_filter[i, k + kh*j, j, k] = 1
+        return unfold_filter
+
+_filter_bank = TransposeConv_Unfold_Filter_Bank()
