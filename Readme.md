@@ -1,6 +1,6 @@
 # NNGeometry
 
-[![Build Status](https://travis-ci.org/tfjgeorge/nngeometry.svg?branch=master)](https://travis-ci.org/tfjgeorge/nngeometry) [![codecov](https://codecov.io/gh/tfjgeorge/nngeometry/branch/master/graph/badge.svg)](https://codecov.io/gh/tfjgeorge/nngeometry) [![DOI](https://zenodo.org/badge/208082966.svg)](https://zenodo.org/badge/latestdoi/208082966) [![PyPI version](https://badge.fury.io/py/nngeometry.svg)](https://badge.fury.io/py/nngeometry)
+[Build Status](https://github.com/tfjgeorge/nngeometry/actions/workflows/nngeometry.yml/badge.svg) [![codecov](https://codecov.io/gh/tfjgeorge/nngeometry/branch/master/graph/badge.svg)](https://codecov.io/gh/tfjgeorge/nngeometry) [![DOI](https://zenodo.org/badge/208082966.svg)](https://zenodo.org/badge/latestdoi/208082966) [![PyPI version](https://badge.fury.io/py/nngeometry.svg)](https://badge.fury.io/py/nngeometry)
 
 
 
