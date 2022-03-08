@@ -1,9 +1,0 @@
-language: python
-install:
-  - pip install -r requirements.txt
-  - pip install .
-  - pip install coverage
-script:
-  - coverage run -m pytest
-after_success:
-  - bash <(curl -s https://codecov.io/bash)
