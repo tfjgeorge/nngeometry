@@ -15,14 +15,14 @@ better visualization:
 
 :class:`nngeometry.object.pspace.PMatDense` representation: this is the usual dense matrix. Memory cost: :math:`d \times d`
 
-.. image:: https://github.com/tfjgeorge/nngeometry/raw/master/examples/repr_img/PMatDense.png
+.. image:: https://github.com/tfjgeorge/nngeometry/raw/master/docs/repr_img/PMatDense.png
   :width: 400
   
 :class:`nngeometry.object.pspace.PMatBlockDiag` representation: a block-diagonal representation where diagonal blocks are
 dense matrices corresponding to parameters of a single layer, and cross-layer interactions are ignored (their coefficients are
 set to :math:`0`). Memory cost: :math:`\sum_l d_l \times d_l` where :math:`d_l` is the number of parameters of layer :math:`l`.
 
-.. image:: https://github.com/tfjgeorge/nngeometry/raw/master/examples/repr_img/PMatBlockDiag.png
+.. image:: https://github.com/tfjgeorge/nngeometry/raw/master/docs/repr_img/PMatBlockDiag.png
   :width: 400
 
 :class:`nngeometry.object.pspace.PMatKFAC` representation :cite:p:`martens2015optimizing, grosse2016kronecker`: a block-diagonal representation where diagonal blocks are
@@ -30,7 +30,7 @@ factored as the Kronecker product of two smaller matrices, and cross-layer inter
 set to :math:`0`). Memory cost: :math:`\sum_l g_l \times g_l + a_l \times a_l` where :math:`a_l` is the number of neurons of the
 input of layer :math:`l` and :math:`g_l` is the number of pre-activations of the output of layer :math:`l`.
 
-.. image:: https://github.com/tfjgeorge/nngeometry/raw/master/examples/repr_img/PMatKFAC.png
+.. image:: https://github.com/tfjgeorge/nngeometry/raw/master/docs/repr_img/PMatKFAC.png
   :width: 400
 
 :class:`nngeometry.object.pspace.PMatEKFAC` representation :cite:p:`george2018fast`: a block-diagonal representation where diagonal blocks are
@@ -38,18 +38,18 @@ factored as a diagonal matrix in a Kronecker factored eigenbasis, and cross-laye
 set to :math:`0`). Memory cost: :math:`\sum_l g_l \times g_l + a_l \times a_l + d_l` where :math:`a_l` is the number of neurons of the
 input of layer :math:`l` and :math:`g_l` is the number of pre-activations of the output of layer :math:`l`, and :math:`d_l` is 
 
-.. image:: https://github.com/tfjgeorge/nngeometry/raw/master/examples/repr_img/PMatEKFAC.png
+.. image:: https://github.com/tfjgeorge/nngeometry/raw/master/docs/repr_img/PMatEKFAC.png
   :width: 400
 
 :class:`nngeometry.object.pspace.PMatDiag` representation: a diagonal representation that ignores all interactions between parameters. 
 Memory cost: :math:`d`
 
-.. image:: https://github.com/tfjgeorge/nngeometry/raw/master/examples/repr_img/PMatDiag.png
+.. image:: https://github.com/tfjgeorge/nngeometry/raw/master/docs/repr_img/PMatDiag.png
   :width: 400
 
 :class:`nngeometry.object.pspace.PMatQuasiDiag` representation :cite:p:`ollivier2015riemannian`: a diagonal representation where for each neuron, a coefficient is also
 stored that measures the interaction between this neuron's weights and the corresponding bias. 
 Memory cost: :math:`2 \times d`
 
-.. image:: https://github.com/tfjgeorge/nngeometry/raw/master/examples/repr_img/PMatQuasiDiag.png
+.. image:: https://github.com/tfjgeorge/nngeometry/raw/master/docs/repr_img/PMatQuasiDiag.png
   :width: 400
