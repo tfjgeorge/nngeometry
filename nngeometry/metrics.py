@@ -33,7 +33,6 @@ def FIM_MonteCarlo(model,
          - 'classif_logits' when using logits for classification
          - 'classif_logsoftmax' when using log_softmax values for classification
          - 'segmentation_logits' when using logits in a segmentation task
-         - 'regression' when using a gaussian regression model
     trials : int, optional (default=1)
         Number of trials for Monte Carlo sampling
     device : string, optional (default='cpu')
