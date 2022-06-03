@@ -109,10 +109,7 @@ def to_onexdataset(dataset, device):
 
 
 def get_convnet_kfc_task(bs=300):
-    train_set = datasets.MNIST(root=default_datapath,
-                               train=True,
-                               download=True,
-                               transform=transforms.ToTensor()),
+    train_set = get_mnist()
     train_set = Subset(train_set, range(1000))
     train_loader = DataLoader(
         dataset=train_set,
@@ -141,8 +138,8 @@ def test_jacobian_kfac_vs_pblockdiag():
     Compares blockdiag and kfac representation on datasets/architectures
     where they are the same
     """
-    # for get_task in [get_convnet_kfc_task, get_fullyconnect_kfac_task]:
-    for get_task in [get_fullyconnect_kfac_task]:
+    for get_task in [get_convnet_kfc_task, get_fullyconnect_kfac_task]:
+    # for get_task in [get_fullyconnect_kfac_task]:
         loader, lc, parameters, model, function, n_output = get_task()
 
         generator = Jacobian(layer_collection=lc,
