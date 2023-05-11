@@ -21,7 +21,7 @@ class FMatDense(FMatAbstract):
     def compute_eigendecomposition(self, impl='symeig'):
         # TODO: test
         if impl == 'symeig':
-            self.evals, self.evecs = torch.symeig(self.data, eigenvectors=True)
+            self.evals, self.evecs = torch.linalg.eigh(self.data)
         elif impl == 'svd':
             _, self.evals, self.evecs = torch.svd(self.data, some=False)
 

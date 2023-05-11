@@ -128,7 +128,7 @@ class PMatDense(PMatAbstract):
     def compute_eigendecomposition(self, impl='symeig'):
         # TODO: test
         if impl == 'symeig':
-            self.evals, self.evecs = torch.symeig(self.data, eigenvectors=True)
+            self.evals, self.evecs = torch.linalg.eigh(self.data)
         elif impl == 'svd':
             _, self.evals, self.evecs = torch.svd(self.data, some=False)
         else:
@@ -141,10 +141,10 @@ class PMatDense(PMatAbstract):
         # TODO: test
         if impl == 'solve':
             # TODO: reuse LU decomposition once it is computed
-            inv_v, _ = torch.solve(v.get_flat_representation().view(-1, 1),
-                                   self.data +
-                                   regul * torch.eye(self.size(0),
-                                                     device=self.data.device))
+            inv_v = torch.linalg.solve(self.data + 
+                                       regul * torch.eye(self.size(0),
+                                                         device=self.data.device),
+                                       v.get_flat_representation().view(-1, 1))
             return PVector(v.layer_collection, vector_repr=inv_v[:, 0])
         elif impl == 'eigendecomposition':
             v_eigenbasis = self.project_to_diag(v)
@@ -350,10 +350,10 @@ class PMatBlockDiag(PMatAbstract):
                 v = torch.cat([v, vs_dict[layer_id][1].view(-1)])
             block = self.data[layer_id]
 
-            inv_v, _ = torch.solve(v.view(-1, 1),
-                                   block +
-                                   regul * torch.eye(block.size(0),
-                                                     device=block.device))
+            inv_v = torch.linalg.solve(block +
+                                       regul * torch.eye(block.size(0),
+                                                         device=block.device),
+                                       v.view(-1, 1))
             inv_v_tuple = (inv_v[:layer.weight.numel()]
                            .view(*layer.weight.size),)
             if layer.bias is not None:
@@ -478,8 +478,8 @@ class PMatKFAC(PMatAbstract):
             a_reg = a + regul**.5 * pi * torch.eye(a.size(0), device=g.device)
             g_reg = g + regul**.5 / pi * torch.eye(g.size(0), device=g.device)
 
-            solve_g, _ = torch.solve(v, g_reg)
-            solve_a, _ = torch.solve(solve_g.t(), a_reg)
+            solve_g, _, _, _ = torch.linalg.lstsq(g_reg, v)
+            solve_a, _, _, _ = torch.linalg.lstsq(a_reg, solve_g.t())
             solve_a = solve_a.t()
             if layer.bias is None:
                 solve_tuple = (solve_a.view(*sw),)
@@ -577,8 +577,8 @@ class PMatKFAC(PMatAbstract):
         if impl == 'symeig':
             for layer_id in self.generator.layer_collection.layers.keys():
                 a, g = self.data[layer_id]
-                evals_a, evecs_a = torch.symeig(a, eigenvectors=True)
-                evals_g, evecs_g = torch.symeig(g, eigenvectors=True)
+                evals_a, evecs_a = torch.linalg.eigh(a)
+                evals_g, evecs_g = torch.linalg.eigh(g)
                 self.evals[layer_id] = (evals_a, evals_g)
                 self.evecs[layer_id] = (evecs_a, evecs_g)
         else:
@@ -625,8 +625,8 @@ class PMatEKFAC(PMatAbstract):
             for layer_id, layer in \
                     self.generator.layer_collection.layers.items():
                 a, g = kfac_blocks[layer_id]
-                evals_a, evecs_a = torch.symeig(a, eigenvectors=True)
-                evals_g, evecs_g = torch.symeig(g, eigenvectors=True)
+                evals_a, evecs_a = torch.linalg.eigh(a)
+                evals_g, evecs_g = torch.linalg.eigh(g)
                 evecs[layer_id] = (evecs_a, evecs_g)
                 diags[layer_id] = kronecker(evals_g.view(-1, 1),
                                             evals_a.view(-1, 1))
@@ -845,8 +845,7 @@ class PMatLowRank(PMatAbstract):
 
     def compute_eigendecomposition(self, impl='symeig'):
         if impl == 'symeig':
-            self.evals, V = torch.symeig(torch.mm(self.data, self.data.t()),
-                                         eigenvectors=True)
+            self.evals, V = torch.linalg.eigh(torch.mm(self.data, self.data.t()))
             self.evecs = torch.mm(self.data.t(), V) / \
                 (self.evals**.5).unsqueeze(0)
         else:
