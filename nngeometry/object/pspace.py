@@ -126,7 +126,6 @@ class PMatDense(PMatAbstract):
             self.data = generator.get_covariance_matrix(examples)
 
     def compute_eigendecomposition(self, impl='eigh'):
-        # TODO: test
         if impl == 'eigh':
             self.evals, self.evecs = torch.linalg.eigh(self.data)
         elif impl == 'svd':
@@ -843,11 +842,11 @@ class PMatLowRank(PMatAbstract):
                           torch.mv(data_mat, v.get_flat_representation()))
         return PVector(v.layer_collection, vector_repr=v_flat)
 
-    def compute_eigendecomposition(self, impl='eigh'):
-        if impl == 'eigh':
-            self.evals, V = torch.linalg.eigh(torch.mm(self.data, self.data.t()))
-            self.evecs = torch.mm(self.data.t(), V) / \
-                (self.evals**.5).unsqueeze(0)
+    def compute_eigendecomposition(self, impl='svd'):
+        data_mat = self.data.view(-1, self.data.size(2))
+        if impl == 'svd':
+            _, sqrt_evals, self.evecs = torch.svd(data_mat, some=True)
+            self.evals = sqrt_evals**2
         else:
             raise NotImplementedError
 
