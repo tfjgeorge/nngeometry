@@ -177,6 +177,74 @@ def test_jacobian_fdense_vs_pullback():
             check_ratio(frob_direct, frob_FMat)
 
 
+def test_jacobian_eigendecomposition_fdense():
+    for get_task in [get_small_conv_transpose_task]:
+        for impl in ['eigh', 'svd']:
+            loader, lc, parameters, model, function, n_output = get_task()
+            generator = Jacobian(layer_collection=lc,
+                                 model=model,
+                                 function=function,
+                                 n_output=n_output,
+                                 centering=True)
+            FMat_dense = FMatDense(generator=generator,
+                                   examples=loader)
+            FMat_dense.compute_eigendecomposition(impl=impl)
+            evals, evecs = FMat_dense.get_eigendecomposition()
+
+            tensor = FMat_dense.get_dense_tensor()
+            s = tensor.size()
+            check_tensors(tensor.view(s[0] * s[1], s[2] * s[3]),
+                          evecs @ torch.diag_embed(evals) @ evecs.T)
+            
+        with pytest.raises(NotImplementedError):
+            FMat_dense.compute_eigendecomposition(impl='stupid')
+
+
+def test_jacobian_eigendecomposition_pdense():
+    for get_task in [get_small_conv_transpose_task]:
+        for impl in ['eigh', 'svd']:
+            loader, lc, parameters, model, function, n_output = get_task()
+            generator = Jacobian(layer_collection=lc,
+                                 model=model,
+                                 function=function,
+                                 n_output=n_output,
+                                 centering=True)
+            pmat_dense = PMatDense(generator=generator,
+                                   examples=loader)
+            pmat_dense.compute_eigendecomposition(impl=impl)
+            evals, evecs = pmat_dense.get_eigendecomposition()
+
+            check_tensors(pmat_dense.get_dense_tensor(),
+                          evecs @ torch.diag_embed(evals) @ evecs.T)
+            
+        with pytest.raises(NotImplementedError):
+            pmat_dense.compute_eigendecomposition(impl='stupid')
+
+
+def test_jacobian_eigendecomposition_plowrank():
+    for get_task in [get_conv_task]:
+        for impl in ['svd']:
+            loader, lc, parameters, model, function, n_output = get_task()
+            generator = Jacobian(layer_collection=lc,
+                                 model=model,
+                                 function=function,
+                                 n_output=n_output,
+                                 centering=True)
+            pmat_lowrank = PMatLowRank(generator=generator,
+                                       examples=loader)
+            pmat_lowrank.compute_eigendecomposition(impl=impl)
+            evals, evecs = pmat_lowrank.get_eigendecomposition()
+
+            assert not evals.isnan().any()
+            assert not evecs.isnan().any()
+
+            check_tensors(pmat_lowrank.get_dense_tensor(),
+                          evecs @ torch.diag_embed(evals) @ evecs.T)
+            
+        with pytest.raises(NotImplementedError):
+            pmat_lowrank.compute_eigendecomposition(impl='stupid')
+
+
 def test_jacobian_pdense_vs_pushforward():
     # NB: sometimes the test with centering=True do not pass,
     # which is probably due to the way we compute centering
