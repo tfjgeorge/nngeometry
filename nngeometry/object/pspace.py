@@ -125,9 +125,9 @@ class PMatDense(PMatAbstract):
         else:
             self.data = generator.get_covariance_matrix(examples)
 
-    def compute_eigendecomposition(self, impl='symeig'):
+    def compute_eigendecomposition(self, impl='eigh'):
         # TODO: test
-        if impl == 'symeig':
+        if impl == 'eigh':
             self.evals, self.evecs = torch.linalg.eigh(self.data)
         elif impl == 'svd':
             _, self.evals, self.evecs = torch.svd(self.data, some=False)
@@ -571,10 +571,10 @@ class PMatKFAC(PMatAbstract):
         return sum([torch.trace(torch.mm(a, a)) * torch.trace(torch.mm(g, g))
                     for a, g in self.data.values()])**.5
 
-    def compute_eigendecomposition(self, impl='symeig'):
+    def compute_eigendecomposition(self, impl='eigh'):
         self.evals = dict()
         self.evecs = dict()
-        if impl == 'symeig':
+        if impl == 'eigh':
             for layer_id in self.generator.layer_collection.layers.keys():
                 a, g = self.data[layer_id]
                 evals_a, evecs_a = torch.linalg.eigh(a)
@@ -843,8 +843,8 @@ class PMatLowRank(PMatAbstract):
                           torch.mv(data_mat, v.get_flat_representation()))
         return PVector(v.layer_collection, vector_repr=v_flat)
 
-    def compute_eigendecomposition(self, impl='symeig'):
-        if impl == 'symeig':
+    def compute_eigendecomposition(self, impl='eigh'):
+        if impl == 'eigh':
             self.evals, V = torch.linalg.eigh(torch.mm(self.data, self.data.t()))
             self.evecs = torch.mm(self.data.t(), V) / \
                 (self.evals**.5).unsqueeze(0)

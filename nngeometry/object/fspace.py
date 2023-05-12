@@ -18,9 +18,9 @@ class FMatDense(FMatAbstract):
         else:
             self.data = generator.get_gram_matrix(examples)
 
-    def compute_eigendecomposition(self, impl='symeig'):
+    def compute_eigendecomposition(self, impl='eigh'):
         # TODO: test
-        if impl == 'symeig':
+        if impl == 'eigh':
             self.evals, self.evecs = torch.linalg.eigh(self.data)
         elif impl == 'svd':
             _, self.evals, self.evecs = torch.svd(self.data, some=False)
