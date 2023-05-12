@@ -19,11 +19,14 @@ class FMatDense(FMatAbstract):
             self.data = generator.get_gram_matrix(examples)
 
     def compute_eigendecomposition(self, impl='eigh'):
-        # TODO: test
+        s = self.data.size()
+        M = self.data.view(s[0] * s[1], s[2] * s[3])
         if impl == 'eigh':
-            self.evals, self.evecs = torch.linalg.eigh(self.data)
+            self.evals, self.evecs = torch.linalg.eigh(M)
         elif impl == 'svd':
-            _, self.evals, self.evecs = torch.svd(self.data, some=False)
+            _, self.evals, self.evecs = torch.svd(M, some=False)
+        else:
+            raise NotImplementedError
 
     def mv(self, v):
         # TODO: test
