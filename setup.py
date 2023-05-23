@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='nngeometry',
-      version='0.2.2',
+      version='0.3',
       description='Manipulate geometry matrices in Pytorch',
       url='https://github.com/tfjgeorge/nngeometry',
       author='tfjgeorge',
@@ -11,5 +11,5 @@ setup(name='nngeometry',
                 'nngeometry.generator',
                 'nngeometry.generator.jacobian',
                 'nngeometry.object'],
-      install_requires=['torch>=1.0.0'],
+      install_requires=['torch>=2.0.0'],
       zip_safe=False)
