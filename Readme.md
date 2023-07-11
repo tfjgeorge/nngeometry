@@ -9,6 +9,7 @@ NNGeometry allows you to:
  - compute finite-width **Neural Tangent Kernels** (Gram matrices), even for multiple output functions.
  - compute **per-examples jacobians** of the loss w.r.t network parameters, or of any function such as the network's output.
  - easily and efficiently compute linear algebra operations involving these matrices **regardless of their approximation**.
+ - compute **implicit** operations on these matrices, that do not require explicitely storing large matrices that would not fit in memory.
 
 ## Example
 
