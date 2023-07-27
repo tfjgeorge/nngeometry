@@ -40,7 +40,7 @@ class LayerCollection:
         :type ignore_unsupported_layers: bool
         """
         lc = LayerCollection()
-        for layer, mod in model.named_modules():
+        for layer, mod in model.named_modules(remove_duplicate=False):
             mod_class = mod.__class__.__name__
             if mod_class in LayerCollection._known_modules:
                 lc.add_layer('%s.%s' % (layer, str(mod)),
@@ -55,7 +55,7 @@ class LayerCollection:
         layerid_to_module = OrderedDict()
         module_to_layerid = OrderedDict()
         named_modules = {'%s.%s' % (l, str(m)): m
-                         for l, m in model.named_modules()}
+                         for l, m in model.named_modules(remove_duplicate=False)}
         for layer in self.layers.keys():
             layerid_to_module[layer] = named_modules[layer]
             module_to_layerid[named_modules[layer]] = layer
@@ -76,7 +76,7 @@ class LayerCollection:
         """
         if module.__class__.__name__ not in LayerCollection._known_modules:
             raise NotImplementedError
-        for layer, mod in model.named_modules():
+        for layer, mod in model.named_modules(remove_duplicate=False):
             if mod is module:
                 self.add_layer('%s.%s' % (layer, str(mod)),
                                LayerCollection._module_to_layer(mod))
