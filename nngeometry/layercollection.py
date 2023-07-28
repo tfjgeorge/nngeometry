@@ -13,10 +13,12 @@ class LayerCollection:
     :param layers:
     """
 
-    _known_modules = ['Linear', 'Conv2d', 'BatchNorm1d',
-                      'BatchNorm2d', 'GroupNorm', 'WeightNorm1d',
-                      'WeightNorm2d', 'Cosine1d', 'Affine1d',
-                      'ConvTranspose2d']
+    _known_modules = ['Linear', 'Conv2d', 
+                      #'BatchNorm1d', 'BatchNorm2d', 'GroupNorm', 'WeightNorm1d',
+                      #'WeightNorm2d', 
+                      #'Cosine1d', 'Affine1d',
+                      'ConvTranspose2d'
+    ]
 
     def __init__(self, layers=None):
         if layers is None:
