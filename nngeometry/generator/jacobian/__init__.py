@@ -48,25 +48,23 @@ class Jacobian:
         self.l_to_m, self.m_to_l = \
             self.layer_collection.get_layerid_module_maps(model)
 
-    def get_device(self):
-        return next(self.model.parameters()).device
-
     def get_covariance_matrix(self, examples):
         # add hooks
         self.handles += self._add_hooks(self._hook_savex,
                                         self._hook_compute_flat_grad,
                                         self.l_to_m.values())
 
-        device = next(self.model.parameters()).device
+        device = self._check_same_device()
+        dtype = self._check_same_dtype()
         loader = self._get_dataloader(examples)
         n_examples = len(loader.sampler)
         n_parameters = self.layer_collection.numel()
         bs = loader.batch_size
-        G = torch.zeros((n_parameters, n_parameters), device=device)
-        self.grads = torch.zeros((1, bs, n_parameters), device=device)
+        G = torch.zeros((n_parameters, n_parameters), device=device, dtype=dtype)
+        self.grads = torch.zeros((1, bs, n_parameters), device=device, dtype=dtype)
         if self.centering:
             grad_mean = torch.zeros((self.n_output, n_parameters),
-                                    device=device)
+                                    device=device, dtype=dtype)
 
         self.start = 0
         self.i_output = 0
@@ -105,11 +103,12 @@ class Jacobian:
                                         self._hook_compute_diag,
                                         self.l_to_m.values())
 
-        device = next(self.model.parameters()).device
+        device = self._check_same_device()
+        dtype = self._check_same_dtype()
         loader = self._get_dataloader(examples)
         n_examples = len(loader.sampler)
         n_parameters = self.layer_collection.numel()
-        self.diag_m = torch.zeros((n_parameters,), device=device)
+        self.diag_m = torch.zeros((n_parameters,), device=device, dtype=dtype)
         self.start = 0
         for d in loader:
             inputs = d[0]
@@ -139,19 +138,20 @@ class Jacobian:
                                         self._hook_compute_quasidiag,
                                         self.l_to_m.values())
 
-        device = next(self.model.parameters()).device
         loader = self._get_dataloader(examples)
         n_examples = len(loader.sampler)
         self._blocks = dict()
         for layer_id, layer in self.layer_collection.layers.items():
+            device = self._infer_device(layer_id)
+            dtype = self._infer_dtype(layer_id)
             s = layer.numel()
             if layer.bias is None:
-                self._blocks[layer_id] = (torch.zeros((s, ), device=device),
+                self._blocks[layer_id] = (torch.zeros((s, ), device=device, dtype=dtype),
                                           None)
             else:
                 cross_s = layer.weight.size
-                self._blocks[layer_id] = (torch.zeros((s, ), device=device),
-                                          torch.zeros(cross_s, device=device))
+                self._blocks[layer_id] = (torch.zeros((s, ), device=device, dtype=dtype),
+                                          torch.zeros(cross_s, device=device, dtype=dtype))
 
         for d in loader:
             inputs = d[0]
@@ -186,13 +186,14 @@ class Jacobian:
                                         self._hook_compute_layer_blocks,
                                         self.l_to_m.values())
 
-        device = next(self.model.parameters()).device
         loader = self._get_dataloader(examples)
         n_examples = len(loader.sampler)
         self._blocks = dict()
         for layer_id, layer in self.layer_collection.layers.items():
+            device = self._infer_device(layer_id)
+            dtype = self._infer_dtype(layer_id)
             s = layer.numel()
-            self._blocks[layer_id] = torch.zeros((s, s), device=device)
+            self._blocks[layer_id] = torch.zeros((s, s), device=device, dtype=dtype)
 
         for d in loader:
             inputs = d[0]
@@ -220,11 +221,12 @@ class Jacobian:
                                         self._hook_compute_kfac_blocks,
                                         self.l_to_m.values())
 
-        device = next(self.model.parameters()).device
         loader = self._get_dataloader(examples)
         n_examples = len(loader.sampler)
         self._blocks = dict()
         for layer_id, layer in self.layer_collection.layers.items():
+            device = self._infer_device(layer_id)
+            dtype = self._infer_dtype(layer_id)
             layer_class = layer.__class__.__name__
             if layer_class == 'LinearLayer':
                 sG = layer.out_features
@@ -235,8 +237,8 @@ class Jacobian:
                     layer.kernel_size[1]
             if layer.bias is not None:
                 sA += 1
-            self._blocks[layer_id] = (torch.zeros((sA, sA), device=device),
-                                      torch.zeros((sG, sG), device=device))
+            self._blocks[layer_id] = (torch.zeros((sA, sA), device=device, dtype=dtype),
+                                      torch.zeros((sG, sG), device=device, dtype=dtype))
 
         for d in loader:
             inputs = d[0]
@@ -274,12 +276,13 @@ class Jacobian:
                                         self._hook_compute_flat_grad,
                                         self.l_to_m.values())
 
-        device = next(self.model.parameters()).device
+        device = self._check_same_device()
+        dtype = self._check_same_dtype()
         loader = self._get_dataloader(examples)
         n_examples = len(loader.sampler)
         n_parameters = self.layer_collection.numel()
         self.grads = torch.zeros((self.n_output, n_examples, n_parameters),
-                                 device=device)
+                                 device=device, dtype=dtype)
         self.start = 0
         for d in loader:
             inputs = d[0]
@@ -312,11 +315,12 @@ class Jacobian:
         self.handles += self._add_hooks(self._hook_savex_io, self._hook_kxy,
                                         self.l_to_m.values())
 
-        device = next(self.model.parameters()).device
+        device = self._check_same_device()
+        dtype = self._check_same_dtype()
         loader = self._get_dataloader(examples)
         n_examples = len(loader.sampler)
         self.G = torch.zeros((self.n_output, n_examples,
-                              self.n_output, n_examples), device=device)
+                              self.n_output, n_examples), device=device, dtype=dtype)
         self.x_outer = dict()
         self.x_inner = dict()
         self.gy_outer = dict()
@@ -392,13 +396,14 @@ class Jacobian:
                                         self._hook_compute_kfe_diag,
                                         self.l_to_m.values())
 
-        device = next(self.model.parameters()).device
         loader = self._get_dataloader(examples)
         n_examples = len(loader.sampler)
         self._diags = dict()
         self._kfe = kfe
         for layer_id, layer in self.layer_collection.layers.items():
             layer_class = layer.__class__.__name__
+            device = self._infer_device(layer_id)
+            dtype = self._infer_dtype(layer_id)
             if layer_class == 'LinearLayer':
                 sG = layer.out_features
                 sA = layer.in_features
@@ -408,7 +413,7 @@ class Jacobian:
                     layer.kernel_size[1]
             if layer.bias is not None:
                 sA += 1
-            self._diags[layer_id] = torch.zeros((sG * sA), device=device)
+            self._diags[layer_id] = torch.zeros((sG * sA), device=device, dtype=dtype)
 
         for d in loader:
             inputs = d[0]
@@ -453,7 +458,8 @@ class Jacobian:
                 parameters.append(mod.bias)
                 output[mod.bias] = torch.zeros_like(mod.bias)
 
-        device = next(self.model.parameters()).device
+        device = self._check_same_device()
+        dtype = self._check_same_dtype()
         loader = self._get_dataloader(examples)
         n_examples = len(loader.sampler)
 
@@ -467,7 +473,7 @@ class Jacobian:
             f_output = self.function(*d).view(bs, self.n_output)
             for i in range(self.n_output):
                 # TODO reuse instead of reallocating memory
-                self._Jv = torch.zeros((1, bs), device=device)
+                self._Jv = torch.zeros((1, bs), device=device, dtype=dtype)
 
                 self.compute_switch = True
                 torch.autograd.grad(f_output[:, i].sum(dim=0), [inputs],
@@ -510,7 +516,8 @@ class Jacobian:
 
         self._v = v.get_dict_representation()
 
-        device = next(self.model.parameters()).device
+        device = self._check_same_device()
+        dtype = self._check_same_dtype()
         loader = self._get_dataloader(examples)
         n_examples = len(loader.sampler)
 
@@ -532,7 +539,7 @@ class Jacobian:
             f_output = self.function(*d).view(bs, self.n_output).sum(dim=0)
             for i in range(self.n_output):
                 # TODO reuse instead of reallocating memory
-                self._Jv = torch.zeros((1, bs), device=device)
+                self._Jv = torch.zeros((1, bs), device=device, dtype=dtype)
 
                 torch.autograd.grad(f_output[i], [inputs],
                                     retain_graph=i < self.n_output - 1,
@@ -589,10 +596,11 @@ class Jacobian:
 
         self._v = v.get_dict_representation()
 
-        device = next(self.model.parameters()).device
+        device = self._check_same_device()
+        dtype = self._check_same_dtype()
         loader = self._get_dataloader(examples)
         n_examples = len(loader.sampler)
-        self._Jv = torch.zeros((self.n_output, n_examples), device=device)
+        self._Jv = torch.zeros((self.n_output, n_examples), device=device, dtype=dtype)
         self.start = 0
         self.compute_switch = True
         for d in loader:
@@ -750,3 +758,30 @@ class Jacobian:
         else:
             return DataLoader(TensorDataset(*examples),
                               batch_size=len(examples[0]))
+
+    def _infer_dtype(self, layer_id):
+        return self.l_to_m[layer_id].weight.dtype
+
+    def _infer_device(self, layer_id):
+        return self.l_to_m[layer_id].weight.device
+
+    def _check_same_device(self):
+        device = None
+        for layer_id in self.layer_collection.layers.keys():
+            if device is None:
+                device = self._infer_device(layer_id)
+            elif device != self._infer_device(layer_id):
+                raise ValueError("All modules should reside on the same device")
+        return device
+
+    def _check_same_dtype(self):
+        dtype = None
+        for layer_id in self.layer_collection.layers.keys():
+            if dtype is None:
+                dtype = self._infer_dtype(layer_id)
+            elif dtype != self._infer_dtype(layer_id):
+                raise ValueError("All modules should have the same type")
+        return dtype
+
+    def get_device(self):
+        return self._check_same_device()
