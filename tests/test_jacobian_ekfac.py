@@ -3,7 +3,7 @@ import torch
 from tasks import device, get_conv_task, get_fullyconnect_task
 from utils import check_ratio, check_tensors
 
-from nngeometry.generator.jacobian import Jacobian
+from nngeometry.generator import Jacobian
 from nngeometry.object.pspace import PMatBlockDiag, PMatEKFAC, PMatKFAC
 from nngeometry.object.vector import random_pvector
 

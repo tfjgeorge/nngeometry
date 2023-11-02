@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 
 import torch
 
-from nngeometry.generator.dummy import DummyGenerator
+from nngeometry.generator import DummyGenerator
 
 from ..maths import kronecker
 from .vector import PVector

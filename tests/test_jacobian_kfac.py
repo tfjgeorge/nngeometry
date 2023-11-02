@@ -9,7 +9,7 @@ from tasks import (get_conv_task, get_fullyconnect_task, get_mnist,
 from torch.utils.data import DataLoader, Subset
 from utils import angle, check_ratio, check_tensors
 
-from nngeometry.generator.jacobian import Jacobian
+from nngeometry.generator import Jacobian
 from nngeometry.layercollection import LayerCollection
 from nngeometry.maths import kronecker
 from nngeometry.object.pspace import PMatBlockDiag, PMatKFAC

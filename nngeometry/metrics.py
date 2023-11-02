@@ -1,6 +1,6 @@
 import torch
 
-from .generator.jacobian import Jacobian
+from .generator import Jacobian
 from .layercollection import LayerCollection
 
 
