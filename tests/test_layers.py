@@ -1,6 +1,8 @@
-from nngeometry.layers import Cosine1d, WeightNorm1d, Affine1d, WeightNorm2d
 import torch
 from utils import check_ratio, check_tensors
+
+from nngeometry.layers import Affine1d, Cosine1d, WeightNorm1d, WeightNorm2d
+
 
 def test_cosine():
     cosine_layer = Cosine1d(2, 3)
@@ -11,7 +13,7 @@ def test_cosine():
     # extract vector orthogonal to cosine_layer.weight[1, :]
     x_1 = cosine_layer.weight[1, :]
     x_2 = cosine_layer.weight[2, :]
-    x_orth = x_2 - (x_2 * x_1).sum() / torch.norm(x_1)**2 * x_1
+    x_orth = x_2 - (x_2 * x_1).sum() / torch.norm(x_1) ** 2 * x_1
     x_orth *= 1.5
     x = torch.stack((x_col, x_orth))
 
@@ -25,7 +27,7 @@ def test_cosine():
 
 def test_weightnorm1d():
     weightnorm_layer = WeightNorm1d(2, 3)
-    
+
     mult0 = 3.3
     mult1 = 1.4
 
@@ -35,7 +37,7 @@ def test_weightnorm1d():
     # extract vector orthogonal to weightnorm_layer.weight[1, :]
     x_1 = weightnorm_layer.weight[1, :]
     x_2 = weightnorm_layer.weight[2, :]
-    x_orth = x_2 - (x_2 * x_1).sum() / torch.norm(x_1)**2 * x_1
+    x_orth = x_2 - (x_2 * x_1).sum() / torch.norm(x_1) ** 2 * x_1
     x_orth *= mult1
     x = torch.stack((x_col, x_orth))
 
@@ -49,7 +51,7 @@ def test_weightnorm1d():
 
 def test_weightnorm2d():
     weightnorm_layer = WeightNorm2d(2, 3, 4)
-    
+
     mult0 = 3.3
     mult1 = 1.4
 
@@ -59,7 +61,7 @@ def test_weightnorm2d():
     # extract vector orthogonal to weightnorm_layer.weight[1, :]
     x_1 = weightnorm_layer.weight[1]
     x_2 = weightnorm_layer.weight[2]
-    x_orth = x_2 - (x_2 * x_1).sum() / torch.norm(x_1)**2 * x_1
+    x_orth = x_2 - (x_2 * x_1).sum() / torch.norm(x_1) ** 2 * x_1
     x_orth *= mult1
     x = torch.stack((x_col, x_orth))
 
@@ -80,10 +82,8 @@ def test_affine1d():
     manual = affine_layer.weight.unsqueeze(0) * x
     check_tensors(manual + affine_layer.bias, out)
 
-    check_tensors(affine_layer.weight,
-                  torch.ones_like(affine_layer.weight))
-    check_tensors(affine_layer.bias,
-                  torch.zeros_like(affine_layer.bias))
+    check_tensors(affine_layer.weight, torch.ones_like(affine_layer.weight))
+    check_tensors(affine_layer.bias, torch.zeros_like(affine_layer.bias))
 
     affine_layer = Affine1d(3, bias=False)
 
@@ -94,4 +94,3 @@ def test_affine1d():
     assert affine_layer.bias is None
 
     print(affine_layer)
-

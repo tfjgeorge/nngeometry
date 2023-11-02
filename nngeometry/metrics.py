@@ -1,17 +1,19 @@
 import torch
-from torch.nn.functional import softmax
+
 from .generator.jacobian import Jacobian
 from .layercollection import LayerCollection
 
 
-def FIM_MonteCarlo(model,
-                   loader,
-                   representation,
-                   variant='classif_logits',
-                   trials=1,
-                   device='cpu',
-                   function=None,
-                   layer_collection=None):
+def FIM_MonteCarlo(
+    model,
+    loader,
+    representation,
+    variant="classif_logits",
+    trials=1,
+    device="cpu",
+    function=None,
+    layer_collection=None,
+):
     """
     Helper that creates a matrix computing the Fisher Information
     Matrix using a Monte-Carlo estimate of y|x with `trials` samples per
@@ -43,69 +45,70 @@ def FIM_MonteCarlo(model,
         parameter.
     layer_collection : layercollection.LayerCollection, optional
             (default=None)
-        An optional layer collection 
+        An optional layer collection
 
     """
 
     if function is None:
+
         def function(*d):
             return model(d[0].to(device))
 
     if layer_collection is None:
         layer_collection = LayerCollection.from_model(model)
 
-    if variant == 'classif_logits':
+    if variant == "classif_logits":
 
         def fim_function(*d):
             log_softmax = torch.log_softmax(function(*d), dim=1)
             probabilities = torch.exp(log_softmax)
-            sampled_targets = torch.multinomial(probabilities, trials,
-                                                replacement=True)
-            return trials ** -.5 * torch.gather(log_softmax, 1,
-                                                sampled_targets)
-    elif variant == 'classif_logsoftmax':
+            sampled_targets = torch.multinomial(probabilities, trials, replacement=True)
+            return trials**-0.5 * torch.gather(log_softmax, 1, sampled_targets)
+
+    elif variant == "classif_logsoftmax":
 
         def fim_function(*d):
             log_softmax = function(*d)
             probabilities = torch.exp(log_softmax)
-            sampled_targets = torch.multinomial(probabilities, trials,
-                                                replacement=True)
-            return trials ** -.5 * torch.gather(log_softmax, 1,
-                                                sampled_targets)
-    elif variant == 'segmentation_logits':
+            sampled_targets = torch.multinomial(probabilities, trials, replacement=True)
+            return trials**-0.5 * torch.gather(log_softmax, 1, sampled_targets)
+
+    elif variant == "segmentation_logits":
 
         def fim_function(*d):
             log_softmax = torch.log_softmax(function(*d), dim=1)
             s_mb, s_c, s_h, s_w = log_softmax.size()
-            log_softmax = log_softmax.permute(0, 2, 3, 1).contiguous() \
-                .view(s_mb * s_h * s_w, s_c)
+            log_softmax = (
+                log_softmax.permute(0, 2, 3, 1).contiguous().view(s_mb * s_h * s_w, s_c)
+            )
             probabilities = torch.exp(log_softmax)
-            sampled_indices = torch.multinomial(probabilities, trials,
-                                                replacement=True)
-            sampled_targets = torch.gather(log_softmax, 1,
-                                        sampled_indices)
-            sampled_targets = sampled_targets.view(s_mb, s_h * s_w, trials) \
-                .sum(dim=1)
-            return trials ** -.5 * sampled_targets
-                                                
+            sampled_indices = torch.multinomial(probabilities, trials, replacement=True)
+            sampled_targets = torch.gather(log_softmax, 1, sampled_indices)
+            sampled_targets = sampled_targets.view(s_mb, s_h * s_w, trials).sum(dim=1)
+            return trials**-0.5 * sampled_targets
+
     else:
         raise NotImplementedError
 
-    generator = Jacobian(layer_collection=layer_collection,
-                         model=model,
-                         function=fim_function,
-                         n_output=trials)
+    generator = Jacobian(
+        layer_collection=layer_collection,
+        model=model,
+        function=fim_function,
+        n_output=trials,
+    )
     return representation(generator=generator, examples=loader)
 
 
-def FIM(model,
-        loader,
-        representation,
-        n_output,
-        variant='classif_logits',
-        device='cpu',
-        function=None,
-        layer_collection=None):
+def FIM(
+    model,
+    loader,
+    representation,
+    n_output,
+    variant="classif_logits",
+    device="cpu",
+    function=None,
+    layer_collection=None,
+):
     """
     Helper that creates a matrix computing the Fisher Information
     Matrix using closed form expressions for the expectation y|x
@@ -136,33 +139,37 @@ def FIM(model,
         parameter.
     layer_collection : layercollection.LayerCollection, optional
             (default=None)
-        An optional layer collection 
+        An optional layer collection
     """
 
     if function is None:
+
         def function(*d):
             return model(d[0].to(device))
 
     if layer_collection is None:
         layer_collection = LayerCollection.from_model(model)
 
-    if variant == 'classif_logits':
+    if variant == "classif_logits":
 
         def function_fim(*d):
             log_probs = torch.log_softmax(function(*d), dim=1)
             probs = torch.exp(log_probs).detach()
-            return (log_probs * probs**.5)
+            return log_probs * probs**0.5
 
-    elif variant == 'regression':
+    elif variant == "regression":
 
         def function_fim(*d):
             estimates = function(*d)
             return estimates
+
     else:
         raise NotImplementedError
 
-    generator = Jacobian(layer_collection=layer_collection,
-                         model=model,
-                         function=function_fim,
-                         n_output=n_output)
+    generator = Jacobian(
+        layer_collection=layer_collection,
+        model=model,
+        function=function_fim,
+        n_output=n_output,
+    )
     return representation(generator=generator, examples=loader)
