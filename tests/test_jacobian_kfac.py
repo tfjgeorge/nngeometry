@@ -1,29 +1,32 @@
-from nngeometry.generator.jacobian import Jacobian
-from nngeometry.object.pspace import PMatBlockDiag, PMatKFAC
-from nngeometry.object.vector import random_pvector, PVector
-from nngeometry.maths import kronecker
-from nngeometry.layercollection import LayerCollection
+import os
+
+import pytest
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from tasks import (get_conv_task, get_fullyconnect_task, get_mnist,
+                   to_device_model)
 from torch.utils.data import DataLoader, Subset
-from torchvision import datasets, transforms
-from utils import check_ratio, check_tensors, angle
-from tasks import get_fullyconnect_task, get_mnist, get_conv_task, to_device_model
-import os
-import pytest
+from utils import angle, check_ratio, check_tensors
 
-default_datapath = 'tmp'
-if 'SLURM_TMPDIR' in os.environ:
-    default_datapath = os.path.join(os.environ['SLURM_TMPDIR'], 'data')
+from nngeometry.generator import Jacobian
+from nngeometry.layercollection import LayerCollection
+from nngeometry.maths import kronecker
+from nngeometry.object.pspace import PMatBlockDiag, PMatKFAC
+from nngeometry.object.vector import PVector, random_pvector
+
+default_datapath = "tmp"
+if "SLURM_TMPDIR" in os.environ:
+    default_datapath = os.path.join(os.environ["SLURM_TMPDIR"], "data")
 
 if torch.cuda.is_available():
-    device = 'cuda'
+    device = "cuda"
 
     def to_device(tensor):
         return tensor.to(device)
+
 else:
-    device = 'cpu'
+    device = "cpu"
 
     # on cpu we need to use double as otherwise ill-conditioning in sums
     # causes numerical instability
@@ -32,8 +35,9 @@ else:
 
 
 class Net(nn.Module):
-    def __init__(self, in_size=10, out_size=10, n_hidden=2, hidden_size=25,
-                 nonlinearity=nn.ReLU):
+    def __init__(
+        self, in_size=10, out_size=10, n_hidden=2, hidden_size=25, nonlinearity=nn.ReLU
+    ):
         super(Net, self).__init__()
         layers = []
         sizes = [in_size] + [hidden_size] * n_hidden + [out_size]
@@ -58,7 +62,7 @@ class ConvNet(nn.Module):
         self.conv1 = nn.Conv2d(1, 5, 3, 1)
         self.conv2 = nn.Conv2d(5, 6, 4, 1)
         self.conv3 = nn.Conv2d(6, 7, 3, 1)
-        self.fc1 = nn.Linear(1*1*7, 10)
+        self.fc1 = nn.Linear(1 * 1 * 7, 10)
 
     def forward(self, x):
         # TODO fix this (backprop gradient is 0)
@@ -71,7 +75,7 @@ class ConvNet(nn.Module):
         x = torch.ones_like(x) * 0.3 + x - x
         x = F.relu(self.conv3(x))
         x = F.max_pool2d(x, 2, 2)
-        x = x.view(-1, 1*1*7)
+        x = x.view(-1, 1 * 1 * 7)
         x = x[0, :].repeat(x.size(0), 1)
         x = self.fc1(x)
         return x
@@ -81,12 +85,9 @@ def get_fullyconnect_kfac_task(bs=300):
     train_set = get_mnist()
     train_set = Subset(train_set, range(1000))
     train_set = to_onexdataset(train_set, device)
-    train_loader = DataLoader(
-        dataset=train_set,
-        batch_size=bs,
-        shuffle=False)
+    train_loader = DataLoader(dataset=train_set, batch_size=bs, shuffle=False)
 
-    net = Net(in_size=18*18)
+    net = Net(in_size=18 * 18)
     to_device_model(net)
     net.eval()
 
@@ -94,8 +95,7 @@ def get_fullyconnect_kfac_task(bs=300):
         return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
-    return (train_loader, layer_collection, net.parameters(), net,
-            output_fn, 10)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn, 10)
 
 
 def to_onexdataset(dataset, device):
@@ -111,10 +111,7 @@ def to_onexdataset(dataset, device):
 def get_convnet_kfc_task(bs=300):
     train_set = get_mnist()
     train_set = Subset(train_set, range(1000))
-    train_loader = DataLoader(
-        dataset=train_set,
-        batch_size=bs,
-        shuffle=False)
+    train_loader = DataLoader(dataset=train_set, batch_size=bs, shuffle=False)
     net = ConvNet()
     to_device_model(net)
     net.eval()
@@ -123,8 +120,7 @@ def get_convnet_kfc_task(bs=300):
         return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
-    return (train_loader, layer_collection, net.parameters(), net,
-            output_fn, 10)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn, 10)
 
 
 @pytest.fixture(autouse=True)
@@ -144,10 +140,9 @@ def test_jacobian_kfac_vs_pblockdiag():
     for get_task in [get_fullyconnect_kfac_task]:
         loader, lc, parameters, model, function, n_output = get_task()
 
-        generator = Jacobian(layer_collection=lc,
-                             model=model,
-                             function=function,
-                             n_output=n_output)
+        generator = Jacobian(
+            layer_collection=lc, model=model, function=function, n_output=n_output
+        )
         M_kfac = PMatKFAC(generator=generator, examples=loader)
         M_blockdiag = PMatBlockDiag(generator=generator, examples=loader)
 
@@ -160,10 +155,9 @@ def test_jacobian_kfac():
     for get_task in [get_fullyconnect_task, get_conv_task]:
         loader, lc, parameters, model, function, n_output = get_task()
 
-        generator = Jacobian(layer_collection=lc,
-                             model=model,
-                             function=function,
-                             n_output=n_output)
+        generator = Jacobian(
+            layer_collection=lc, model=model, function=function, n_output=n_output
+        )
         M_kfac = PMatKFAC(generator=generator, examples=loader)
         G_kfac_split = M_kfac.get_dense_tensor(split_weight_bias=True)
         G_kfac = M_kfac.get_dense_tensor(split_weight_bias=False)
@@ -179,8 +173,7 @@ def test_jacobian_kfac():
         check_ratio(frob_direct, frob_kfac)
 
         # Test get_diag
-        check_tensors(torch.diag(G_kfac_split),
-                      M_kfac.get_diag(split_weight_bias=True))
+        check_tensors(torch.diag(G_kfac_split), M_kfac.get_diag(split_weight_bias=True))
 
         # sample random vector
         random_v = random_pvector(lc, device)
@@ -188,8 +181,7 @@ def test_jacobian_kfac():
         # Test mv
         mv_direct = torch.mv(G_kfac_split, random_v.get_flat_representation())
         mv_kfac = M_kfac.mv(random_v)
-        check_tensors(mv_direct,
-                      mv_kfac.get_flat_representation())
+        check_tensors(mv_direct, mv_kfac.get_flat_representation())
 
         # Test vTMv
         mnorm_kfac = M_kfac.vTMv(random_v)
@@ -204,15 +196,19 @@ def test_jacobian_kfac():
         mv2 = M_kfac.mv(mv_kfac)
         kfac_inverse = M_kfac.inverse(regul)
         mv_back = kfac_inverse.mv(mv2 + regul * mv_kfac)
-        check_tensors(mv_kfac.get_flat_representation(),
-                      mv_back.get_flat_representation(),
-                      eps=1e-2)
+        check_tensors(
+            mv_kfac.get_flat_representation(),
+            mv_back.get_flat_representation(),
+            eps=1e-2,
+        )
 
         # Test solve
         mv_back = M_kfac.solve(mv2 + regul * mv_kfac, regul=regul)
-        check_tensors(mv_kfac.get_flat_representation(),
-                      mv_back.get_flat_representation(),
-                      eps=1e-2)
+        check_tensors(
+            mv_kfac.get_flat_representation(),
+            mv_back.get_flat_representation(),
+            eps=1e-2,
+        )
 
 
 def test_pspace_kfac_eigendecomposition():
@@ -224,10 +220,9 @@ def test_pspace_kfac_eigendecomposition():
     eps = 1e-3
     loader, lc, parameters, model, function, n_output = get_fullyconnect_task()
 
-    generator = Jacobian(layer_collection=lc,
-                         model=model,
-                         function=function,
-                         n_output=n_output)
+    generator = Jacobian(
+        layer_collection=lc, model=model, function=function, n_output=n_output
+    )
 
     M_kfac = PMatKFAC(generator=generator, examples=loader)
     M_kfac.compute_eigendecomposition()
@@ -244,12 +239,16 @@ def test_pspace_kfac_eigendecomposition():
                         v_a = evecs[l_id][0][:, i_a].unsqueeze(0)
                         v_g = evecs[l_id][1][:, i_g].unsqueeze(1)
                         evec_block = kronecker(v_g, v_a)
-                        evec_tuple = (evec_block[:, :-1].contiguous(),
-                                      evec_block[:, -1].contiguous())
+                        evec_tuple = (
+                            evec_block[:, :-1].contiguous(),
+                            evec_block[:, -1].contiguous(),
+                        )
                         evec_v[l_id] = evec_tuple
                     else:
-                        evec_v[l_id2] = (torch.zeros_like(m.weight),
-                                         torch.zeros_like(m.bias))
+                        evec_v[l_id2] = (
+                            torch.zeros_like(m.weight),
+                            torch.zeros_like(m.bias),
+                        )
                 evec_v = PVector(lc, dict_repr=evec_v)
                 Mv = M_kfac.mv(evec_v)
                 angle_v_Mv = angle(Mv, evec_v)
@@ -263,14 +262,12 @@ def test_kfac():
         loader, lc, parameters, model1, function1, n_output = get_task()
         _, _, _, model2, function2, _ = get_task()
 
-        generator1 = Jacobian(layer_collection=lc,
-                              model=model1,
-                              function=function1,
-                              n_output=n_output)
-        generator2 = Jacobian(layer_collection=lc,
-                              model=model2,
-                              function=function1,
-                              n_output=n_output)
+        generator1 = Jacobian(
+            layer_collection=lc, model=model1, function=function1, n_output=n_output
+        )
+        generator2 = Jacobian(
+            layer_collection=lc, model=model2, function=function1, n_output=n_output
+        )
         M_kfac1 = PMatKFAC(generator=generator1, examples=loader)
         M_kfac2 = PMatKFAC(generator=generator2, examples=loader)
 
@@ -281,5 +278,4 @@ def test_kfac():
 
         prod_tensor = prod.get_dense_tensor(split_weight_bias=True)
 
-        check_tensors(torch.mm(M_kfac1_tensor, M_kfac2_tensor),
-                      prod_tensor)
+        check_tensors(torch.mm(M_kfac1_tensor, M_kfac2_tensor), prod_tensor)

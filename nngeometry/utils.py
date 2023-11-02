@@ -1,13 +1,12 @@
 import torch
-import torch.nn.functional as F
+
 from nngeometry.object.vector import PVector
 
 
 def display_correl(M, axis):
-
     M = M.get_dense_tensor()
     diag = torch.diag(M)
-    dM = (diag + diag.mean() / 100) **.5
+    dM = (diag + diag.mean() / 100) ** 0.5
     correl = torch.abs(M) / dM.unsqueeze(0) / dM.unsqueeze(1)
 
     axis.imshow(correl.cpu())
@@ -19,7 +18,7 @@ def grad(output, vec, *args, **kwargs):
 
     ..warning This function only works when internally your `vec` has been
         created from leaf nodes in the graph (e.g. model parameters)
-    
+
     :param output: The scalar quantity to be differentiated
     :param vec: a `PVector`
     :return: a `PVector` of gradients of `output` w.r.t `vec`
@@ -44,10 +43,11 @@ def grad(output, vec, *args, **kwargs):
             if l == 1:
                 dict_repr_grad[k] = (grad_list[p],)
             elif l == 2:
-                dict_repr_grad[k] = (grad_list[p], grad_list[p+1])
+                dict_repr_grad[k] = (grad_list[p], grad_list[p + 1])
 
-        return PVector(vec.layer_collection,
-                       dict_repr=dict_repr_grad)
+        return PVector(vec.layer_collection, dict_repr=dict_repr_grad)
     else:
-        raise RuntimeError('grad only works with the vector is created ' +
-                           'from leaf nodes in the computation graph')
+        raise RuntimeError(
+            "grad only works with the vector is created "
+            + "from leaf nodes in the computation graph"
+        )

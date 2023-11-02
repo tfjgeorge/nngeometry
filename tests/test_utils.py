@@ -1,9 +1,11 @@
+import pytest
 import torch
+from tasks import get_conv_gn_task, to_device
+from utils import check_tensors
+
 from nngeometry.object.vector import PVector, random_pvector
 from nngeometry.utils import grad
-from utils import check_tensors
-import pytest
-from tasks import get_conv_gn_task, to_device
+
 
 @pytest.fixture(autouse=True)
 def make_test_deterministic():
@@ -23,8 +25,9 @@ def test_grad_dict_repr():
     scalar_output.backward()
     grad_direct = PVector.from_model_grad(model)
 
-    check_tensors(grad_direct.get_flat_representation(),
-                  grad_nng.get_flat_representation())
+    check_tensors(
+        grad_direct.get_flat_representation(), grad_nng.get_flat_representation()
+    )
 
 
 def test_grad_flat_repr():

@@ -1,11 +1,12 @@
 import torch
+
 from ..layercollection import LayerCollection
 
 
 def random_pvector_dict(layer_collection, device=None):
     """
     Returns a random :class:`nngeometry.object.PVector` object using
-    the structure defined by the `layer_collection` parameter, with 
+    the structure defined by the `layer_collection` parameter, with
     each components drawn from a normal distribution with mean 0 and standard
     deviation 1.
 
@@ -17,8 +18,10 @@ def random_pvector_dict(layer_collection, device=None):
     v_dict = dict()
     for layer_id, layer in layer_collection.layers.items():
         if layer.bias is not None:
-            v_dict[layer_id] = (torch.normal(0, 1, layer.weight.size, device=device),
-                                torch.normal(0, 1, layer.bias.size, device=device))
+            v_dict[layer_id] = (
+                torch.normal(0, 1, layer.weight.size, device=device),
+                torch.normal(0, 1, layer.bias.size, device=device),
+            )
         else:
             v_dict[layer_id] = (torch.normal(0, 1, layer.weight.size, device=device),)
     return PVector(layer_collection, dict_repr=v_dict)
@@ -27,7 +30,7 @@ def random_pvector_dict(layer_collection, device=None):
 def random_pvector(layer_collection, device=None):
     """
     Returns a random :class:`nngeometry.object.PVector` object using
-    the structure defined by the `layer_collection` parameter, with 
+    the structure defined by the `layer_collection` parameter, with
     each components drawn from a normal distribution with mean 0 and standard
     deviation 1.
 
@@ -37,15 +40,20 @@ def random_pvector(layer_collection, device=None):
     describing the structure of the random pvector
     """
     n_parameters = layer_collection.numel()
-    random_v_flat = torch.normal(0, 1, (n_parameters,),
-                               device=device)
-    return PVector(layer_collection=layer_collection,
-                   vector_repr=random_v_flat)
+    random_v_flat = torch.normal(0, 1, (n_parameters,), device=device)
+    return PVector(layer_collection=layer_collection, vector_repr=random_v_flat)
 
 
 def random_fvector(n_samples, n_output=1, device=None):
-    random_v_flat = torch.normal(0, 1, (n_output, n_samples,),
-                                device=device)
+    random_v_flat = torch.normal(
+        0,
+        1,
+        (
+            n_output,
+            n_samples,
+        ),
+        device=device,
+    )
     return FVector(vector_repr=random_v_flat)
 
 
@@ -55,8 +63,8 @@ class PVector:
 
     :param:
     """
-    def __init__(self, layer_collection, vector_repr=None,
-                 dict_repr=None):
+
+    def __init__(self, layer_collection, vector_repr=None, dict_repr=None):
         self.layer_collection = layer_collection
         self.vector_repr = vector_repr
         self.dict_repr = dict_repr
@@ -138,8 +146,7 @@ class PVector:
                     dict_clone[k] = (v[0].clone(),)
             return PVector(self.layer_collection, dict_repr=dict_clone)
         if self.vector_repr is not None:
-            return PVector(self.layer_collection,
-                           vector_repr=self.vector_repr.clone())
+            return PVector(self.layer_collection, vector_repr=self.vector_repr.clone())
 
     def detach(self):
         """
@@ -154,8 +161,7 @@ class PVector:
                     dict_detach[k] = (v[0].detach(),)
             return PVector(self.layer_collection, dict_repr=dict_detach)
         if self.vector_repr is not None:
-            return PVector(self.layer_collection,
-                           vector_repr=self.vector_repr.detach())
+            return PVector(self.layer_collection, vector_repr=self.vector_repr.detach())
 
     def get_flat_representation(self):
         """
@@ -196,12 +202,14 @@ class PVector:
         dict_repr = dict()
         for layer_id, layer in self.layer_collection.layers.items():
             start = self.layer_collection.p_pos[layer_id]
-            w = self.vector_repr[start:start+layer.weight.numel()] \
-                    .view(*layer.weight.size)
+            w = self.vector_repr[start : start + layer.weight.numel()].view(
+                *layer.weight.size
+            )
             start += layer.weight.numel()
             if layer.bias is not None:
-                b = self.vector_repr[start:start+layer.bias.numel()] \
-                        .view(*layer.bias.size)
+                b = self.vector_repr[start : start + layer.bias.numel()].view(
+                    *layer.bias.size
+                )
                 start += layer.bias.numel()
                 dict_repr[layer_id] = (w, b)
             else:
@@ -215,10 +223,10 @@ class PVector:
         if self.dict_repr is not None:
             sum_p = 0
             for l_id, l in self.layer_collection.layers.items():
-                sum_p += (self.dict_repr[l_id][0]**p).sum()
+                sum_p += (self.dict_repr[l_id][0] ** p).sum()
                 if l.bias is not None:
-                    sum_p += (self.dict_repr[l_id][1]**p).sum()
-            return sum_p ** (1/p)
+                    sum_p += (self.dict_repr[l_id][1] ** p).sum()
+            return sum_p ** (1 / p)
         else:
             return torch.norm(self.vector_repr, p=p)
 
@@ -229,56 +237,63 @@ class PVector:
             v_dict = dict()
             for l_id, l in self.layer_collection.layers.items():
                 if l.bias:
-                    v_dict[l_id] = (x * self.dict_repr[l_id][0],
-                                    x * self.dict_repr[l_id][1])
+                    v_dict[l_id] = (
+                        x * self.dict_repr[l_id][0],
+                        x * self.dict_repr[l_id][1],
+                    )
                 else:
                     v_dict[l_id] = (x * self.dict_repr[l_id][0],)
             return PVector(self.layer_collection, dict_repr=v_dict)
         else:
-            return PVector(self.layer_collection,
-                           vector_repr=x * self.vector_repr)
+            return PVector(self.layer_collection, vector_repr=x * self.vector_repr)
 
     def __add__(self, other):
         if self.dict_repr is not None and other.dict_repr is not None:
             v_dict = dict()
             for l_id, l in self.layer_collection.layers.items():
                 if l.bias is not None:
-                    v_dict[l_id] = (self.dict_repr[l_id][0] +
-                                    other.dict_repr[l_id][0],
-                                    self.dict_repr[l_id][1] +
-                                    other.dict_repr[l_id][1])
+                    v_dict[l_id] = (
+                        self.dict_repr[l_id][0] + other.dict_repr[l_id][0],
+                        self.dict_repr[l_id][1] + other.dict_repr[l_id][1],
+                    )
                 else:
-                    v_dict[l_id] = (self.dict_repr[l_id][0] +
-                                    other.dict_repr[l_id][0],)
+                    v_dict[l_id] = (self.dict_repr[l_id][0] + other.dict_repr[l_id][0],)
             return PVector(self.layer_collection, dict_repr=v_dict)
         elif self.vector_repr is not None and other.vector_repr is not None:
-            return PVector(self.layer_collection,
-                           vector_repr=self.vector_repr+other.vector_repr)
+            return PVector(
+                self.layer_collection, vector_repr=self.vector_repr + other.vector_repr
+            )
         else:
-            return PVector(self.layer_collection,
-                           vector_repr=(self.get_flat_representation() +
-                                        other.get_flat_representation()))
+            return PVector(
+                self.layer_collection,
+                vector_repr=(
+                    self.get_flat_representation() + other.get_flat_representation()
+                ),
+            )
 
     def __sub__(self, other):
         if self.dict_repr is not None and other.dict_repr is not None:
             v_dict = dict()
             for l_id, l in self.layer_collection.layers.items():
                 if l.bias is not None:
-                    v_dict[l_id] = (self.dict_repr[l_id][0] -
-                                    other.dict_repr[l_id][0],
-                                    self.dict_repr[l_id][1] -
-                                    other.dict_repr[l_id][1])
+                    v_dict[l_id] = (
+                        self.dict_repr[l_id][0] - other.dict_repr[l_id][0],
+                        self.dict_repr[l_id][1] - other.dict_repr[l_id][1],
+                    )
                 else:
-                    v_dict[l_id] = (self.dict_repr[l_id][0] -
-                                    other.dict_repr[l_id][0],)
+                    v_dict[l_id] = (self.dict_repr[l_id][0] - other.dict_repr[l_id][0],)
             return PVector(self.layer_collection, dict_repr=v_dict)
         elif self.vector_repr is not None and other.vector_repr is not None:
-            return PVector(self.layer_collection,
-                           vector_repr=self.vector_repr-other.vector_repr)
+            return PVector(
+                self.layer_collection, vector_repr=self.vector_repr - other.vector_repr
+            )
         else:
-            return PVector(self.layer_collection,
-                           vector_repr=(self.get_flat_representation() -
-                                        other.get_flat_representation()))
+            return PVector(
+                self.layer_collection,
+                vector_repr=(
+                    self.get_flat_representation() - other.get_flat_representation()
+                ),
+            )
 
     def dot(self, other):
         """
@@ -287,16 +302,17 @@ class PVector:
         :param other: The other `PVector`
         """
         if self.vector_repr is not None or other.vector_repr is not None:
-            return torch.dot(self.get_flat_representation(),
-                             other.get_flat_representation())
+            return torch.dot(
+                self.get_flat_representation(), other.get_flat_representation()
+            )
         else:
             dot_ = 0
             for l_id, l in self.layer_collection.layers.items():
                 if l.bias is not None:
-                    dot_ += torch.dot(self.dict_repr[l_id][1],
-                                      other.dict_repr[l_id][1])
-                dot_ += torch.dot(self.dict_repr[l_id][0].view(-1),
-                                  other.dict_repr[l_id][0].view(-1))
+                    dot_ += torch.dot(self.dict_repr[l_id][1], other.dict_repr[l_id][1])
+                dot_ += torch.dot(
+                    self.dict_repr[l_id][0].view(-1), other.dict_repr[l_id][0].view(-1)
+                )
             return dot_
 
     def size(self):
@@ -304,13 +320,14 @@ class PVector:
         The size of the PVector, or equivalently the number of
         parameters of the layer collection
         """
-        return (self.layer_collection.numel(), )
+        return (self.layer_collection.numel(),)
 
 
 class FVector:
     """
     A vector in function space
     """
+
     def __init__(self, vector_repr=None):
         self.vector_repr = vector_repr
 
