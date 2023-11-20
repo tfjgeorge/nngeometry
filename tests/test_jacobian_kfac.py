@@ -4,8 +4,7 @@ import pytest
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from tasks import (get_conv_task, get_fullyconnect_task, get_mnist,
-                   to_device_model)
+from tasks import get_conv_task, get_fullyconnect_task, get_mnist, to_device_model
 from torch.utils.data import DataLoader, Subset
 from utils import angle, check_ratio, check_tensors
 
@@ -54,33 +53,6 @@ class Net(nn.Module):
         return out
 
 
-class ConvNet(nn.Module):
-    # this weird network transforms the input so that KFC and regular
-    # block diagonal Fisher are the same
-    def __init__(self):
-        super(ConvNet, self).__init__()
-        self.conv1 = nn.Conv2d(1, 5, 3, 1)
-        self.conv2 = nn.Conv2d(5, 6, 4, 1)
-        self.conv3 = nn.Conv2d(6, 7, 3, 1)
-        self.fc1 = nn.Linear(1 * 1 * 7, 10)
-
-    def forward(self, x):
-        # TODO fix this (backprop gradient is 0)
-        x = torch.ones_like(x) * 0.1 + x - x
-        x = F.relu(self.conv1(x))
-        x = F.max_pool2d(x, 2, 2)
-        x = torch.ones_like(x) * 0.2 + x - x
-        x = F.relu(self.conv2(x))
-        x = F.max_pool2d(x, 2, 2)
-        x = torch.ones_like(x) * 0.3 + x - x
-        x = F.relu(self.conv3(x))
-        x = F.max_pool2d(x, 2, 2)
-        x = x.view(-1, 1 * 1 * 7)
-        x = x[0, :].repeat(x.size(0), 1)
-        x = self.fc1(x)
-        return x
-
-
 def get_fullyconnect_kfac_task(bs=300):
     train_set = get_mnist()
     train_set = Subset(train_set, range(1000))
@@ -108,9 +80,21 @@ def to_onexdataset(dataset, device):
     return torch.utils.data.TensorDataset(x.to(device), t.to(device))
 
 
-def get_convnet_kfc_task(bs=300):
-    train_set = get_mnist()
-    train_set = Subset(train_set, range(1000))
+class ConvNet(nn.Module):
+    def __init__(self):
+        super(ConvNet, self).__init__()
+        self.conv1 = nn.Conv2d(3, 4, 3, 1)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = F.relu(x)
+        return x.sum(axis=(2, 3))
+
+
+def get_convnet_kfc_task(bs=5):
+    train_set = torch.utils.data.TensorDataset(
+        torch.ones(size=(10, 3, 5, 7)), torch.randint(0, 4, size=(10, 4))
+    )
     train_loader = DataLoader(dataset=train_set, batch_size=bs, shuffle=False)
     net = ConvNet()
     to_device_model(net)
@@ -120,7 +104,7 @@ def get_convnet_kfc_task(bs=300):
         return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
-    return (train_loader, layer_collection, net.parameters(), net, output_fn, 10)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn, 4)
 
 
 @pytest.fixture(autouse=True)
@@ -129,15 +113,13 @@ def make_test_deterministic():
     yield
 
 
+
 def test_jacobian_kfac_vs_pblockdiag():
     """
     Compares blockdiag and kfac representation on datasets/architectures
     where they are the same
-
-    TODO: design a task where kfc is exact
     """
-    # for get_task in [get_convnet_kfc_task, get_fullyconnect_kfac_task]:
-    for get_task in [get_fullyconnect_kfac_task]:
+    for get_task in [get_convnet_kfc_task, get_fullyconnect_kfac_task]:
         loader, lc, parameters, model, function, n_output = get_task()
 
         generator = Jacobian(
@@ -148,7 +130,7 @@ def test_jacobian_kfac_vs_pblockdiag():
 
         G_kfac = M_kfac.get_dense_tensor(split_weight_bias=True)
         G_blockdiag = M_blockdiag.get_dense_tensor()
-        check_tensors(G_blockdiag, G_kfac, only_print_diff=True)
+        check_tensors(G_blockdiag, G_kfac, only_print_diff=False)
 
 
 def test_jacobian_kfac():

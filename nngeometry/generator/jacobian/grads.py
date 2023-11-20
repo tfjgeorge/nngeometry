@@ -159,7 +159,7 @@ class Conv2dJacobianFactory(JacobianFactory):
         os = gy.size(1)
         # DS_tilda in KFC
         DS_tilda = gy.permute(0, 2, 3, 1).contiguous().view(-1, os)
-        buffer.add_(torch.mm(DS_tilda.t(), DS_tilda) / spatial_locations)
+        buffer.add_(torch.mm(DS_tilda.t(), DS_tilda))
 
     @classmethod
     def kfe_diag(cls, buffer, mod, layer, x, gy, evecs_a, evecs_g):
