@@ -87,7 +87,6 @@ class ConvNet(nn.Module):
 
     def forward(self, x):
         x = self.conv1(x)
-        x = F.relu(x)
         return x.sum(axis=(2, 3))
 
 
@@ -113,13 +112,14 @@ def make_test_deterministic():
     yield
 
 
-
 def test_jacobian_kfac_vs_pblockdiag():
     """
     Compares blockdiag and kfac representation on datasets/architectures
     where they are the same
     """
-    for get_task in [get_convnet_kfc_task, get_fullyconnect_kfac_task]:
+    for get_task, mult in zip(
+        [get_convnet_kfc_task, get_fullyconnect_kfac_task], [15.0, 1.0]
+    ):
         loader, lc, parameters, model, function, n_output = get_task()
 
         generator = Jacobian(
@@ -130,7 +130,7 @@ def test_jacobian_kfac_vs_pblockdiag():
 
         G_kfac = M_kfac.get_dense_tensor(split_weight_bias=True)
         G_blockdiag = M_blockdiag.get_dense_tensor()
-        check_tensors(G_blockdiag, G_kfac, only_print_diff=False)
+        check_tensors(G_blockdiag, G_kfac * mult, only_print_diff=False)
 
 
 def test_jacobian_kfac():
