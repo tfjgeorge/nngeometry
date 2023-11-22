@@ -482,3 +482,37 @@ def get_conv_skip_task():
 
     layer_collection = LayerCollection.from_model(net)
     return (train_loader, layer_collection, net.parameters(), net, output_fn, 3)
+
+
+class Conv1dNet(nn.Module):
+    def __init__(self, normalization="none"):
+        super(Conv1dNet, self).__init__()
+        if normalization != 'none':
+            raise NotImplementedError
+        self.normalization = normalization
+        self.conv1 = nn.Conv1d(1, 6, 3, 2)
+        self.conv2 = nn.Conv1d(6, 5, 4, 1)
+        self.fc1 = nn.Linear(7, 4)
+
+    def forward(self, x):
+        x = x.reshape(x.size(0), x.size(1), -1)
+        x = tF.relu(self.conv1(x))
+        x = tF.relu(self.conv2(x))
+        x = x.view(x.size(0), -1)
+        x = self.fc1(x)
+        return x
+
+
+def get_conv1d_task(normalization="none"):
+    train_set = get_mnist()
+    train_set = Subset(train_set, range(70))
+    train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
+    net = Conv1dNet(normalization=normalization)
+    to_device_model(net)
+    net.eval()
+
+    def output_fn(input, target):
+        return net(to_device(input))
+
+    layer_collection = LayerCollection.from_model(net)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn, 3)
