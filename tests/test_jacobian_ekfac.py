@@ -1,6 +1,6 @@
 import pytest
 import torch
-from tasks import device, get_conv_task, get_fullyconnect_task
+from tasks import device, get_conv_task, get_conv1d_task, get_fullyconnect_task
 from utils import check_ratio, check_tensors
 
 from nngeometry.generator import Jacobian
@@ -20,7 +20,7 @@ def test_pspace_ekfac_vs_kfac():
     sense of the Frobenius norm
     """
     eps = 1e-4
-    for get_task in [get_fullyconnect_task, get_conv_task]:
+    for get_task in [get_conv1d_task, get_fullyconnect_task, get_conv_task]:
         loader, lc, parameters, model, function, n_output = get_task()
         model.train()
         generator = Jacobian(
@@ -50,7 +50,7 @@ def test_pspace_ekfac_vs_direct():
     Check EKFAC basis operations against direct computation using
     get_dense_tensor
     """
-    for get_task in [get_fullyconnect_task, get_conv_task]:
+    for get_task in [get_conv1d_task, get_fullyconnect_task, get_conv_task]:
         loader, lc, parameters, model, function, n_output = get_task()
         model.train()
 

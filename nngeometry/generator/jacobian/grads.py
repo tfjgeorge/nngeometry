@@ -379,6 +379,40 @@ class Conv1dJacobianFactory(JacobianFactory):
         DS_tilda = gy.permute(0, 2, 1).contiguous().view(-1, os)
         buffer.add_(torch.mm(DS_tilda.t(), DS_tilda) / spatial_locations)
 
+    @classmethod
+    def kfe_diag(cls, buffer, mod, layer, x, gy, evecs_a, evecs_g):
+        ks = (1, mod.weight.size(2))
+        gy_s = gy.size()
+        bs = gy_s[0]
+        # project x to kfe
+        x_unfold = F.unfold(
+            x.unsqueeze(2),
+            kernel_size=ks,
+            stride=(1, mod.stride[0]),
+            padding=(0, mod.padding[0]),
+            dilation=(1, mod.dilation[0]),
+        )
+        x_unfold_s = x_unfold.size()
+        x_unfold = (
+            x_unfold.view(bs, x_unfold_s[1], -1)
+            .permute(0, 2, 1)
+            .contiguous()
+            .view(-1, x_unfold_s[1])
+        )
+        if mod.bias is not None:
+            x_unfold = torch.cat([x_unfold, torch.ones_like(x_unfold[:, :1])], dim=1)
+        x_kfe = torch.mm(x_unfold, evecs_a)
+
+        # project gy to kfe
+        gy = gy.view(bs, gy_s[1], -1).permute(0, 2, 1).contiguous()
+        gy_kfe = torch.mm(gy.view(-1, gy_s[1]), evecs_g)
+        gy_kfe = gy_kfe.view(bs, -1, gy_s[1]).permute(0, 2, 1).contiguous()
+
+        indiv_gw = torch.bmm(
+            gy_kfe.view(bs, gy_s[1], -1), x_kfe.view(bs, -1, x_kfe.size(1))
+        )
+        buffer.add_((indiv_gw**2).sum(dim=0).view(-1))
+
 
 FactoryMap = {
     LinearLayer: LinearJacobianFactory,

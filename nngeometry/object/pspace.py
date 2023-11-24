@@ -602,7 +602,7 @@ class PMatEKFAC(PMatAbstract):
     """
     EKFAC representation from
     *George, Laurent et al., Fast Approximate Natural Gradient Descent
-    in a Kronecker-factored Eigenbasis, NIPS 2018*
+    in a Kronecker-factored Eigenbasis, NeurIPS 2018*
 
     """
 
@@ -659,9 +659,9 @@ class PMatEKFAC(PMatAbstract):
         """
         evecs, _ = self.data
         KFE = dict()
-        for layer_id, _ in self.generator.layer_collection.layers.items():
+        for layer_id, layer in self.generator.layer_collection.layers.items():
             evecs_a, evecs_g = evecs[layer_id]
-            if split_weight_bias:
+            if split_weight_bias and layer.bias:
                 kronecker(evecs_g, evecs_a[:-1, :])
                 kronecker(evecs_g, evecs_a[-1:, :].contiguous())
                 KFE[layer_id] = torch.cat(

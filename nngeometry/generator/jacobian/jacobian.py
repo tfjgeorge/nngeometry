@@ -462,6 +462,9 @@ class Jacobian:
             elif layer_class == "Conv2dLayer":
                 sG = layer.out_channels
                 sA = layer.in_channels * layer.kernel_size[0] * layer.kernel_size[1]
+            elif layer_class == "Conv1dLayer":
+                sG = layer.out_channels
+                sA = layer.in_channels * layer.kernel_size[0]
             if layer.bias is not None:
                 sA += 1
             self._diags[layer_id] = torch.zeros((sG * sA), device=device, dtype=dtype)
@@ -778,7 +781,7 @@ class Jacobian:
         layer = self.layer_collection[layer_id]
         x = self.xs[mod]
         evecs_a, evecs_g = self._kfe[layer_id]
-        if mod_class in ["Linear", "Conv2d"]:
+        if mod_class in ["Linear", "Conv2d", "Conv1d"]:
             FactoryMap[layer.__class__].kfe_diag(
                 self._diags[layer_id], mod, layer, x, gy, evecs_a, evecs_g
             )
