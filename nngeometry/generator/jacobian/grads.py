@@ -5,9 +5,10 @@ from nngeometry.layercollection import (Affine1dLayer, BatchNorm1dLayer,
                                         BatchNorm2dLayer, Conv2dLayer,
                                         ConvTranspose2dLayer, Cosine1dLayer,
                                         GroupNormLayer, LinearLayer,
-                                        WeightNorm1dLayer, WeightNorm2dLayer)
+                                        WeightNorm1dLayer, WeightNorm2dLayer,
+                                        Conv1dLayer)
 
-from .grads_conv import conv2d_backward, convtranspose2d_backward
+from .grads_conv import conv2d_backward, convtranspose2d_backward, conv1d_backward
 
 
 class JacobianFactory:
@@ -325,8 +326,30 @@ class Affine1dJacobianFactory(JacobianFactory):
             buffer[:, w_numel:].add_(gy)
 
 
+class Conv1dJacobianFactory(JacobianFactory):
+    @classmethod
+    def flat_grad(cls, buffer, mod, layer, x, gy):
+        bs = x.size(0)
+        w_numel = layer.weight.numel()
+        indiv_gw = conv1d_backward(mod, x, gy)
+        buffer[:, :w_numel].add_(indiv_gw.view(bs, -1))
+        if layer.bias is not None:
+            buffer[:, w_numel:].add_(gy.sum(dim=2))
+
+    @classmethod
+    def Jv(cls, buffer, mod, layer, x, gy, v, v_bias):
+        bs = x.size(0)
+        gy2 = F.conv1d(
+            x, v, stride=mod.stride, padding=mod.padding, dilation=mod.dilation
+        )
+        buffer.add_((gy * gy2).view(bs, -1).sum(dim=1))
+        if layer.bias is not None:
+            buffer.add_(torch.mv(gy.sum(dim=2), v_bias))
+
+
 FactoryMap = {
     LinearLayer: LinearJacobianFactory,
+    Conv1dLayer: Conv1dJacobianFactory,
     Conv2dLayer: Conv2dJacobianFactory,
     ConvTranspose2dLayer: ConvTranspose2dJacobianFactory,
     BatchNorm1dLayer: BatchNorm1dJacobianFactory,

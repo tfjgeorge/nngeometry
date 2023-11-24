@@ -119,7 +119,25 @@ def conv2d_backward_using_unfold(mod, x, gy):
 
 
 def conv2d_backward(*args, **kwargs):
-    return _conv_grad_impl.get_impl()(*args, **kwargs)
+    return _conv_grad_impl.get_impl2d()(*args, **kwargs)
+
+
+def conv1d_backward_using_unfold(mod, x, gy):
+    """Computes per-example gradients for nn.Conv1d layers."""
+    ks = (1, mod.weight.size(2))
+    gy_s = gy.size()
+    bs = gy_s[0]
+    x_unfold = F.unfold(
+        x.unsqueeze(2), kernel_size=ks, stride=(1, mod.stride[0]), padding=(0, mod.padding[0]), dilation=(1, mod.dilation[0])
+    )
+    x_unfold_s = x_unfold.size()
+    return torch.bmm(
+        gy.view(bs, gy_s[1], -1), x_unfold.view(bs, x_unfold_s[1], -1).permute(0, 2, 1)
+    )
+
+
+def conv1d_backward(*args, **kwargs):
+    return _conv_grad_impl.get_impl1d()(*args, **kwargs)
 
 
 class ConvGradImplManager:
@@ -129,11 +147,17 @@ class ConvGradImplManager:
     def use_unfold(self, choice=True):
         self._use_unfold = choice
 
-    def get_impl(self):
+    def get_impl2d(self):
         if self._use_unfold:
             return conv2d_backward_using_unfold
         else:
             return conv2d_backward_using_conv
+
+    def get_impl1d(self):
+        if self._use_unfold:
+            return conv1d_backward_using_unfold
+        else:
+            raise NotImplementedError()
 
 
 _conv_grad_impl = ConvGradImplManager()

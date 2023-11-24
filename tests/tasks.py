@@ -490,14 +490,16 @@ class Conv1dNet(nn.Module):
         if normalization != 'none':
             raise NotImplementedError
         self.normalization = normalization
-        self.conv1 = nn.Conv1d(1, 6, 3, 2)
-        self.conv2 = nn.Conv1d(6, 5, 4, 1)
-        self.fc1 = nn.Linear(7, 4)
+        self.conv1 = nn.Conv1d(1, 6, 3, 3)
+        self.conv2 = nn.Conv1d(6, 5, 4, 8, bias=False)
+        self.conv3 = nn.Conv1d(5, 2, 4, 4)
+        self.fc1 = nn.Linear(16, 4)
 
     def forward(self, x):
         x = x.reshape(x.size(0), x.size(1), -1)
         x = tF.relu(self.conv1(x))
         x = tF.relu(self.conv2(x))
+        x = tF.relu(self.conv3(x))
         x = x.view(x.size(0), -1)
         x = self.fc1(x)
         return x
@@ -515,4 +517,4 @@ def get_conv1d_task(normalization="none"):
         return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
-    return (train_loader, layer_collection, net.parameters(), net, output_fn, 3)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn, 4)
