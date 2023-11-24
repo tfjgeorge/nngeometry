@@ -101,7 +101,7 @@ class ConvNet(nn.Module):
             self.bn1 = nn.BatchNorm2d(6)
         elif self.normalization == "group_norm":
             self.gn1 = nn.GroupNorm(2, 6)
-        self.conv2 = nn.Conv2d(6, 5, 4, 1)
+        self.conv2 = nn.Conv2d(6, 5, 4, 1, bias=False)
         self.conv3 = nn.Conv2d(5, 7, 3, 1, 1)
         if self.normalization == "weight_norm":
             self.wn2 = WeightNorm1d(7, 4)

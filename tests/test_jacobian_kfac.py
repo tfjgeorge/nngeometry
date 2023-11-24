@@ -4,7 +4,13 @@ import pytest
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from tasks import get_conv_task, get_fullyconnect_task, get_mnist, to_device_model
+from tasks import (
+    get_conv_task,
+    get_fullyconnect_task,
+    get_mnist,
+    to_device_model,
+    get_conv1d_task,
+)
 from torch.utils.data import DataLoader, Subset
 from utils import angle, check_ratio, check_tensors
 
@@ -161,7 +167,7 @@ def test_jacobian_kfac_vs_pblockdiag():
 
 
 def test_jacobian_kfac():
-    for get_task in [get_fullyconnect_task, get_conv_task]:
+    for get_task in [get_conv1d_task, get_fullyconnect_task, get_conv_task]:
         loader, lc, parameters, model, function, n_output = get_task()
 
         generator = Jacobian(
@@ -190,6 +196,8 @@ def test_jacobian_kfac():
         # Test mv
         mv_direct = torch.mv(G_kfac_split, random_v.get_flat_representation())
         mv_kfac = M_kfac.mv(random_v)
+        print(mv_direct.size(), lc.layers)
+        pvec = PVector(layer_collection=lc, vector_repr=mv_direct)
         check_tensors(mv_direct, mv_kfac.get_flat_representation())
 
         # Test vTMv
