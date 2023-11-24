@@ -194,7 +194,7 @@ class PVector:
         parts = []
         for layer_id, layer in self.layer_collection.layers.items():
             parts.append(self.dict_repr[layer_id][0].view(-1))
-            if len(self.dict_repr[layer_id]) > 1:
+            if layer.bias:
                 parts.append(self.dict_repr[layer_id][1].view(-1))
         return torch.cat(parts)
 
