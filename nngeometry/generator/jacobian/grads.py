@@ -1,12 +1,19 @@
 import torch
 import torch.nn.functional as F
 
-from nngeometry.layercollection import (Affine1dLayer, BatchNorm1dLayer,
-                                        BatchNorm2dLayer, Conv2dLayer,
-                                        ConvTranspose2dLayer, Cosine1dLayer,
-                                        GroupNormLayer, LinearLayer,
-                                        WeightNorm1dLayer, WeightNorm2dLayer,
-                                        Conv1dLayer)
+from nngeometry.layercollection import (
+    Affine1dLayer,
+    BatchNorm1dLayer,
+    BatchNorm2dLayer,
+    Conv2dLayer,
+    ConvTranspose2dLayer,
+    Cosine1dLayer,
+    GroupNormLayer,
+    LinearLayer,
+    WeightNorm1dLayer,
+    WeightNorm2dLayer,
+    Conv1dLayer,
+)
 
 from .grads_conv import conv2d_backward, convtranspose2d_backward, conv1d_backward
 

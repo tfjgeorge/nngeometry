@@ -145,7 +145,7 @@ def test_jacobian_kfac_vs_pblockdiag():
     """
     for get_task, mult in zip(
         [get_conv1dnet_kfc_task, get_convnet_kfc_task, get_fullyconnect_kfac_task],
-        [3., 15.0, 1.0]
+        [3.0, 15.0, 1.0],
     ):
         loader, lc, parameters, model, function, n_output = get_task()
 

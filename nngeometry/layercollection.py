@@ -238,14 +238,13 @@ class ConvTranspose2dLayer(AbstractLayer):
             and self.kernel_size == other.kernel_size
         )
 
+
 class Conv1dLayer(AbstractLayer):
     def __init__(self, in_channels, out_channels, kernel_size, bias=True):
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
-        self.weight = Parameter(
-            out_channels, in_channels, kernel_size[0]
-        )
+        self.weight = Parameter(out_channels, in_channels, kernel_size[0])
         if bias:
             self.bias = Parameter(out_channels)
         else:

@@ -487,7 +487,7 @@ def get_conv_skip_task():
 class Conv1dNet(nn.Module):
     def __init__(self, normalization="none"):
         super(Conv1dNet, self).__init__()
-        if normalization != 'none':
+        if normalization != "none":
             raise NotImplementedError
         self.normalization = normalization
         self.conv1 = nn.Conv1d(1, 6, 3, 3)

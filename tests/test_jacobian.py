@@ -1,21 +1,35 @@
 import pytest
 import torch
-from tasks import (get_batchnorm_conv_linear_task,
-                   get_batchnorm_fc_linear_task, get_conv_gn_task,
-                   get_conv_skip_task, get_conv_task,
-                   get_fullyconnect_affine_task, get_fullyconnect_cosine_task,
-                   get_fullyconnect_onlylast_task, get_fullyconnect_task,
-                   get_fullyconnect_wn_task, get_linear_conv_task,
-                   get_linear_fc_task, get_small_conv_transpose_task,
-                   get_small_conv_wn_task, get_conv1d_task)
+from tasks import (
+    get_batchnorm_conv_linear_task,
+    get_batchnorm_fc_linear_task,
+    get_conv_gn_task,
+    get_conv_skip_task,
+    get_conv_task,
+    get_fullyconnect_affine_task,
+    get_fullyconnect_cosine_task,
+    get_fullyconnect_onlylast_task,
+    get_fullyconnect_task,
+    get_fullyconnect_wn_task,
+    get_linear_conv_task,
+    get_linear_fc_task,
+    get_small_conv_transpose_task,
+    get_small_conv_wn_task,
+    get_conv1d_task,
+)
 from utils import check_ratio, check_tensors
 
 from nngeometry.generator import Jacobian
 from nngeometry.object.fspace import FMatDense
-from nngeometry.object.map import (PullBackDense, PushForwardDense,
-                                   PushForwardImplicit)
-from nngeometry.object.pspace import (PMatBlockDiag, PMatDense, PMatDiag,
-                                      PMatImplicit, PMatLowRank, PMatQuasiDiag)
+from nngeometry.object.map import PullBackDense, PushForwardDense, PushForwardImplicit
+from nngeometry.object.pspace import (
+    PMatBlockDiag,
+    PMatDense,
+    PMatDiag,
+    PMatImplicit,
+    PMatLowRank,
+    PMatQuasiDiag,
+)
 from nngeometry.object.vector import PVector, random_fvector, random_pvector
 
 linear_tasks = [
