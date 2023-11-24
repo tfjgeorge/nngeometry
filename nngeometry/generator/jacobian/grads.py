@@ -346,6 +346,32 @@ class Conv1dJacobianFactory(JacobianFactory):
         if layer.bias is not None:
             buffer.add_(torch.mv(gy.sum(dim=2), v_bias))
 
+    @classmethod
+    def kfac_xx(cls, buffer, mod, layer, x, gy):
+        ks = (1, mod.weight.size(2))
+        # A_tilda in KFC
+        A_tilda = F.unfold(
+            x.unsqueeze(2),
+            kernel_size=ks,
+            stride=(1, mod.stride[0]),
+            padding=(0, mod.padding[0]),
+            dilation=(1, mod.dilation[0]),
+        )
+        # A_tilda is bs * #locations x #parameters
+        A_tilda = A_tilda.permute(0, 2, 1).contiguous().view(-1, A_tilda.size(1))
+        if layer.bias is not None:
+            A_tilda = torch.cat([A_tilda, torch.ones_like(A_tilda[:, :1])], dim=1)
+        # Omega_hat in KFC
+        buffer.add_(torch.mm(A_tilda.t(), A_tilda))
+
+    @classmethod
+    def kfac_gg(cls, buffer, mod, layer, x, gy):
+        spatial_locations = gy.size(2)
+        os = gy.size(1)
+        # DS_tilda in KFC
+        DS_tilda = gy.permute(0, 2, 1).contiguous().view(-1, os)
+        buffer.add_(torch.mm(DS_tilda.t(), DS_tilda) / spatial_locations)
+
 
 FactoryMap = {
     LinearLayer: LinearJacobianFactory,

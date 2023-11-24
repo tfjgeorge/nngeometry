@@ -106,6 +106,32 @@ def get_convnet_kfc_task(bs=5):
     return (train_loader, layer_collection, net.parameters(), net, output_fn, 4)
 
 
+class Conv1dNet(nn.Module):
+    def __init__(self):
+        super(Conv1dNet, self).__init__()
+        self.conv1 = nn.Conv1d(3, 4, 3, 1)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        return x.sum(axis=(2,))
+
+
+def get_conv1dnet_kfc_task(bs=5):
+    train_set = torch.utils.data.TensorDataset(
+        torch.ones(size=(10, 3, 5)), torch.randint(0, 4, size=(10, 4))
+    )
+    train_loader = DataLoader(dataset=train_set, batch_size=bs, shuffle=False)
+    net = Conv1dNet()
+    to_device_model(net)
+    net.eval()
+
+    def output_fn(input, target):
+        return net(to_device(input))
+
+    layer_collection = LayerCollection.from_model(net)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn, 4)
+
+
 @pytest.fixture(autouse=True)
 def make_test_deterministic():
     torch.manual_seed(1234)
@@ -118,7 +144,8 @@ def test_jacobian_kfac_vs_pblockdiag():
     where they are the same
     """
     for get_task, mult in zip(
-        [get_convnet_kfc_task, get_fullyconnect_kfac_task], [15.0, 1.0]
+        [get_conv1dnet_kfc_task, get_convnet_kfc_task, get_fullyconnect_kfac_task],
+        [3., 15.0, 1.0]
     ):
         loader, lc, parameters, model, function, n_output = get_task()
 

@@ -128,7 +128,8 @@ def conv1d_backward_using_unfold(mod, x, gy):
     gy_s = gy.size()
     bs = gy_s[0]
     x_unfold = F.unfold(
-        x.unsqueeze(2), kernel_size=ks, stride=(1, mod.stride[0]), padding=(0, mod.padding[0]), dilation=(1, mod.dilation[0])
+        x.unsqueeze(2), kernel_size=ks, stride=(1, mod.stride[0]),
+        padding=(0, mod.padding[0]), dilation=(1, mod.dilation[0])
     )
     x_unfold_s = x_unfold.size()
     return torch.bmm(
