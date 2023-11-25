@@ -3,7 +3,6 @@ import os
 import pytest
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from tasks import (
     get_conv_task,
     get_fullyconnect_task,
@@ -196,8 +195,6 @@ def test_jacobian_kfac():
         # Test mv
         mv_direct = torch.mv(G_kfac_split, random_v.get_flat_representation())
         mv_kfac = M_kfac.mv(random_v)
-        print(mv_direct.size(), lc.layers)
-        pvec = PVector(layer_collection=lc, vector_repr=mv_direct)
         check_tensors(mv_direct, mv_kfac.get_flat_representation())
 
         # Test vTMv

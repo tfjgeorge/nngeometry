@@ -41,7 +41,10 @@ class Jacobian:
         self.centering = centering
 
         if function is None:
-            function = lambda *x: model(x[0])
+
+            def function(*x):
+                return model(x[0])
+
         self.function = function
 
         if layer_collection is None:

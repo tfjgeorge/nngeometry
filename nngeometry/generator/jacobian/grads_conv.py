@@ -83,11 +83,6 @@ def conv_backward(
     return weight_bgrad
 
 
-def conv1d_backward(*args, **kwargs):
-    """Computes per-example gradients for nn.Conv1d layers."""
-    return conv_backward(*args, nd=1, **kwargs)
-
-
 def conv2d_backward_using_conv(mod, x, gy):
     """Computes per-example gradients for nn.Conv2d layers."""
     return conv_backward(

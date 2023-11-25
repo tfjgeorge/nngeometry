@@ -5,8 +5,7 @@ import torch.nn.functional as tF
 from utils import check_ratio, check_tensors
 
 from nngeometry.layercollection import LayerCollection
-from nngeometry.object.vector import (PVector, random_pvector,
-                                      random_pvector_dict)
+from nngeometry.object.vector import PVector, random_pvector, random_pvector_dict
 
 
 class ConvNet(nn.Module):

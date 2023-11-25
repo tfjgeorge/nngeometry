@@ -833,6 +833,7 @@ def test_bn_eval_mode():
         model.train()
         with pytest.raises(RuntimeError):
             FMat_dense = FMatDense(generator=generator, examples=loader)
+            FMat_dense.get_dense_tensor()
 
 
 def test_example_passing():

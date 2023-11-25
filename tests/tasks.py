@@ -370,21 +370,6 @@ def get_fullyconnect_affine_task():
     return get_fullyconnect_task(normalization="affine")
 
 
-def get_conv_task(normalization="none"):
-    train_set = get_mnist()
-    train_set = Subset(train_set, range(70))
-    train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
-    net = ConvNet(normalization=normalization)
-    to_device_model(net)
-    net.eval()
-
-    def output_fn(input, target):
-        return net(to_device(input))
-
-    layer_collection = LayerCollection.from_model(net)
-    return (train_loader, layer_collection, net.parameters(), net, output_fn, 3)
-
-
 def get_conv_bn_task():
     return get_conv_task(normalization="batch_norm")
 

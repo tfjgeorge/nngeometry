@@ -1,9 +1,14 @@
 import pytest
 import torch
 import torch.nn.functional as tF
-from tasks import (device, get_conv_gn_task, get_conv_task,
-                   get_fullyconnect_segm_task, get_fullyconnect_task,
-                   to_device)
+from tasks import (
+    device,
+    get_conv_gn_task,
+    get_conv_task,
+    get_fullyconnect_segm_task,
+    get_fullyconnect_task,
+    to_device,
+)
 from test_jacobian import get_output_vector, update_model
 
 from nngeometry.metrics import FIM, FIM_MonteCarlo
