@@ -24,6 +24,7 @@ class LayerCollection:
         "Cosine1d",
         "Affine1d",
         "ConvTranspose2d",
+        "Conv1d",
     ]
 
     def __init__(self, layers=None):
@@ -107,6 +108,13 @@ class LayerCollection:
             )
         elif mod_class == "ConvTranspose2d":
             return ConvTranspose2dLayer(
+                in_channels=mod.in_channels,
+                out_channels=mod.out_channels,
+                kernel_size=mod.kernel_size,
+                bias=(mod.bias is not None),
+            )
+        elif mod_class == "Conv1d":
+            return Conv1dLayer(
                 in_channels=mod.in_channels,
                 out_channels=mod.out_channels,
                 kernel_size=mod.kernel_size,
@@ -212,6 +220,31 @@ class ConvTranspose2dLayer(AbstractLayer):
         self.weight = Parameter(
             out_channels, in_channels, kernel_size[0], kernel_size[1]
         )
+        if bias:
+            self.bias = Parameter(out_channels)
+        else:
+            self.bias = None
+
+    def numel(self):
+        if self.bias is not None:
+            return self.weight.numel() + self.bias.numel()
+        else:
+            return self.weight.numel()
+
+    def __eq__(self, other):
+        return (
+            self.in_channels == other.in_channels
+            and self.out_channels == other.out_channels
+            and self.kernel_size == other.kernel_size
+        )
+
+
+class Conv1dLayer(AbstractLayer):
+    def __init__(self, in_channels, out_channels, kernel_size, bias=True):
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.weight = Parameter(out_channels, in_channels, kernel_size[0])
         if bias:
             self.bias = Parameter(out_channels)
         else:

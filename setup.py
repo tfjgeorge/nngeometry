@@ -11,5 +11,5 @@ setup(name='nngeometry',
                 'nngeometry.generator',
                 'nngeometry.generator.jacobian',
                 'nngeometry.object'],
-      install_requires=['torch>=2.0.0'],
+      install_requires=['torch>=2.0.0','torchvision>=0.9.1'],
       zip_safe=False)

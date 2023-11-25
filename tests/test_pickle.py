@@ -4,8 +4,13 @@ from tasks import get_conv_gn_task, get_conv_task
 from utils import check_tensors
 
 from nngeometry.generator import Jacobian
-from nngeometry.object.pspace import (PMatBlockDiag, PMatDense, PMatDiag,
-                                      PMatLowRank, PMatQuasiDiag)
+from nngeometry.object.pspace import (
+    PMatBlockDiag,
+    PMatDense,
+    PMatDiag,
+    PMatLowRank,
+    PMatQuasiDiag,
+)
 from nngeometry.object.vector import PVector
 
 

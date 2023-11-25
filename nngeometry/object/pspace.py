@@ -487,7 +487,7 @@ class PMatKFAC(PMatAbstract):
             a, g = self.data[layer_id]
             start = self.generator.layer_collection.p_pos[layer_id]
             sAG = a.size(0) * g.size(0)
-            if split_weight_bias:
+            if split_weight_bias and layer.bias:
                 reconstruct = torch.cat(
                     [
                         torch.cat(
@@ -517,7 +517,7 @@ class PMatKFAC(PMatAbstract):
         for layer_id, layer in self.generator.layer_collection.layers.items():
             a, g = self.data[layer_id]
             diag_of_block = torch.diag(g).view(-1, 1) * torch.diag(a).view(1, -1)
-            if split_weight_bias:
+            if split_weight_bias and layer.bias:
                 diags.append(diag_of_block[:, :-1].contiguous().view(-1))
                 diags.append(diag_of_block[:, -1:].view(-1))
             else:
@@ -535,10 +535,10 @@ class PMatKFAC(PMatAbstract):
                 v = torch.cat([v, vs_dict[layer_id][1].unsqueeze(1)], dim=1)
             a, g = self.data[layer_id]
             mv = torch.mm(torch.mm(g, v), a)
-            if layer.bias is None:
-                mv_tuple = (mv.view(*sw),)
-            else:
+            if layer.bias:
                 mv_tuple = (mv[:, :-1].contiguous().view(*sw), mv[:, -1].contiguous())
+            else:
+                mv_tuple = (mv.view(*sw),)
             out_dict[layer_id] = mv_tuple
         return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
 
@@ -602,7 +602,7 @@ class PMatEKFAC(PMatAbstract):
     """
     EKFAC representation from
     *George, Laurent et al., Fast Approximate Natural Gradient Descent
-    in a Kronecker-factored Eigenbasis, NIPS 2018*
+    in a Kronecker-factored Eigenbasis, NeurIPS 2018*
 
     """
 
@@ -659,9 +659,9 @@ class PMatEKFAC(PMatAbstract):
         """
         evecs, _ = self.data
         KFE = dict()
-        for layer_id, _ in self.generator.layer_collection.layers.items():
+        for layer_id, layer in self.generator.layer_collection.layers.items():
             evecs_a, evecs_g = evecs[layer_id]
-            if split_weight_bias:
+            if split_weight_bias and layer.bias:
                 kronecker(evecs_g, evecs_a[:-1, :])
                 kronecker(evecs_g, evecs_a[-1:, :].contiguous())
                 KFE[layer_id] = torch.cat(
