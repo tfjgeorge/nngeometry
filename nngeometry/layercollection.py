@@ -25,6 +25,7 @@ class LayerCollection:
         "Affine1d",
         "ConvTranspose2d",
         "Conv1d",
+        "LayerNorm"
     ]
 
     def __init__(self, layers=None):
@@ -145,6 +146,10 @@ class LayerCollection:
         elif mod_class == "Affine1d":
             return Affine1dLayer(
                 num_features=mod.num_features, bias=(mod.bias is not None)
+            )
+        elif mod_class == "LayerNorm":
+            return LayerNormLayer(
+                normalized_shape=mod.normalized_shape, bias=(mod.bias is not None)
             )
 
     def numel(self):
@@ -313,6 +318,24 @@ class BatchNorm2dLayer(AbstractLayer):
         return self.num_features == other.num_features
 
 
+class LayerNormLayer(AbstractLayer):
+    def __init__(self, normalized_shape, bias=True):
+        self.weight = Parameter(*normalized_shape)
+        if bias:
+            self.bias = Parameter(*normalized_shape)
+        else:
+            self.bias = None
+
+    def numel(self):
+        if self.bias is not None:
+            return self.weight.numel() + self.bias.numel()
+        else:
+            return self.weight.numel()
+
+    def __eq__(self, other):
+        return self.weight == other.weight and self.bias == other.bias
+
+
 class GroupNormLayer(AbstractLayer):
     def __init__(self, num_groups, num_channels):
         self.num_channels = num_channels
@@ -406,3 +429,6 @@ class Parameter(object):
 
     def numel(self):
         return reduce(operator.mul, self.size, 1)
+
+    def __eq__(self, other):
+        return self.size == other.size

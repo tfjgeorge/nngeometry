@@ -13,6 +13,7 @@ from nngeometry.layercollection import (
     WeightNorm1dLayer,
     WeightNorm2dLayer,
     Conv1dLayer,
+    LayerNormLayer
 )
 
 from .grads_conv import conv2d_backward, convtranspose2d_backward, conv1d_backward
@@ -269,6 +270,18 @@ class BatchNorm2dJacobianFactory(JacobianFactory):
             buffer[:, w_numel:].add_(gy.sum(dim=(2, 3)))
 
 
+class LayerNormJacobianFactory(JacobianFactory):
+    @classmethod
+    def flat_grad(cls, buffer, mod, layer, x, gy):
+        w_numel = layer.weight.numel()
+        x_normalized = F.layer_norm(
+            x, normalized_shape=mod.normalized_shape, eps=mod.eps
+        )
+        buffer[:, :w_numel].add_(gy * x_normalized)
+        if layer.bias is not None:
+            buffer[:, w_numel:].add_(gy)
+
+
 class GroupNormJacobianFactory(JacobianFactory):
     @classmethod
     def flat_grad(cls, buffer, mod, layer, x, gy):
@@ -279,19 +292,37 @@ class GroupNormJacobianFactory(JacobianFactory):
 
 
 class WeightNorm1dJacobianFactory(JacobianFactory):
+    
     @classmethod
     def flat_grad(cls, buffer, mod, layer, x, gy):
         bs = x.size(0)
+        gw_prime = torch.bmm(gy.unsqueeze(2), x.unsqueeze(1)).view(bs, -1).view(bs, *mod.weight.size())
         norm2 = (mod.weight**2).sum(dim=1, keepdim=True) + mod.eps
-        gw = torch.bmm(gy.unsqueeze(2) / torch.sqrt(norm2), x.unsqueeze(1))
-        wn2_out = F.linear(x, mod.weight / norm2**1.5)
-        gw -= (gy * wn2_out).unsqueeze(2) * mod.weight.unsqueeze(0)
+
+        gw = gw_prime / torch.sqrt(norm2).unsqueeze(0)
+        
+        gw-= (gw_prime * mod.weight.unsqueeze(0)).sum(dim=2, keepdim=True) * (mod.weight * norm2**(-1.5)).unsqueeze(0)
+
         buffer.add_(gw.view(bs, -1))
 
 
 class WeightNorm2dJacobianFactory(JacobianFactory):
     @classmethod
     def flat_grad(cls, buffer, mod, layer, x, gy):
+        bs = x.size(0)
+        gw_prime = conv2d_backward(mod, x, gy).view(bs, *mod.weight.size())
+        norm2 = (mod.weight**2).sum(dim=(1,2,3), keepdim=True) + mod.eps
+
+        gw = gw_prime / torch.sqrt(norm2).unsqueeze(0)
+        # print((gw_prime * mod.weight.unsqueeze(0)).sum(dim=(2,3,4), keepdim=True).size())
+        # print((mod.weight * norm2**(-1.5)).unsqueeze(0).size())
+
+        gw-= (gw_prime * mod.weight.unsqueeze(0)).sum(dim=(2,3,4), keepdim=True) * (mod.weight * norm2**(-1.5)).unsqueeze(0)
+
+        buffer.add_(gw.view(bs, -1))
+
+    @classmethod
+    def flat_grad_(cls, buffer, mod, layer, x, gy):
         bs = x.size(0)
         out_dim = mod.weight.size(0)
         norm2 = (mod.weight**2).sum(dim=(1, 2, 3)) + mod.eps
@@ -426,4 +457,5 @@ FactoryMap = {
     WeightNorm2dLayer: WeightNorm2dJacobianFactory,
     Cosine1dLayer: Cosine1dJacobianFactory,
     Affine1dLayer: Affine1dJacobianFactory,
+    LayerNormLayer: LayerNormJacobianFactory,
 }

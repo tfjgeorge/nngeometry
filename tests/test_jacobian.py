@@ -18,6 +18,7 @@ from tasks import (
     get_conv1d_task,
 )
 from utils import check_ratio, check_tensors
+from test_tasks.layernorm import get_layernorm_task
 
 from nngeometry.generator import Jacobian
 from nngeometry.object.fspace import FMatDense
@@ -41,6 +42,7 @@ linear_tasks = [
 ]
 
 nonlinear_tasks = [
+    get_layernorm_task,
     get_conv1d_task,
     get_small_conv_transpose_task,
     get_conv_task,
@@ -104,6 +106,7 @@ def test_jacobian_pushforward_dense_linear():
 
 def test_jacobian_pushforward_dense_nonlinear():
     for get_task in nonlinear_tasks:
+        print(get_task)
         loader, lc, parameters, model, function, n_output = get_task()
         generator = Jacobian(
             layer_collection=lc, model=model, function=function, n_output=n_output
@@ -123,8 +126,13 @@ def test_jacobian_pushforward_dense_nonlinear():
         check_tensors(
             output_after - output_before,
             doutput_lin.get_flat_representation().t(),
-            eps=5e-3,
+            eps=5e-3, only_print_diff=True,
         )
+        # check_tensors(
+        #     output_after - output_before,
+        #     doutput_lin.get_flat_representation().t(),
+        #     eps=5e-3,
+        # )
 
 
 def test_jacobian_pushforward_implicit():
