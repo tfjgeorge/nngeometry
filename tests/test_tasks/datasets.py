@@ -1,5 +1,7 @@
 from torchvision import datasets, transforms
+
 default_datapath = "tmp"
+
 
 def get_mnist():
     return datasets.MNIST(
