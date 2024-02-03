@@ -3,6 +3,7 @@ import torch
 from tasks import (
     get_batchnorm_conv_linear_task,
     get_batchnorm_fc_linear_task,
+    get_conv1d_task,
     get_conv_gn_task,
     get_conv_skip_task,
     get_conv_task,
@@ -11,11 +12,12 @@ from tasks import (
     get_fullyconnect_onlylast_task,
     get_fullyconnect_task,
     get_fullyconnect_wn_task,
+    get_layernorm_conv_task,
+    get_layernorm_task,
     get_linear_conv_task,
     get_linear_fc_task,
     get_small_conv_transpose_task,
     get_small_conv_wn_task,
-    get_conv1d_task,
 )
 from utils import check_ratio, check_tensors
 
@@ -41,6 +43,8 @@ linear_tasks = [
 ]
 
 nonlinear_tasks = [
+    get_layernorm_conv_task,
+    get_layernorm_task,
     get_conv1d_task,
     get_small_conv_transpose_task,
     get_conv_task,
@@ -104,13 +108,14 @@ def test_jacobian_pushforward_dense_linear():
 
 def test_jacobian_pushforward_dense_nonlinear():
     for get_task in nonlinear_tasks:
+        print(get_task)
         loader, lc, parameters, model, function, n_output = get_task()
         generator = Jacobian(
             layer_collection=lc, model=model, function=function, n_output=n_output
         )
         push_forward = PushForwardDense(generator=generator, examples=loader)
         dw = random_pvector(lc, device=device)
-        dw = 1e-4 / dw.norm() * dw
+        dw = 1e-5 / dw.norm() * dw
 
         doutput_lin = push_forward.mv(dw)
 
