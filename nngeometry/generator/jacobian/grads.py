@@ -57,6 +57,7 @@ class JacobianFactory:
         cls.flat_grad(buffer_flat, mod, layer, x, gy)
         v = v.view(-1)
         if v_bias is not None:
+            v_bias = v_bias.view(-1)
             v = torch.cat((v, v_bias))
         buffer.add_(torch.mv(buffer_flat, v))
 
