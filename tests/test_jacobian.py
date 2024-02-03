@@ -12,12 +12,13 @@ from tasks import (
     get_fullyconnect_onlylast_task,
     get_fullyconnect_task,
     get_fullyconnect_wn_task,
+    get_layernorm_conv_task,
+    get_layernorm_task,
     get_linear_conv_task,
     get_linear_fc_task,
     get_small_conv_transpose_task,
     get_small_conv_wn_task,
 )
-from test_tasks.layernorm import get_layernorm_conv_task, get_layernorm_task
 from utils import check_ratio, check_tensors
 
 from nngeometry.generator import Jacobian
