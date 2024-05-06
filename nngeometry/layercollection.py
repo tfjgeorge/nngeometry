@@ -25,7 +25,8 @@ class LayerCollection:
         "Affine1d",
         "ConvTranspose2d",
         "Conv1d",
-        "LayerNorm"
+        "LayerNorm",
+        "Embedding",
     ]
 
     def __init__(self, layers=None):
@@ -150,6 +151,10 @@ class LayerCollection:
         elif mod_class == "LayerNorm":
             return LayerNormLayer(
                 normalized_shape=mod.normalized_shape, bias=(mod.bias is not None)
+            )
+        elif mod_class == "Embedding":
+            return EmbeddingLayer(
+                embedding_dim=mod.embedding_dim, num_embeddings=mod.num_embeddings
             )
 
     def numel(self):
@@ -289,6 +294,22 @@ class LinearLayer(AbstractLayer):
         return (
             self.in_features == other.in_features
             and self.out_features == other.out_features
+        )
+
+
+class EmbeddingLayer(AbstractLayer):
+    def __init__(self, num_embeddings, embedding_dim):
+        self.num_embeddings = num_embeddings
+        self.embedding_dim = embedding_dim
+        self.weight = Parameter(num_embeddings, embedding_dim)
+
+    def numel(self):
+        return self.weight.numel()
+
+    def __eq__(self, other):
+        return (
+            self.num_embeddings == other.num_embeddings
+            and self.embedding_dim == other.embedding_dim
         )
 
 

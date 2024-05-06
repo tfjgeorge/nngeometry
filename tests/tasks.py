@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as tF
 from torch.nn.modules.conv import ConvTranspose2d
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader, Subset, TensorDataset
 from torchvision import datasets, transforms
 
 from nngeometry.layercollection import LayerCollection
@@ -182,6 +182,33 @@ def get_linear_fc_task():
 
     layer_collection = LayerCollection.from_model(net)
     return (train_loader, layer_collection, net.parameters(), net, output_fn, 2)
+
+
+class EmbeddingNet(nn.Module):
+    def __init__(self):
+        super(EmbeddingNet, self).__init__()
+        self.embedding_layer = nn.Embedding(10, 3)
+
+    def forward(self, x):
+        output = self.embedding_layer(x)
+        print(output.size())
+        return output.sum(axis=1)
+
+
+def get_embedding_task():
+    train_set = TensorDataset(
+        torch.LongTensor([[1, 2, 4, 5], [4, 3, 2, 9]]), torch.LongTensor([2, 0])
+    )
+    train_loader = DataLoader(dataset=train_set, batch_size=2, shuffle=False)
+    net = EmbeddingNet()
+    to_device_model(net)
+    net.eval()
+
+    def output_fn(input, target):
+        return net(input)
+
+    layer_collection = LayerCollection.from_model(net)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn, 3)
 
 
 class LinearConvNet(nn.Module):
