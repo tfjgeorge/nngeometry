@@ -329,7 +329,14 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self.start = 0
         for d in loader:
             inputs = d[0]
-            inputs.requires_grad = True
+            differentiate_wrt = []
+            if inputs.dtype in [
+                torch.float16,
+                torch.float32,
+                torch.float64,
+            ]:
+                inputs.requires_grad = True
+                differentiate_wrt.append(inputs)
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
             n_output = output.size(-1)
@@ -338,7 +345,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 retain_graph = self.i_output < n_output - 1
                 torch.autograd.grad(
                     output[self.i_output],
-                    [inputs],
+                    differentiate_wrt,
                     retain_graph=retain_graph,
                     only_inputs=True,
                 )
