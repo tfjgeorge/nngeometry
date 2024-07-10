@@ -52,7 +52,7 @@ If you use NNGeometry in a published project, please cite our work using the fol
   month        = feb,
   year         = 2021,
   publisher    = {Zenodo},
-  version      = {v0.2.1},
+  version      = {v0.3},
   doi          = {10.5281/zenodo.4532597},
   url          = {https://doi.org/10.5281/zenodo.4532597}
 }
