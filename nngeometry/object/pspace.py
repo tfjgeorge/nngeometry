@@ -444,6 +444,27 @@ class PMatKFAC(PMatAbstract):
             inv_data[layer_id] = (inv_a, inv_g)
         return PMatKFAC(generator=self.generator, data=inv_data)
 
+    def pow(self, pow, regul=1e-8, use_pi=True):
+        pow_data = dict()
+        for layer_id, layer in self.generator.layer_collection.layers.items():
+            a, g = self.data[layer_id]
+            if use_pi:
+                pi = (torch.trace(a) / torch.trace(g) * g.size(0) / a.size(0)) ** 0.5
+            else:
+                pi = 1
+            pow_a = torch.linalg.matrix_power(
+                a + pi * regul**0.5 * torch.eye(a.size(0), device=a.device), pow
+            )
+            pow_g = torch.linalg.matrix_power(
+                g + regul**0.5 / pi * torch.eye(g.size(0), device=g.device), pow
+            )
+            pow_data[layer_id] = (pow_a, pow_g)
+        return PMatKFAC(generator=self.generator, data=pow_data)
+    
+    def __pow__(self, pow):
+        return self.pow(pow)
+
+
     def solve(self, vs, regul=1e-8, use_pi=True):
         vs_dict = vs.get_dict_representation()
         out_dict = dict()
@@ -729,9 +750,15 @@ class PMatEKFAC(PMatAbstract):
         raise NotImplementedError
 
     def inverse(self, regul=1e-8):
+        return self.pow(-1, regul=regul)
+
+    def pow(self, pow, regul=1e-8):
         evecs, diags = self.data
-        inv_diags = {i: 1.0 / (d + regul) for i, d in diags.items()}
+        inv_diags = {i: (d + regul) ** pow for i, d in diags.items()}
         return PMatEKFAC(generator=self.generator, data=(evecs, inv_diags))
+
+    def __pow__(self, pow):
+        return self.pow(pow)
 
     def solve(self, vs, regul=1e-8):
         vs_dict = vs.get_dict_representation()

@@ -202,6 +202,13 @@ def test_jacobian_kfac():
         mnorm_direct = torch.dot(mv_direct, random_v.get_flat_representation())
         check_ratio(mnorm_direct, mnorm_kfac)
 
+        # Test pow
+        M_pow = M_kfac**2
+        check_tensors(
+            M_pow.get_dense_tensor(),
+            torch.mm(M_kfac.get_dense_tensor(), M_kfac.get_dense_tensor()),
+        )
+
         # Test inverse
         # We start from a mv vector since it kills its components projected to
         # the small eigenvalues of KFAC
