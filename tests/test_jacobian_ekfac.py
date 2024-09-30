@@ -84,6 +84,13 @@ def test_pspace_ekfac_vs_direct():
             mv_ekfac = M_ekfac.mv(v)
             check_tensors(mv_direct, mv_ekfac.get_flat_representation())
 
+            # Test pow
+            M_pow = M_ekfac**2
+            check_tensors(
+                M_pow.get_dense_tensor(),
+                torch.mm(M_ekfac.get_dense_tensor(), M_ekfac.get_dense_tensor()),
+            )
+
             # Test inverse
             regul = 1e-5
             M_inv = M_ekfac.inverse(regul=regul)
