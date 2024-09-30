@@ -122,6 +122,28 @@ def test_sub():
     )
 
 
+def test_pow():
+    model = ConvNet()
+    layer_collection = LayerCollection.from_model(model)
+    r1 = random_pvector(layer_collection)
+    sqrt_r1 = r1**3
+    assert (
+        torch.norm(
+            sqrt_r1.get_flat_representation() - r1.get_flat_representation() ** 3
+        )
+        < 1e-5
+    )
+
+    r1 = random_pvector_dict(layer_collection)
+    sqrt_r1 = r1**3
+    assert (
+        torch.norm(
+            sqrt_r1.get_flat_representation() - r1.get_flat_representation() ** 3
+        )
+        < 1e-5
+    )
+
+
 def test_clone():
     eps = 1e-8
     model = ConvNet()

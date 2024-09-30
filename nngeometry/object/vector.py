@@ -295,6 +295,21 @@ class PVector:
                 ),
             )
 
+    def __pow__(self, exp):
+        if self.dict_repr is not None:
+            v_dict = dict()
+            for l_id, l in self.layer_collection.layers.items():
+                if l.bias is not None:
+                    v_dict[l_id] = (
+                        self.dict_repr[l_id][0] ** exp,
+                        self.dict_repr[l_id][1] ** exp,
+                    )
+                else:
+                    v_dict[l_id] = (self.dict_repr[l_id][0] ** exp,)
+            return PVector(self.layer_collection, dict_repr=v_dict)
+        else:
+            return PVector(self.layer_collection, vector_repr=self.vector_repr**exp)
+
     def dot(self, other):
         """
         Computes the dot product between `self` and `other`
