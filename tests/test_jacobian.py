@@ -7,6 +7,7 @@ from tasks import (
     get_conv_gn_task,
     get_conv_skip_task,
     get_conv_task,
+    get_embedding_task,
     get_fullyconnect_affine_task,
     get_fullyconnect_cosine_task,
     get_fullyconnect_onlylast_task,
@@ -35,6 +36,7 @@ from nngeometry.object.pspace import (
 from nngeometry.object.vector import PVector, random_fvector, random_pvector
 
 linear_tasks = [
+    get_embedding_task,
     get_linear_fc_task,
     get_linear_conv_task,
     get_batchnorm_fc_linear_task,
