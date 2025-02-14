@@ -127,10 +127,14 @@ def FIM(
         Number of outputs of the model
     variants : string 'classif_logits' or 'regression', optional
             (default='classif_logits')
-        Variant to use depending on how you interpret your function.
+        Variant to use depending on how you interpret your neural network.
         Possible choices are:
-         - 'classif_logits' when using logits for classification
-         - 'regression' when using a gaussian regression model
+         - 'classif_logits' the NN returns logits to be used in a softmax
+         model.
+         - 'classif_binary_logits' the NN returns 1d logits to be used in
+         a sigmoid model.
+         - 'regression' the NN returns the mean of a normal distribution with
+         identity covariance.
     device : string, optional (default='cpu')
         Target device for the returned matrix
     function : function, optional (default=None)
@@ -156,6 +160,23 @@ def FIM(
             log_probs = torch.log_softmax(function(*d), dim=1)
             probs = torch.exp(log_probs).detach()
             return log_probs * probs**0.5
+
+    elif variant == "classif_binary_logits":
+
+        if n_output != 1:
+            raise NotImplementedError()
+
+        def function_fim(*d):
+            logits = function(*d)
+            log_probs_1 = torch.nn.functional.logsigmoid(logits)
+            log_probs_0 = torch.nn.functional.logsigmoid(-logits)
+            probs = torch.exp(log_probs_1).detach()
+
+            return torch.cat(
+                (probs**0.5 * log_probs_1, (1 - probs) ** 0.5 * log_probs_0), dim=1
+            )
+
+        n_output = 2
 
     elif variant == "regression":
 

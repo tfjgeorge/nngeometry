@@ -113,6 +113,52 @@ def test_FIM_vs_linearization_classif_logits():
         assert mean_quotient > 1 - 5e-2 and mean_quotient < 1 + 5e-2
 
 
+def test_FIM_vs_linearization_classif_binary_logits():
+    step = 1e-2
+
+    for get_task in nonlinear_tasks:
+        quots = []
+        for i in range(10):  # repeat to kill statistical fluctuations
+            loader, lc, parameters, model, function, n_output = get_task()
+            model.train()
+            F = FIM(
+                layer_collection=lc,
+                model=model,
+                loader=loader,
+                variant="classif_binary_logits",
+                representation=PMatDense,
+                n_output=1,
+                function=lambda *d: model(to_device(d[0]))[:, 0:1],
+            )
+
+            dw = random_pvector(lc, device=device)
+            dw = step / dw.norm() * dw
+
+            logits_before = get_output_vector(loader, function)[:, 0:1]
+            update_model(parameters, dw.get_flat_representation())
+            logits_after = get_output_vector(loader, function)[:, 0:1]
+            update_model(parameters, -dw.get_flat_representation())
+
+            log_prob_1_before = tF.logsigmoid(logits_before)
+            log_prob_0_before = tF.logsigmoid(-logits_before)
+            log_prob_1_after = tF.logsigmoid(logits_after)
+            log_prob_0_after = tF.logsigmoid(-logits_after)
+
+            KL = tF.kl_div(
+                torch.cat((log_prob_1_before, log_prob_0_before), dim=1),
+                torch.cat((log_prob_1_after, log_prob_0_after), dim=1),
+                log_target=True,
+                reduction="batchmean",
+            )
+
+            quot = (KL / F.vTMv(dw) * 2) ** 0.5
+
+            quots.append(quot.item())
+
+        mean_quotient = sum(quots) / len(quots)
+        assert mean_quotient > 1 - 5e-2 and mean_quotient < 1 + 5e-2
+
+
 def test_FIM_vs_linearization_regression():
     step = 1e-2
 
