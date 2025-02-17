@@ -94,7 +94,6 @@ def FIM_MonteCarlo(
         layer_collection=layer_collection,
         model=model,
         function=fim_function,
-        n_output=trials,
     )
     return representation(generator=generator, examples=loader)
 
@@ -103,7 +102,6 @@ def FIM(
     model,
     loader,
     representation,
-    n_output,
     variant="classif_logits",
     device="cpu",
     function=None,
@@ -123,8 +121,6 @@ def FIM(
     representation : class
         The parameter matrix representation that will be used to store
         the matrix
-    n_output : int
-        Number of outputs of the model
     variants : string 'classif_logits' or 'regression', optional
             (default='classif_logits')
         Variant to use depending on how you interpret your neural network.
@@ -163,9 +159,6 @@ def FIM(
 
     elif variant == "classif_binary_logits":
 
-        if n_output != 1:
-            raise NotImplementedError()
-
         def function_fim(*d):
             logits = function(*d)
             log_probs_1 = torch.nn.functional.logsigmoid(logits)
@@ -175,8 +168,6 @@ def FIM(
             return torch.cat(
                 (probs**0.5 * log_probs_1, (1 - probs) ** 0.5 * log_probs_0), dim=1
             )
-
-        n_output = 2
 
     elif variant == "regression":
 
@@ -191,6 +182,5 @@ def FIM(
         layer_collection=layer_collection,
         model=model,
         function=function_fim,
-        n_output=n_output,
     )
     return representation(generator=generator, examples=loader)

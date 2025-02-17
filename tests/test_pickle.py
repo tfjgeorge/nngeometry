@@ -15,7 +15,7 @@ from nngeometry.object.vector import PVector
 
 
 def test_layercollection_pkl():
-    _, lc, _, _, _, _ = get_conv_gn_task()
+    _, lc, _, _, _ = get_conv_gn_task()
 
     with open("/tmp/lc.pkl", "wb") as f:
         pkl.dump(lc, f)
@@ -27,19 +27,21 @@ def test_layercollection_pkl():
 
 
 def test_layercollection_eq():
-    _, lc, _, _, _, _ = get_conv_gn_task()
-    _, lc_same, _, _, _, _ = get_conv_gn_task()
-    _, lc_different, _, _, _, _ = get_conv_task()
+    _, lc, _, _, _ = get_conv_gn_task()
+    _, lc_same, _, _, _ = get_conv_gn_task()
+    _, lc_different, _, _, _ = get_conv_task()
 
     assert lc == lc_same
     assert lc != lc_different
 
 
 def test_PMat_pickle():
-    loader, lc, parameters, model, function, n_output = get_conv_task()
+    loader, lc, parameters, model, function = get_conv_task()
 
     generator = Jacobian(
-        layer_collection=lc, model=model, function=function, n_output=n_output
+        layer_collection=lc,
+        model=model,
+        function=function,
     )
 
     for repr in [PMatDense, PMatDiag, PMatBlockDiag, PMatLowRank, PMatQuasiDiag]:
@@ -55,7 +57,7 @@ def test_PMat_pickle():
 
 
 def test_PVector_pickle():
-    _, _, _, model, _, _ = get_conv_task()
+    _, _, _, model, _ = get_conv_task()
 
     vec = PVector.from_model(model)
 

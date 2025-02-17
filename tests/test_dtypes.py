@@ -24,7 +24,7 @@ def test_same_dtype():
 
     for PMatType in [PMatDense, PMatDiag]:
         with pytest.raises(ValueError):
-            FIM(model, loader, PMatType, 2, variant="classif_logits")
+            FIM(model, loader, PMatType, variant="classif_logits")
 
 
 def test_dtypes():
@@ -36,4 +36,4 @@ def test_dtypes():
         loader = th.utils.data.DataLoader(dataset, batch_size=10)
 
     for PMatType in [PMatDense, PMatDiag, PMatKFAC, PMatEKFAC]:
-        FIM(model, loader, PMatType, 2, variant="classif_logits")
+        FIM(model, loader, PMatType, variant="classif_logits")

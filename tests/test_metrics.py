@@ -31,7 +31,7 @@ def test_FIM_MC_vs_linearization():
         for variant in ["classif_logits", "classif_logsoftmax"]:
             quots = []
             for i in range(10):  # repeat to kill statistical fluctuations
-                loader, lc, parameters, model, function, n_output = get_task()
+                loader, lc, parameters, model, function = get_task()
                 model.train()
 
                 if variant == "classif_logits":
@@ -78,7 +78,7 @@ def test_FIM_vs_linearization_classif_logits():
     for get_task in nonlinear_tasks:
         quots = []
         for i in range(10):  # repeat to kill statistical fluctuations
-            loader, lc, parameters, model, function, n_output = get_task()
+            loader, lc, parameters, model, function = get_task()
             model.train()
             F = FIM(
                 layer_collection=lc,
@@ -86,7 +86,6 @@ def test_FIM_vs_linearization_classif_logits():
                 loader=loader,
                 variant="classif_logits",
                 representation=PMatDense,
-                n_output=n_output,
                 function=lambda *d: model(to_device(d[0])),
             )
 
@@ -119,7 +118,7 @@ def test_FIM_vs_linearization_classif_binary_logits():
     for get_task in nonlinear_tasks:
         quots = []
         for i in range(10):  # repeat to kill statistical fluctuations
-            loader, lc, parameters, model, function, n_output = get_task()
+            loader, lc, parameters, model, function = get_task()
             model.train()
             F = FIM(
                 layer_collection=lc,
@@ -127,7 +126,6 @@ def test_FIM_vs_linearization_classif_binary_logits():
                 loader=loader,
                 variant="classif_binary_logits",
                 representation=PMatDense,
-                n_output=1,
                 function=lambda *d: model(to_device(d[0]))[:, 0:1],
             )
 
@@ -165,7 +163,7 @@ def test_FIM_vs_linearization_regression():
     for get_task in nonlinear_tasks:
         quots = []
         for i in range(10):  # repeat to kill statistical fluctuations
-            loader, lc, parameters, model, function, n_output = get_task()
+            loader, lc, parameters, model, function = get_task()
             model.train()
             F = FIM(
                 layer_collection=lc,
@@ -173,7 +171,6 @@ def test_FIM_vs_linearization_regression():
                 loader=loader,
                 variant="regression",
                 representation=PMatDense,
-                n_output=n_output,
                 function=lambda *d: model(to_device(d[0])),
             )
 
@@ -201,7 +198,7 @@ def test_FIM_MC_vs_linearization_segmentation():
     for get_task in [get_fullyconnect_segm_task]:
         quots = []
         for i in range(10):  # repeat to kill statistical fluctuations
-            loader, lc, parameters, model, function, n_output = get_task()
+            loader, lc, parameters, model, function = get_task()
             model.train()
 
             f = lambda *d: model(to_device(d[0]))

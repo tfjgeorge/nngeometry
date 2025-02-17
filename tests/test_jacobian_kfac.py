@@ -72,7 +72,7 @@ def get_fullyconnect_kfac_task(bs=300):
         return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
-    return (train_loader, layer_collection, net.parameters(), net, output_fn, 10)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn)
 
 
 def to_onexdataset(dataset, device):
@@ -108,7 +108,7 @@ def get_convnet_kfc_task(bs=5):
         return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
-    return (train_loader, layer_collection, net.parameters(), net, output_fn, 4)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn)
 
 
 class Conv1dNet(nn.Module):
@@ -134,7 +134,7 @@ def get_conv1dnet_kfc_task(bs=5):
         return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
-    return (train_loader, layer_collection, net.parameters(), net, output_fn, 4)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn)
 
 
 @pytest.fixture(autouse=True)
@@ -152,10 +152,12 @@ def test_jacobian_kfac_vs_pblockdiag():
         [get_conv1dnet_kfc_task, get_convnet_kfc_task, get_fullyconnect_kfac_task],
         [3.0, 15.0, 1.0],
     ):
-        loader, lc, parameters, model, function, n_output = get_task()
+        loader, lc, parameters, model, function = get_task()
 
         generator = Jacobian(
-            layer_collection=lc, model=model, function=function, n_output=n_output
+            layer_collection=lc,
+            model=model,
+            function=function,
         )
         M_kfac = PMatKFAC(generator=generator, examples=loader)
         M_blockdiag = PMatBlockDiag(generator=generator, examples=loader)
@@ -167,11 +169,9 @@ def test_jacobian_kfac_vs_pblockdiag():
 
 def test_jacobian_kfac():
     for get_task in [get_conv1d_task, get_fullyconnect_task, get_conv_task]:
-        loader, lc, parameters, model, function, n_output = get_task()
+        loader, lc, parameters, model, function = get_task()
 
-        generator = Jacobian(
-            layer_collection=lc, model=model, function=function, n_output=n_output
-        )
+        generator = Jacobian(layer_collection=lc, model=model, function=function)
         M_kfac = PMatKFAC(generator=generator, examples=loader)
         G_kfac_split = M_kfac.get_dense_tensor(split_weight_bias=True)
         G_kfac = M_kfac.get_dense_tensor(split_weight_bias=False)
@@ -239,11 +239,9 @@ def test_pspace_kfac_eigendecomposition():
     more erratic because of numerical precision
     """
     eps = 1e-3
-    loader, lc, parameters, model, function, n_output = get_fullyconnect_task()
+    loader, lc, parameters, model, function = get_fullyconnect_task()
 
-    generator = Jacobian(
-        layer_collection=lc, model=model, function=function, n_output=n_output
-    )
+    generator = Jacobian(layer_collection=lc, model=model, function=function)
 
     M_kfac = PMatKFAC(generator=generator, examples=loader)
     M_kfac.compute_eigendecomposition()
@@ -280,15 +278,11 @@ def test_pspace_kfac_eigendecomposition():
 
 def test_kfac():
     for get_task in [get_fullyconnect_task, get_conv_task]:
-        loader, lc, parameters, model1, function1, n_output = get_task()
-        _, _, _, model2, function2, _ = get_task()
+        loader, lc, parameters, model1, function1 = get_task()
+        _, _, _, model2, function2 = get_task()
 
-        generator1 = Jacobian(
-            layer_collection=lc, model=model1, function=function1, n_output=n_output
-        )
-        generator2 = Jacobian(
-            layer_collection=lc, model=model2, function=function1, n_output=n_output
-        )
+        generator1 = Jacobian(layer_collection=lc, model=model1, function=function1)
+        generator2 = Jacobian(layer_collection=lc, model=model2, function=function1)
         M_kfac1 = PMatKFAC(generator=generator1, examples=loader)
         M_kfac2 = PMatKFAC(generator=generator2, examples=loader)
 

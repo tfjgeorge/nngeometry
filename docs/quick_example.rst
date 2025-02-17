@@ -15,7 +15,6 @@ Let us now illustrate this by computing the FIM using the KFAC representation.
    >>> F_kfac = FIM(model=model,
                     loader=loader,
                     representation=PMatKFAC,
-                    n_output=10,
                     variant='classif_logits',
                     device='cuda')
    >>> print(F_kfac.trace())

@@ -14,7 +14,7 @@ def make_test_deterministic():
 
 
 def test_grad_dict_repr():
-    loader, lc, parameters, model, function, n_output = get_conv_gn_task()
+    loader, lc, parameters, model, function = get_conv_gn_task()
 
     d, _ = next(iter(loader))
     scalar_output = model(to_device(d)).sum()
@@ -31,7 +31,7 @@ def test_grad_dict_repr():
 
 
 def test_grad_flat_repr():
-    loader, lc, parameters, model, function, n_output = get_conv_gn_task()
+    loader, lc, parameters, model, function = get_conv_gn_task()
 
     vec = random_pvector(lc)
     scalar_output = vec.norm()
