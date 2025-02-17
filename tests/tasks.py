@@ -181,7 +181,7 @@ def get_linear_fc_task():
         return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
-    return (train_loader, layer_collection, net.parameters(), net, output_fn, 2)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn)
 
 
 class LinearConvNet(nn.Module):
@@ -211,7 +211,7 @@ def get_linear_conv_task():
         return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
-    return (train_loader, layer_collection, net.parameters(), net, output_fn, 2)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn)
 
 
 class BatchNormFCLinearNet(nn.Module):
@@ -247,7 +247,7 @@ def get_batchnorm_fc_linear_task():
     layer_collection.add_layer(*lc_full.layers.popitem())
     parameters = list(net.bn2.parameters()) + list(net.bn1.parameters())
 
-    return (train_loader, layer_collection, parameters, net, output_fn, 2)
+    return (train_loader, layer_collection, parameters, net, output_fn)
 
 
 class BatchNormConvLinearNet(nn.Module):
@@ -285,7 +285,7 @@ def get_batchnorm_conv_linear_task():
     layer_collection.add_layer(*lc_full.layers.popitem())
     parameters = list(net.conv2.parameters()) + list(net.conv1.parameters())
 
-    return (train_loader, layer_collection, parameters, net, output_fn, 2)
+    return (train_loader, layer_collection, parameters, net, output_fn)
 
 
 class BatchNormNonLinearNet(nn.Module):
@@ -327,7 +327,7 @@ def get_batchnorm_nonlinear_task():
         return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
-    return (train_loader, layer_collection, net.parameters(), net, output_fn, 5)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn)
 
 
 def get_mnist():
@@ -351,7 +351,7 @@ def get_fullyconnect_task(normalization="none"):
         return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
-    return (train_loader, layer_collection, net.parameters(), net, output_fn, 3)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn)
 
 
 def get_fullyconnect_bn_task():
@@ -401,7 +401,7 @@ def get_conv_task(normalization="none", small=False):
         return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
-    return (train_loader, layer_collection, net.parameters(), net, output_fn, 3)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn)
 
 
 def get_small_conv_wn_task():
@@ -413,13 +413,13 @@ def get_small_conv_transpose_task():
 
 
 def get_fullyconnect_onlylast_task():
-    train_loader, lc_full, _, net, output_fn, n_output = get_fullyconnect_task()
+    train_loader, lc_full, _, net, output_fn = get_fullyconnect_task()
     layer_collection = LayerCollection()
     # only keep last layer parameters
     layer_collection.add_layer(*lc_full.layers.popitem())
     parameters = net.net[-1].parameters()
 
-    return train_loader, layer_collection, parameters, net, output_fn, n_output
+    return train_loader, layer_collection, parameters, net, output_fn
 
 
 def get_fullyconnect_segm_task():
@@ -434,7 +434,7 @@ def get_fullyconnect_segm_task():
         return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
-    return (train_loader, layer_collection, net.parameters(), net, output_fn, 3)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn)
 
 
 class ConvNetWithSkipConnection(nn.Module):
@@ -466,7 +466,7 @@ def get_conv_skip_task():
         return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
-    return (train_loader, layer_collection, net.parameters(), net, output_fn, 3)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn)
 
 
 class Conv1dNet(nn.Module):
@@ -502,7 +502,7 @@ def get_conv1d_task(normalization="none"):
         return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
-    return (train_loader, layer_collection, net.parameters(), net, output_fn, 4)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn)
 
 
 class LayerNormNet(nn.Module):
@@ -532,7 +532,7 @@ def get_layernorm_task():
         return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
-    return (train_loader, layer_collection, net.parameters(), net, output_fn, 3)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn)
 
 
 class LayerNormConvNet(nn.Module):
@@ -560,4 +560,4 @@ def get_layernorm_conv_task():
         return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
-    return (train_loader, layer_collection, net.parameters(), net, output_fn, 3)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn)
