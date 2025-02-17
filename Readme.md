@@ -17,8 +17,7 @@ In the Elastic Weight Consolidation continual learning technique, you want to co
 ```python
 F = FIM(model=model,
         loader=loader,
-        representation=PMatDiag,
-        n_output=10)
+        representation=PMatDiag)
 
 regularizer = F.vTMv(w - w_a)
 ```

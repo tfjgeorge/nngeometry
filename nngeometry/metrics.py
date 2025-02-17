@@ -121,8 +121,6 @@ def FIM(
     representation : class
         The parameter matrix representation that will be used to store
         the matrix
-    n_output : int
-        Number of outputs of the model
     variants : string 'classif_logits' or 'regression', optional
             (default='classif_logits')
         Variant to use depending on how you interpret your neural network.
