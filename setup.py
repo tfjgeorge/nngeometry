@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='nngeometry',
-      version='0.3',
+      version='0.3.1',
       description='{KFAC,EKFAC,Diagonal,Implicit} Fisher Matrices and finite width NTKs in PyTorch',
       url='https://github.com/tfjgeorge/nngeometry',
       author='tfjgeorge',
