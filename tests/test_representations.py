@@ -22,15 +22,11 @@ def make_test_deterministic():
 
 def test_diag():
     for get_task in nonlinear_tasks:
-        loader, lc, parameters, model1, function1, n_output = get_task()
-        _, _, _, model2, function2, _ = get_task()
+        loader, lc, parameters, model1, function1 = get_task()
+        _, _, _, model2, function2 = get_task()
 
-        generator1 = Jacobian(
-            layer_collection=lc, model=model1, function=function1, n_output=n_output
-        )
-        generator2 = Jacobian(
-            layer_collection=lc, model=model2, function=function1, n_output=n_output
-        )
+        generator1 = Jacobian(layer_collection=lc, model=model1, function=function1)
+        generator2 = Jacobian(layer_collection=lc, model=model2, function=function1)
         M_diag1 = PMatDiag(generator=generator1, examples=loader)
         M_diag2 = PMatDiag(generator=generator2, examples=loader)
 
@@ -46,15 +42,11 @@ def test_diag():
 
 def test_dense():
     for get_task in nonlinear_tasks:
-        loader, lc, parameters, model1, function1, n_output = get_task()
-        _, _, _, model2, function2, _ = get_task()
+        loader, lc, parameters, model1, function1 = get_task()
+        _, _, _, model2, function2 = get_task()
 
-        generator1 = Jacobian(
-            layer_collection=lc, model=model1, function=function1, n_output=n_output
-        )
-        generator2 = Jacobian(
-            layer_collection=lc, model=model2, function=function1, n_output=n_output
-        )
+        generator1 = Jacobian(layer_collection=lc, model=model1, function=function1)
+        generator2 = Jacobian(layer_collection=lc, model=model2, function=function1)
         M_dense1 = PMatDense(generator=generator1, examples=loader)
         M_dense2 = PMatDense(generator=generator2, examples=loader)
 
@@ -70,15 +62,11 @@ def test_dense():
 
 def test_blockdiag():
     for get_task in nonlinear_tasks:
-        loader, lc, parameters, model1, function1, n_output = get_task()
-        _, _, _, model2, function2, _ = get_task()
+        loader, lc, parameters, model1, function1 = get_task()
+        _, _, _, model2, function2 = get_task()
 
-        generator1 = Jacobian(
-            layer_collection=lc, model=model1, function=function1, n_output=n_output
-        )
-        generator2 = Jacobian(
-            layer_collection=lc, model=model2, function=function1, n_output=n_output
-        )
+        generator1 = Jacobian(layer_collection=lc, model=model1, function=function1)
+        generator2 = Jacobian(layer_collection=lc, model=model2, function=function1)
         M_blockdiag1 = PMatBlockDiag(generator=generator1, examples=loader)
         M_blockdiag2 = PMatBlockDiag(generator=generator2, examples=loader)
 

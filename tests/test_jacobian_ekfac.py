@@ -21,11 +21,9 @@ def test_pspace_ekfac_vs_kfac():
     """
     eps = 1e-4
     for get_task in [get_conv1d_task, get_fullyconnect_task, get_conv_task]:
-        loader, lc, parameters, model, function, n_output = get_task()
+        loader, lc, parameters, model, function = get_task()
         model.train()
-        generator = Jacobian(
-            layer_collection=lc, model=model, function=function, n_output=n_output
-        )
+        generator = Jacobian(layer_collection=lc, model=model, function=function)
 
         M_kfac = PMatKFAC(generator=generator, examples=loader)
         M_ekfac = PMatEKFAC(generator=generator, examples=loader)
@@ -51,12 +49,10 @@ def test_pspace_ekfac_vs_direct():
     get_dense_tensor
     """
     for get_task in [get_conv1d_task, get_fullyconnect_task, get_conv_task]:
-        loader, lc, parameters, model, function, n_output = get_task()
+        loader, lc, parameters, model, function = get_task()
         model.train()
 
-        generator = Jacobian(
-            layer_collection=lc, model=model, function=function, n_output=n_output
-        )
+        generator = Jacobian(layer_collection=lc, model=model, function=function)
 
         M_ekfac = PMatEKFAC(generator=generator, examples=loader)
         v = random_pvector(lc, device=device)

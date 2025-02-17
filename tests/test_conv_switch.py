@@ -6,10 +6,8 @@ from nngeometry.object.pspace import PMatDense
 
 
 def test_conv_impl_switch():
-    loader, lc, parameters, model, function, n_output = get_conv_task()
-    generator = Jacobian(
-        layer_collection=lc, model=model, function=function, n_output=n_output
-    )
+    loader, lc, parameters, model, function = get_conv_task()
+    generator = Jacobian(layer_collection=lc, model=model, function=function)
 
     with jacobian.use_unfold_impl_for_convs():
         PMat_dense_unfold = PMatDense(generator=generator, examples=loader)
