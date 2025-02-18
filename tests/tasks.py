@@ -347,7 +347,7 @@ def get_mnist(n_classes=None, subset=None):
 
 
 def get_fullyconnect_task(normalization="none"):
-    train_set = get_mnist(subset=70)
+    train_set = get_mnist(subset=70, n_classes=3)
     train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
     net = FCNet(out_size=3, normalization=normalization)
     to_device_model(net)
