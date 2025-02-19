@@ -3,11 +3,11 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to NNGeometry's documentation!
+NNGeometry: FIMs and NTKs in PyTorch
 ======================================
 
 NNGeometry is a library built on top of PyTorch aiming at giving tools
-to easily manipulate and study properties of Fisher Information Matrices and tangent kernels.
+to easily manipulate and study properties of Fisher Information Matrices and finite width tangent kernels.
 
 You can start by looking at the quick start example below. Convinced? Then :doc:`install NNGeometry</install>`, try
 the tutorials or explore the API reference.
@@ -24,9 +24,7 @@ Computing the Fisher Information Matrix on a given PyTorch model using a KFAC re
    >>> F_kfac = FIM(model=model,
                     loader=loader,
                     representation=PMatKFAC,
-                    n_output=10,
-                    variant='classif_logits',
-                    device='cuda')
+                    variant='classif_logits')
    >>> print(F_kfac.trace())
 
 If we instead wanted to choose a :class:`nngeometry.object.pspace.PMatBlockDiag` representation, we can just replace ``representation=PMatKFAC`` with ``representation=PMatBlockDiag`` in the above.
