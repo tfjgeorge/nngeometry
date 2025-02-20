@@ -9,7 +9,7 @@ from tasks import (
     get_batchnorm_fc_linear_task,
     get_batchnorm_conv_linear_task,
     get_fullyconnect_onlylast_task,
-    to_device,
+    to_device,get_fullyconnect_task
 )
 from utils import check_tensors
 
@@ -70,14 +70,14 @@ def test_hessian_vs_FIM():
 
 
 # # %%
-# linear_tasks = [get_linear_conv_task] * 1
+# linear_tasks = [get_fullyconnect_task] * 1
 # for i, get_task in enumerate(linear_tasks):
 
 #     torch.manual_seed(48)
 #     print("-----------------")
 #     print(i, get_task)
 #     loader, lc, parameters, model, function = get_task()
-#     model.eval()
+#     model.train()
 
 #     F = FIM(
 #         layer_collection=lc,
@@ -116,7 +116,6 @@ def test_hessian_vs_FIM():
 
 
 # # %%
-# lc.layers["conv1"].numel(), lc.layers["conv2"].numel()
 # # %%
 # lc.layers
 # # %%
@@ -141,3 +140,21 @@ def test_hessian_vs_FIM():
 # p(F2_flat)
 
 # # %%
+
+# plt.figure(figsize=(15,15))
+# display_correl(H, axis=plt.gca())
+# # %%
+# display_correl(F, axis=plt.gca())
+# # %%
+# p(torch.log(torch.abs(H_flat)+1e-8)+8)
+# # %%
+
+# u, sH, v = torch.svd(H_flat)
+# u, sF, v = torch.svd(F_flat)
+
+# # %%
+# plt.plot(sH, 'x', label="H")
+# plt.plot(sF, 'x', label="F")
+# plt.yscale('log')
+
+# plt.legend()
