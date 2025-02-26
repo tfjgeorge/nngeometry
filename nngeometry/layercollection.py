@@ -25,7 +25,7 @@ class LayerCollection:
         "Affine1d",
         "ConvTranspose2d",
         "Conv1d",
-        "LayerNorm"
+        "LayerNorm",
     ]
 
     def __init__(self, layers=None):
@@ -53,9 +53,7 @@ class LayerCollection:
         for layer, mod in model.named_modules():
             mod_class = mod.__class__.__name__
             if mod_class in LayerCollection._known_modules:
-                lc.add_layer(
-                    "%s.%s" % (layer, str(mod)), LayerCollection._module_to_layer(mod)
-                )
+                lc.add_layer(layer, LayerCollection._module_to_layer(mod))
             elif not ignore_unsupported_layers:
                 if len(list(mod.children())) == 0 and len(list(mod.parameters())) > 0:
                     raise Exception("I do not know what to do with layer " + str(mod))
@@ -65,7 +63,7 @@ class LayerCollection:
     def get_layerid_module_maps(self, model):
         layerid_to_module = OrderedDict()
         module_to_layerid = OrderedDict()
-        named_modules = {"%s.%s" % (l, str(m)): m for l, m in model.named_modules()}
+        named_modules = dict(model.named_modules())
         for layer in self.layers.keys():
             layerid_to_module[layer] = named_modules[layer]
             module_to_layerid[named_modules[layer]] = layer
@@ -88,9 +86,7 @@ class LayerCollection:
             raise NotImplementedError
         for layer, mod in model.named_modules():
             if mod is module:
-                self.add_layer(
-                    "%s.%s" % (layer, str(mod)), LayerCollection._module_to_layer(mod)
-                )
+                self.add_layer(layer, LayerCollection._module_to_layer(mod))
 
     def _module_to_layer(mod):
         mod_class = mod.__class__.__name__
@@ -175,6 +171,17 @@ class LayerCollection:
             elif layer.bias:
                 yield layerid_to_module[layer_id].bias
 
+    def named_parameters(self, layerid_to_module):
+        for layer_id, layer in self.layers.items():
+            yield layer_id + ".weight", layerid_to_module[layer_id].weight
+            if isinstance(layer, BatchNorm1dLayer) or isinstance(
+                layer, BatchNorm2dLayer
+            ):
+                yield layer_id + ".bias", layerid_to_module[layer_id].bias
+            # otherwise it is a Linear or Conv2d with optional bias
+            elif layer.bias:
+                yield layer_id + ".bias", layerid_to_module[layer_id].bias
+
     def __eq__(self, other):
         for layer_id in set(self.layers.keys()).union(set(other.layers.keys())):
             if (
@@ -187,7 +194,13 @@ class LayerCollection:
 
 
 class AbstractLayer(ABC):
-    pass
+
+    def __repr__(self):
+        repr = f"{self.__class__}\n - weight = {self.weight}"
+        if self.bias is not None:
+            return repr + f"\n - bias   = {self.bias}"
+        else:
+            return repr
 
 
 class Conv2dLayer(AbstractLayer):
@@ -432,3 +445,6 @@ class Parameter(object):
 
     def __eq__(self, other):
         return self.size == other.size
+
+    def __repr__(self):
+        return f'Parameter with shape {self.size}'
