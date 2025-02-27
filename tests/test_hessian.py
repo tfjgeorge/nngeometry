@@ -13,8 +13,8 @@ from tasks import (
     to_device,
     get_fullyconnect_task,
 )
-from utils import , check_tensors
-from test_jacobian import  update_model
+from utils import check_tensors
+from test_jacobian import update_model
 
 linear_tasks = [
     get_linear_fc_task,
@@ -22,7 +22,6 @@ linear_tasks = [
     get_fullyconnect_onlylast_task,
 ]
 nonlinear_tasks = [get_fullyconnect_task, get_conv_task]
-
 
 
 @pytest.fixture(autouse=True)
@@ -115,4 +114,3 @@ def test_H_vs_linearization():
             (grad_after - grad_before).get_flat_representation(),
             delta.get_flat_representation(),
         )
-
