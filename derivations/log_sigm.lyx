@@ -1,0 +1,145 @@
+#LyX 2.3 created this file. For more info see http://www.lyx.org/
+\lyxformat 544
+\begin_document
+\begin_header
+\save_transient_properties true
+\origin unavailable
+\textclass article
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman "default" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100 100
+\font_tt_scale 100 100
+\use_microtype false
+\use_dash_ligatures true
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\use_hyperref false
+\papersize default
+\use_geometry false
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 1
+\use_package mathtools 1
+\use_package mhchem 1
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
+\cite_engine basic
+\cite_engine_type default
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\justification true
+\use_refstyle 1
+\use_minted 0
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\is_math_indent 0
+\math_numbering_side default
+\quotes_style english
+\dynamic_quotes 0
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Standard
+\begin_inset Formula $\log\text{sigmoid}\left(x\right)=\log\left(\frac{1}{1+\exp\left(x\right)}\right)=-\log\left(1+\exp\left(x\right)\right)$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $\log\text{sigmoid}\left(-x\right)=\log\left(\frac{1}{1+\exp\left(-x\right)}\right)=-\log\left(1+\exp\left(-x\right)\right)$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $\frac{\partial}{\partial x}\log\text{sigmoid}\left(x\right)=-\frac{\exp\left(x\right)}{1+\exp\left(x\right)}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $\frac{\partial}{\partial x}\log\text{sigmoid}\left(-x\right)=\frac{\exp\left(-x\right)}{1+\exp\left(-x\right)}=\frac{1}{1+\exp\left(x\right)}=\frac{1+\exp\left(x\right)}{1+\exp\left(x\right)}-\frac{\exp\left(x\right)}{1+\exp\left(x\right)}=1-\frac{\partial}{\partial x}\log\text{sigmoid}\left(x\right)$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Denote 
+\begin_inset Formula $Dx=\frac{\partial}{\partial x}\log\text{sigmoid}\left(-x\right)$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align*}
+pDx^{2}\frac{\partial x}{\partial\mathbf{w}}\frac{\partial x}{\partial\mathbf{w}}^{\top}+\left(1-p\right)\left(1-Dx\right)^{2}\frac{\partial x}{\partial\mathbf{w}}\frac{\partial x}{\partial\mathbf{w}}^{\top} & =\left(pDx^{2}+\text{\left(1-p\right)\left(1+Dx^{2}-2Dx\right)}\right)\frac{\partial x}{\partial\mathbf{w}}\frac{\partial x}{\partial\mathbf{w}}^{\top}\\
+ & =\left(pDx^{2}+1+Dx^{2}-2Dx-p-pDx^{2}+2pDx\right)\frac{\partial x}{\partial\mathbf{w}}\frac{\partial x}{\partial\mathbf{w}}^{\top}\\
+ & =\left(1+Dx^{2}-2Dx-p+2pDx\right)\frac{\partial x}{\partial\mathbf{w}}\frac{\partial x}{\partial\mathbf{w}}^{\top}\\
+ & =\left(1-p-2\left(1-p\right)Dx+Dx^{2}\right)\frac{\partial x}{\partial\mathbf{w}}\frac{\partial x}{\partial\mathbf{w}}^{\top}
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align*}
+1-p-2\left(1-p\right)Dx+Dx^{2} & =1-p-2\left(1-p\right)\frac{\exp\left(x\right)}{1+\exp\left(x\right)}+\left(\frac{\exp\left(x\right)}{1+\exp\left(x\right)}\right)^{2}\\
+ & =1-p+\frac{\exp\left(x\right)^{2}-2\left(1-p\right)\exp\left(x\right)\left(1+\exp\left(x\right)\right)}{\left(1+\exp\left(x\right)\right)^{2}}\\
+ & =\frac{\exp\left(x\right)^{2}-2\left(1-p\right)\exp\left(x\right)\left(1+\exp\left(x\right)\right)+\left(1-p\right)\left(1+\exp\left(x\right)\right)^{2}}{\left(1+\exp\left(x\right)\right)^{2}}\\
+ & =\frac{\exp\left(x\right)^{2}-2\left(1-p\right)\exp\left(x\right)\left(1+\exp\left(x\right)\right)+\left(1-p\right)\left(1+\exp\left(x\right)^{2}+2\exp\left(x\right)\right)}{\left(1+\exp\left(x\right)\right)^{2}}\\
+ & =\frac{\left(1-2\left(1-p\right)+1-p\right)\exp\left(x\right)^{2}+\left(-2\left(1-p\right)+2\left(1-p\right)\right)\exp\left(x\right)+\left(1-p\right)}{\left(1+\exp\left(x\right)\right)^{2}}\\
+ & =\frac{p\exp\left(x\right)^{2}+1-p}{\left(1+\exp\left(x\right)\right)^{2}}
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\end_body
+\end_document
