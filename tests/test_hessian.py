@@ -33,7 +33,6 @@ def make_test_deterministic():
 def test_hessian_vs_FIM():
     for get_task in linear_tasks:
 
-        print(get_task)
         loader, lc, parameters, model, _ = get_task()
         model.train()
 
@@ -57,11 +56,6 @@ def test_hessian_vs_FIM():
             function=f,
         )
 
-        check_tensors(
-            F.get_dense_tensor(),
-            H.get_dense_tensor() / len(loader.sampler),
-            only_print_diff=True,
-        )
         check_tensors(F.get_dense_tensor(), H.get_dense_tensor() / len(loader.sampler))
 
 
@@ -69,9 +63,7 @@ def test_H_vs_linearization():
     step = 1e-5
 
     for get_task in nonlinear_tasks:
-        quots = []
         loader, lc, parameters, model, function = get_task()
-        print(get_task)
         model.train()
 
         def f(y_pred, y):
@@ -102,14 +94,7 @@ def test_H_vs_linearization():
 
         delta = H.mv(dw)
 
-        # print((grad_after - grad_before).get_flat_representation())
-        # print(delta.get_flat_representation())
-
-        # print(
-        #     (grad_after - grad_before).get_flat_representation()
-        #     / delta.get_flat_representation()
-        # )
-
+I
         check_tensors(
             (grad_after - grad_before).get_flat_representation(),
             delta.get_flat_representation(),
