@@ -94,7 +94,6 @@ def test_H_vs_linearization():
 
         delta = H.mv(dw)
 
-I
         check_tensors(
             (grad_after - grad_before).get_flat_representation(),
             delta.get_flat_representation(),
