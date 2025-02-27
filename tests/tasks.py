@@ -90,7 +90,7 @@ class FCNetSegmentation(nn.Module):
 
 
 class ConvNet(nn.Module):
-    def __init__(self, normalization="none"):
+    def __init__(self, normalization="none", binary=False):
         super(ConvNet, self).__init__()
         self.normalization = normalization
         if normalization == "weight_norm":
@@ -109,7 +109,10 @@ class ConvNet(nn.Module):
             self.fc1 = nn.Linear(7, 4)
         if self.normalization == "batch_norm":
             self.bn2 = nn.BatchNorm1d(4)
-        self.fc2 = nn.Linear(4, 3)
+        if binary:
+            self.fc2 = nn.Linear(4, 1)
+        else:
+            self.fc2 = nn.Linear(4, 3)
 
     def forward(self, x):
         if self.normalization == "batch_norm":
@@ -137,15 +140,20 @@ class ConvNet(nn.Module):
 
 
 class SmallConvNet(nn.Module):
-    def __init__(self, normalization="none"):
+    def __init__(self, normalization="none", binary=False):
         super(SmallConvNet, self).__init__()
+
+        if binary:
+            n_output = 1
+        else:
+            n_output = 3
         self.normalization = normalization
         if normalization == "weight_norm":
             self.l1 = WeightNorm2d(1, 6, 3, 2)
-            self.l2 = WeightNorm2d(6, 3, 2, 3)
+            self.l2 = WeightNorm2d(6, n_output, 2, 3)
         elif normalization == "transpose":
             self.l1 = ConvTranspose2d(1, 6, (3, 2), 2)
-            self.l2 = ConvTranspose2d(6, 3, (2, 3), 3, bias=False)
+            self.l2 = ConvTranspose2d(6, n_output, (2, 3), 3, bias=False)
         else:
             raise NotImplementedError
 
@@ -346,10 +354,13 @@ def get_mnist(n_classes=None, subset=None):
     return TensorDataset(to_device(x), y.to(device))
 
 
-def get_fullyconnect_task(normalization="none"):
+def get_fullyconnect_task(normalization="none", binary=False):
     train_set = get_mnist(subset=70, n_classes=3)
     train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
-    net = FCNet(out_size=3, normalization=normalization)
+    if binary:
+        net = FCNet(out_size=1, normalization=normalization)
+    else:
+        net = FCNet(out_size=3, normalization=normalization)
     to_device_model(net)
     net.eval()
 
@@ -380,8 +391,8 @@ def get_conv_bn_task():
     return get_conv_task(normalization="batch_norm")
 
 
-def get_conv_gn_task():
-    return get_conv_task(normalization="group_norm")
+def get_conv_gn_task(binary=False):
+    return get_conv_task(normalization="group_norm", binary=binary)
 
 
 def get_conv_wn_task():
@@ -392,13 +403,13 @@ def get_conv_cosine_task():
     return get_conv_task(normalization="cosine")
 
 
-def get_conv_task(normalization="none", small=False):
-    train_set = get_mnist(subset=70, n_classes=3)
+def get_conv_task(normalization="none", small=False, binary=False):
+    train_set = get_mnist(subset=70, n_classes=2 if binary else 3)
     train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
     if small:
-        net = SmallConvNet(normalization=normalization)
+        net = SmallConvNet(normalization=normalization, binary=binary)
     else:
-        net = ConvNet(normalization=normalization)
+        net = ConvNet(normalization=normalization, binary=binary)
     to_device_model(net)
     net.eval()
 

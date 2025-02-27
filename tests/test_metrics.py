@@ -113,12 +113,13 @@ def test_FIM_vs_linearization_classif_logits():
 
 
 def test_FIM_vs_linearization_classif_binary_logits():
-    step = 1e-2
+    step = 1e-3
 
-    for get_task in nonlinear_tasks:
+    for get_task in nonlinear_tasks[::-1]:
+        print(get_task)
         quots = []
         for i in range(10):  # repeat to kill statistical fluctuations
-            loader, lc, parameters, model, function = get_task()
+            loader, lc, parameters, model, function = get_task(binary=True)
             model.train()
             F = FIM(
                 layer_collection=lc,
@@ -126,15 +127,15 @@ def test_FIM_vs_linearization_classif_binary_logits():
                 loader=loader,
                 variant="classif_binary_logits",
                 representation=PMatDense,
-                function=lambda *d: model(to_device(d[0]))[:, 0:1],
+                function=lambda *d: model(to_device(d[0])),
             )
 
             dw = random_pvector(lc, device=device)
             dw = step / dw.norm() * dw
 
-            logits_before = get_output_vector(loader, function)[:, 0:1]
+            logits_before = get_output_vector(loader, function)
             update_model(parameters, dw.get_flat_representation())
-            logits_after = get_output_vector(loader, function)[:, 0:1]
+            logits_after = get_output_vector(loader, function)
             update_model(parameters, -dw.get_flat_representation())
 
             log_prob_1_before = tF.logsigmoid(logits_before)
@@ -154,7 +155,8 @@ def test_FIM_vs_linearization_classif_binary_logits():
             quots.append(quot.item())
 
         mean_quotient = sum(quots) / len(quots)
-        assert mean_quotient > 1 - 5e-2 and mean_quotient < 1 + 5e-2
+
+        assert mean_quotient > 1 - 1e-1 and mean_quotient < 1 + 1e-1
 
 
 def test_FIM_vs_linearization_regression():

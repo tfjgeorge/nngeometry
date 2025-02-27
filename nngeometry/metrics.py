@@ -159,15 +159,13 @@ def FIM(
 
     elif variant == "classif_binary_logits":
 
+        # derivation is in log_sigm.lyx
         def function_fim(*d):
-            logits = function(*d)
-            log_probs_1 = torch.nn.functional.logsigmoid(logits)
-            log_probs_0 = torch.nn.functional.logsigmoid(-logits)
-            probs = torch.exp(log_probs_1).detach()
-
-            return torch.cat(
-                (probs**0.5 * log_probs_1, (1 - probs) ** 0.5 * log_probs_0), dim=1
-            )
+            logit = function(*d)
+            probs = torch.nn.functional.sigmoid(logit).detach()
+            exp_logit = torch.exp(logit).detach()
+            coef = torch.sqrt(probs * exp_logit**2 + 1 - probs) / (1 + exp_logit)
+            return logit * coef
 
     elif variant == "regression":
 
