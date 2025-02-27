@@ -404,7 +404,7 @@ def get_conv_cosine_task():
 
 
 def get_conv_task(normalization="none", small=False, binary=False):
-    train_set = get_mnist(subset=70)
+    train_set = get_mnist(subset=70, n_classes=2 if binary else 3)
     train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
     if small:
         net = SmallConvNet(normalization=normalization, binary=binary)

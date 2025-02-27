@@ -1,23 +1,27 @@
-# %%
 import pytest
 import torch
 from nngeometry import Hessian, FIM
+from nngeometry.utils import grad
 from nngeometry.object.pspace import PMatDense
+from nngeometry.object.vector import PVector, random_pvector
 from tasks import (
+    device,
+    get_conv_task,
     get_linear_fc_task,
     get_linear_conv_task,
-    get_batchnorm_fc_linear_task,
-    get_batchnorm_conv_linear_task,
     get_fullyconnect_onlylast_task,
-    to_device,get_fullyconnect_task
+    to_device,
+    get_fullyconnect_task,
 )
 from utils import check_tensors
+from test_jacobian import update_model
 
 linear_tasks = [
     get_linear_fc_task,
     get_linear_conv_task,
     get_fullyconnect_onlylast_task,
 ]
+nonlinear_tasks = [get_fullyconnect_task, get_conv_task]
 
 
 @pytest.fixture(autouse=True)
@@ -29,7 +33,6 @@ def make_test_deterministic():
 def test_hessian_vs_FIM():
     for get_task in linear_tasks:
 
-        print(get_task)
         loader, lc, parameters, model, _ = get_task()
         model.train()
 
@@ -53,108 +56,45 @@ def test_hessian_vs_FIM():
             function=f,
         )
 
-        check_tensors(F.get_dense_tensor(), H.get_dense_tensor(), only_print_diff=True)
-        check_tensors(F.get_dense_tensor(), H.get_dense_tensor())
+        check_tensors(F.get_dense_tensor(), H.get_dense_tensor() / len(loader.sampler))
 
 
-# # # %%
+def test_H_vs_linearization():
+    step = 1e-5
 
-# import matplotlib.pyplot as plt
+    for get_task in nonlinear_tasks:
+        loader, lc, parameters, model, function = get_task()
+        model.train()
 
+        def f(y_pred, y):
+            return torch.nn.functional.cross_entropy(y_pred, y, reduction="sum")
 
-# def p(M):
-#     mm = torch.abs(M).max()
-#     plt.figure()
-#     plt.matshow(M, cmap="PiYG", vmin=-mm, vmax=mm)
-#     plt.show()
+        H = Hessian(
+            layer_collection=lc,
+            model=model,
+            loader=loader,
+            representation=PMatDense,
+            function=f,
+        )
 
+        X, y = loader.dataset.tensors
+        loss = torch.nn.functional.cross_entropy(model(X), y, reduction="sum")
 
-# # %%
-# linear_tasks = [get_fullyconnect_task] * 1
-# for i, get_task in enumerate(linear_tasks):
+        params = PVector.from_model(model=model)
 
-#     torch.manual_seed(48)
-#     print("-----------------")
-#     print(i, get_task)
-#     loader, lc, parameters, model, function = get_task()
-#     model.train()
+        grad_before = grad(loss, params)
 
-#     F = FIM(
-#         layer_collection=lc,
-#         model=model,
-#         loader=loader,
-#         variant="classif_logits",
-#         representation=PMatDense,
-#         function=lambda *d: model(to_device(d[0])),
-#     )
+        dw = random_pvector(lc, device=device)
+        dw = step / dw.norm() * dw
 
-#     def f(y_pred, y):
-#         # print(y_pred.size(), y.size())
-#         return torch.nn.functional.cross_entropy(y_pred, y, reduction="sum")
+        update_model(parameters, dw.get_flat_representation())
 
-#     H = Hessian(
-#         layer_collection=lc,
-#         model=model,
-#         loader=loader,
-#         representation=PMatDense,
-#         function=f,
-#     )
+        loss = torch.nn.functional.cross_entropy(model(X), y, reduction="sum")
+        grad_after = grad(loss, params)
 
-#     F_flat = F.get_dense_tensor()
-#     H_flat = H.get_dense_tensor().detach()
+        delta = H.mv(dw)
 
-#     p(F_flat)
-
-#     p(H_flat)
-
-#     if (
-#         check_tensors(F.get_dense_tensor(), H.get_dense_tensor(), only_print_diff=True)
-#         > 0.01
-#     ):
-
-#         p(F_flat - H_flat)
-
-
-# # %%
-# # %%
-# lc.layers
-# # %%
-# H2_flat = Hessian(
-#     layer_collection=lc,
-#     model=model,
-#     loader=loader,
-#     representation=PMatDense,
-#     function=f,
-# ).get_dense_tensor()
-# p(H2_flat)
-
-# # %%
-# F2_flat = FIM(
-#     layer_collection=lc,
-#     model=model,
-#     loader=loader,
-#     variant="classif_logits",
-#     representation=PMatDense,
-#     function=lambda *d: model(to_device(d[0])),
-# ).get_dense_tensor()
-# p(F2_flat)
-
-# # %%
-
-# plt.figure(figsize=(15,15))
-# display_correl(H, axis=plt.gca())
-# # %%
-# display_correl(F, axis=plt.gca())
-# # %%
-# p(torch.log(torch.abs(H_flat)+1e-8)+8)
-# # %%
-
-# u, sH, v = torch.svd(H_flat)
-# u, sF, v = torch.svd(F_flat)
-
-# # %%
-# plt.plot(sH, 'x', label="H")
-# plt.plot(sF, 'x', label="F")
-# plt.yscale('log')
-
-# plt.legend()
+        check_tensors(
+            (grad_after - grad_before).get_flat_representation(),
+            delta.get_flat_representation(),
+        )

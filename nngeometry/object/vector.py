@@ -27,7 +27,7 @@ def random_pvector_dict(layer_collection, device=None):
     return PVector(layer_collection, dict_repr=v_dict)
 
 
-def random_pvector(layer_collection, device=None):
+def random_pvector(layer_collection, device=None, dtype=torch.float64):
     """
     Returns a random :class:`nngeometry.object.PVector` object using
     the structure defined by the `layer_collection` parameter, with
@@ -40,7 +40,7 @@ def random_pvector(layer_collection, device=None):
     describing the structure of the random pvector
     """
     n_parameters = layer_collection.numel()
-    random_v_flat = torch.normal(0, 1, (n_parameters,), device=device)
+    random_v_flat = torch.normal(0, 1, (n_parameters,), device=device, dtype=dtype)
     return PVector(layer_collection=layer_collection, vector_repr=random_v_flat)
 
 
