@@ -24,7 +24,6 @@ class HessianTorch(AbstractGenerator):
         dtype = self._check_same_dtype()
 
         loader = self._get_dataloader(examples)
-        n_examples = len(loader.sampler)
         n_parameters = self.layer_collection.numel()
         H = torch.zeros((n_parameters, n_parameters), device=device, dtype=dtype)
 
@@ -94,5 +93,4 @@ class HessianTorch(AbstractGenerator):
                             .detach()
                         )
 
-        H /= n_examples
         return H
