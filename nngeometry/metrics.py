@@ -163,8 +163,7 @@ def FIM(
         def function_fim(*d):
             logit = function(*d)
             probs = torch.nn.functional.sigmoid(logit).detach()
-            exp_logit = torch.exp(logit).detach()
-            coef = torch.sqrt(probs * exp_logit**2 + 1 - probs) / (1 + exp_logit)
+            coef = torch.sqrt(probs * (1 - probs))
             return logit * coef
 
     elif variant == "regression":
