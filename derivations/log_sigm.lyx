@@ -141,5 +141,33 @@ pDx^{2}\frac{\partial x}{\partial\mathbf{w}}\frac{\partial x}{\partial\mathbf{w}
 
 \end_layout
 
+\begin_layout Standard
+replace 
+\begin_inset Formula $p=\frac{1}{1+\exp\left(x\right)}$
+\end_inset
+
+, 
+\begin_inset Formula $1-p=\frac{1+\exp\left(x\right)-1}{1+\exp\left(x\right)}=\frac{\exp\left(x\right)}{1+\exp\left(x\right)}$
+\end_inset
+
+
+\begin_inset Newline newline
+\end_inset
+
+
+\begin_inset Formula 
+\begin{eqnarray*}
+\frac{p\exp\left(x\right)^{2}+1-p}{\left(1+\exp\left(x\right)\right)^{2}} & = & \frac{\exp\left(x\right)^{2}+1+\exp\left(x\right)-1}{\left(1+\exp\left(x\right)\right)^{3}}\\
+ & = & \frac{\exp\left(x\right)^{2}+\exp\left(x\right)}{\left(1+\exp\left(x\right)\right)^{3}}\\
+ & = & \frac{\exp\left(x\right)\left(1+\exp\left(x\right)\right)}{\left(1+\exp\left(x\right)\right)^{3}}\\
+ & = & \frac{\exp\left(x\right)}{\left(1+\exp\left(x\right)\right)^{2}}\\
+ & = & p\left(1-p\right)
+\end{eqnarray*}
+
+\end_inset
+
+
+\end_layout
+
 \end_body
 \end_document
