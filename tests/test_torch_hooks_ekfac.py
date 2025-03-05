@@ -3,7 +3,7 @@ import torch
 from tasks import device, get_conv_task, get_conv1d_task, get_fullyconnect_task
 from utils import check_ratio, check_tensors
 
-from nngeometry.generator import Jacobian
+from nngeometry.backend import TorchHooksJacobianBackend
 from nngeometry.object.pspace import PMatBlockDiag, PMatEKFAC, PMatKFAC
 from nngeometry.object.vector import random_pvector
 
@@ -23,7 +23,9 @@ def test_pspace_ekfac_vs_kfac():
     for get_task in [get_conv1d_task, get_fullyconnect_task, get_conv_task]:
         loader, lc, parameters, model, function = get_task()
         model.train()
-        generator = Jacobian(layer_collection=lc, model=model, function=function)
+        generator = TorchHooksJacobianBackend(
+            layer_collection=lc, model=model, function=function
+        )
 
         M_kfac = PMatKFAC(generator=generator, examples=loader)
         M_ekfac = PMatEKFAC(generator=generator, examples=loader)
@@ -52,7 +54,9 @@ def test_pspace_ekfac_vs_direct():
         loader, lc, parameters, model, function = get_task()
         model.train()
 
-        generator = Jacobian(layer_collection=lc, model=model, function=function)
+        generator = TorchHooksJacobianBackend(
+            layer_collection=lc, model=model, function=function
+        )
 
         M_ekfac = PMatEKFAC(generator=generator, examples=loader)
         v = random_pvector(lc, device=device)

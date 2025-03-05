@@ -1,9 +1,9 @@
 import torch
 from nngeometry.layercollection import LayerCollection
-from ._generator import AbstractGenerator
+from ._backend import AbstractBackend
 
 
-class HessianTorch(AbstractGenerator):
+class TorchFuncHessianBackend(AbstractBackend):
 
     def __init__(self, model, function, layer_collection=None):
         self.model = model
@@ -33,7 +33,6 @@ class HessianTorch(AbstractGenerator):
 
         for d in loader:
             inputs = d[0]
-            bs = inputs.size(0)
 
             H_mb = torch.func.hessian(compute_loss)(self.params_dict, inputs, d[1])
 

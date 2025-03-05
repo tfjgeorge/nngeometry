@@ -1,4 +1,5 @@
 import torch
+from tasks import device
 
 
 def check_ratio(vref, v2, eps=1e-3):
@@ -30,3 +31,20 @@ def angle(v1, v2):
     v1_flat = v1.get_flat_representation()
     v2_flat = v2.get_flat_representation()
     return torch.dot(v1_flat, v2_flat) / (torch.norm(v1_flat) * torch.norm(v2_flat))
+
+
+def update_model(parameters, dw):
+    i = 0
+    for p in parameters:
+        j = i + p.numel()
+        p.data += dw[i:j].view(*p.size())
+        i = j
+
+
+def get_output_vector(loader, function):
+    with torch.no_grad():
+        outputs = []
+        for inputs, targets in loader:
+            inputs, targets = inputs.to(device), targets.to(device)
+            outputs.append(function(inputs, targets))
+        return torch.cat(outputs)
