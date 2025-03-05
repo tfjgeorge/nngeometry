@@ -75,6 +75,14 @@
 
 \begin_body
 
+\begin_layout Title
+Derivation of FIM for logistic regression
+\end_layout
+
+\begin_layout Section
+Binary model: log sigmoid
+\end_layout
+
 \begin_layout Standard
 \begin_inset Formula $\log\text{sigmoid}\left(x\right)=\log\left(\frac{1}{1+\exp\left(x\right)}\right)=-\log\left(1+\exp\left(x\right)\right)$
 \end_inset
@@ -164,6 +172,284 @@ replace
  & = & p\left(1-p\right)
 \end{eqnarray*}
 
+\end_inset
+
+
+\end_layout
+
+\begin_layout Section
+Multiclass: log softmax
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $\log\text{softmax}\left(\mathbf{x}\right)_{i}=\mathbf{x}_{i}-\log\sum_{j}\exp\left(\mathbf{x}_{j}\right)$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $\frac{\partial}{\partial\mathbf{x}_{i}}=1-\frac{\exp\left(\mathbf{x}_{i}\right)}{\sum_{j}\exp\left(\mathbf{x}_{j}\right)}=1-\text{softmax}\left(\mathbf{x}\right)_{i}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $k\neq i,\frac{\partial}{\partial\mathbf{x}_{k}}=-\text{softmax}\left(\mathbf{x}\right)_{k}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $\sum_{i}\sum_{jk}p_{i}\frac{\partial\sigma_{i}}{\partial\mathbf{x}_{j}}\frac{\partial\sigma_{i}}{\partial\mathbf{x}_{k}}\frac{\partial x_{j}}{\partial\mathbf{w}}\frac{\partial x_{k}}{\partial\mathbf{w}}^{\top}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+For given 
+\begin_inset Formula $jk$
+\end_inset
+
+, simplify sum on the index 
+\begin_inset Formula $i$
+\end_inset
+
+?
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align*}
+\sum_{i}p_{i}\frac{\partial\sigma_{i}}{\partial\mathbf{x}_{j}}\frac{\partial\sigma_{i}}{\partial\mathbf{x}_{k}} & =\sum_{i}\sigma_{i}\left(\delta_{ij}-\text{softmax}\left(\mathbf{x}\right)_{j}\right)\left(\delta_{ik}-\text{softmax}\left(\mathbf{x}\right)_{k}\right)\\
+ & =\sum_{i}\frac{\exp\left(\mathbf{x}_{i}\right)}{\sum_{l}\exp\left(\mathbf{x}_{l}\right)}\left(\delta_{ij}-\text{softmax}\left(\mathbf{x}\right)_{j}\right)\left(\delta_{ik}-\text{softmax}\left(\mathbf{x}\right)_{k}\right)\\
+ & =\sum_{i}\frac{\exp\left(\mathbf{x}_{i}\right)}{\sum_{l}\exp\left(\mathbf{x}_{l}\right)}\left(\delta_{ij}\delta_{ik}-\delta_{ik}\text{softmax}\left(\mathbf{x}\right)_{j}-\delta_{ij}\text{softmax}\left(\mathbf{x}\right)_{k}+\text{softmax}\left(\mathbf{x}\right)_{k}\text{softmax}\left(\mathbf{x}\right)_{j}\right)\\
+ & =\delta_{jk}\frac{\exp\left(\mathbf{x}_{j}\right)}{\sum_{l}\exp\left(\mathbf{x}_{l}\right)}-\frac{\exp\left(\mathbf{x}_{k}\right)}{\sum_{l}\exp\left(\mathbf{x}_{l}\right)}\text{softmax}\left(\mathbf{x}\right)_{j}-\frac{\exp\left(\mathbf{x}_{j}\right)}{\sum_{l}\exp\left(\mathbf{x}_{l}\right)}\text{softmax}\left(\mathbf{x}\right)_{k}+\text{softmax}\left(\mathbf{x}\right)_{k}\text{softmax}\left(\mathbf{x}\right)_{j}\\
+ & =\delta_{jk}\text{softmax}\left(\mathbf{x}\right)_{j}-\text{softmax}\left(\mathbf{x}\right)_{k}\text{softmax}\left(\mathbf{x}\right)_{j}\\
+ & =\text{softmax}\left(\mathbf{x}\right)_{j}\left(\delta_{jk}-\text{softmax}\left(\mathbf{x}\right)_{k}\right)
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection
+Example 
+\begin_inset Formula $2\times2$
+\end_inset
+
+, square root (using wikipedia 
+\begin_inset CommandInset href
+LatexCommand href
+target "https://en.wikipedia.org/wiki/Square_root_of_a_2_by_2_matrix"
+
+\end_inset
+
+)
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $V=\left(\begin{array}{cc}
+\sigma_{1}\left(1-\sigma_{1}\right) & -\sigma_{1}\sigma_{2}\\
+-\sigma_{2}\sigma_{1} & \sigma_{2}\left(1-\sigma_{2}\right)
+\end{array}\right)$
+\end_inset
+
+ (also 
+\begin_inset Formula $V=\left(\begin{array}{cc}
+\sigma_{1}\sigma_{2} & -\sigma_{1}\sigma_{2}\\
+-\sigma_{2}\sigma_{1} & \sigma_{2}\sigma_{1}
+\end{array}\right)=\sigma_{1}\sigma_{2}\left(\begin{array}{cc}
+1 & -1\\
+-1 & 1
+\end{array}\right)$
+\end_inset
+
+)
+\end_layout
+
+\begin_layout Standard
+determinant 
+\begin_inset Formula $\delta=\sigma_{1}\left(1-\sigma_{1}\right)\sigma_{2}\left(1-\sigma_{2}\right)-\sigma_{1}^{2}\sigma_{2}^{2}=\sigma_{1}\sigma_{2}\left(1-\sigma_{1}-\sigma_{2}+\sigma_{1}\sigma_{2}\right)-\sigma_{1}^{2}\sigma_{2}^{2}=\sigma_{1}\sigma_{2}\left(1-\sigma_{1}-\sigma_{2}\right)=0$
+\end_inset
+
+ using 
+\begin_inset Formula $\sigma_{1}+\sigma_{2}=1$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+trace 
+\begin_inset Formula $\tau=\sigma_{1}\left(1-\sigma_{1}\right)+\sigma_{2}\left(1-\sigma_{2}\right)=\sigma_{1}-\sigma_{1}^{2}+\sigma_{2}-\sigma_{2}^{2}=1-\sigma_{1}^{2}-\sigma_{2}^{2}=1-\sigma_{1}^{2}-\left(1-\sigma_{1}\right)^{2}=2\sigma_{1}-2\sigma_{1}^{2}=2\sigma_{1}\left(1-\sigma_{1}\right)=2\sigma_{1}\sigma_{2}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $V^{\frac{1}{2}}=\frac{1}{\sqrt{2\sigma_{1}\sigma_{2}}}\left(\begin{array}{cc}
+\sigma_{1}\left(1-\sigma_{1}\right) & -\sigma_{1}\sigma_{2}\\
+-\sigma_{2}\sigma_{1} & \sigma_{2}\left(1-\sigma_{2}\right)
+\end{array}\right)$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Check:
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align*}
+V^{\frac{1}{2}}V^{\frac{1}{2}} & =\frac{1}{2\sigma_{1}\sigma_{2}}\left(\begin{array}{cc}
+\sigma_{1}\left(1-\sigma_{1}\right) & -\sigma_{1}\sigma_{2}\\
+-\sigma_{2}\sigma_{1} & \sigma_{2}\left(1-\sigma_{2}\right)
+\end{array}\right)\left(\begin{array}{cc}
+\sigma_{1}\left(1-\sigma_{1}\right) & -\sigma_{1}\sigma_{2}\\
+-\sigma_{2}\sigma_{1} & \sigma_{2}\left(1-\sigma_{2}\right)
+\end{array}\right)\\
+ & =\frac{1}{2\sigma_{1}\sigma_{2}}\left(\begin{array}{cc}
+\sigma_{1}^{2}\left(1-\sigma_{1}\right)^{2}+\sigma_{1}^{2}\sigma_{2}^{2} & -\sigma_{1}\left(1-\sigma_{1}\right)\sigma_{1}\sigma_{2}-\sigma_{1}\sigma_{2}\sigma_{2}\left(1-\sigma_{2}\right)\\
+-\sigma_{2}\sigma_{1}\sigma_{1}\left(1-\sigma_{1}\right)-\sigma_{1}\sigma_{2}\sigma_{2}\left(1-\sigma_{2}\right) & \sigma_{1}^{2}\sigma_{2}^{2}+\sigma_{2}^{2}\left(1-\sigma_{2}\right)^{2}
+\end{array}\right)\\
+ & =\frac{1}{2\sigma_{1}\sigma_{2}}\left(\begin{array}{cc}
+2\sigma_{1}^{2}\sigma_{2}^{2} & -2\sigma_{2}^{2}\sigma_{1}^{2}\\
+-2\sigma_{2}^{2}\sigma_{1}^{2} & 2\sigma_{1}^{2}\sigma_{2}^{2}
+\end{array}\right)\\
+ & =V
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+QED
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $V-2\sigma_{1}\sigma_{2}I=-\sigma_{1}\sigma_{2}\left(\begin{array}{cc}
+1 & 1\\
+1 & 1
+\end{array}\right)$
+\end_inset
+
+ hence an eigenvector is 
+\begin_inset Formula $e=\left(\begin{array}{c}
+1\\
+-1
+\end{array}\right)$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $V=\sigma_{1}\sigma_{2}\left(\begin{array}{c}
+1\\
+-1
+\end{array}\right)\left(\begin{array}{cc}
+1 & -1\end{array}\right)$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection
+Example 
+\begin_inset Formula $3\times3$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $V=\left(\begin{array}{ccc}
+\sigma_{1}\left(1-\sigma_{1}\right) & -\sigma_{1}\sigma_{2} & -\sigma_{1}\sigma_{3}\\
+-\sigma_{2}\sigma_{1} & \sigma_{2}\left(1-\sigma_{2}\right) & -\sigma_{2}\sigma_{3}\\
+-\sigma_{3}\sigma_{1} & -\sigma_{3}\sigma_{2} & \sigma_{3}\left(1-\sigma_{3}\right)
+\end{array}\right)=\left(\begin{array}{ccc}
+\sigma_{1} & 0 & 0\\
+0 & \sigma_{2} & 0\\
+0 & 0 & \sigma_{3}
+\end{array}\right)-\left(\begin{array}{ccc}
+\sigma_{1} & \sigma_{2} & \sigma_{3}\end{array}\right)\left(\begin{array}{c}
+\sigma_{1}\\
+\sigma_{2}\\
+\sigma_{3}
+\end{array}\right)$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Replace 
+\begin_inset Formula $\sigma_{3}=1-\sigma_{1}-\sigma_{2}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $V=\left(\begin{array}{ccc}
+\sigma_{1}\left(1-\sigma_{1}\right) & -\sigma_{1}\sigma_{2} & -\sigma_{1}\left(1-\sigma_{1}-\sigma_{2}\right)\\
+-\sigma_{2}\sigma_{1} & \sigma_{2}\left(1-\sigma_{2}\right) & -\sigma_{2}\left(1-\sigma_{1}-\sigma_{2}\right)\\
+-\left(1-\sigma_{1}-\sigma_{2}\right)\sigma_{1} & -\left(1-\sigma_{1}-\sigma_{2}\right)\sigma_{2} & \left(1-\sigma_{1}-\sigma_{2}\right)\left(\sigma_{1}+\sigma_{2}\right)
+\end{array}\right)$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Characteristic polynomial
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align*}
+\det\left(V-\lambda I\right) & =\det\left(\begin{array}{ccc}
+\sigma_{1}\left(1-\sigma_{1}\right)-\lambda & -\sigma_{1}\sigma_{2} & -\sigma_{1}\left(1-\sigma_{1}-\sigma_{2}\right)\\
+-\sigma_{2}\sigma_{1} & \sigma_{2}\left(1-\sigma_{2}\right)-\lambda & -\sigma_{2}\left(1-\sigma_{1}-\sigma_{2}\right)\\
+-\left(1-\sigma_{1}-\sigma_{2}\right)\sigma_{1} & -\left(1-\sigma_{1}-\sigma_{2}\right)\sigma_{2} & \left(1-\sigma_{1}-\sigma_{2}\right)\left(\sigma_{1}+\sigma_{2}\right)-\lambda
+\end{array}\right)\\
+ & =-\left(1-\sigma_{1}-\sigma_{2}\right)\sigma_{1}\left[\sigma_{1}\sigma_{2}\sigma_{2}\left(1-\sigma_{1}-\sigma_{2}\right)+\left(\sigma_{2}\left(1-\sigma_{2}\right)-\lambda\right)\sigma_{1}\left(1-\sigma_{1}-\sigma_{2}\right)\right]+\left(1-\sigma_{1}-\sigma_{2}\right)\sigma_{2}\left[-\left(\sigma_{1}\left(1-\sigma_{1}\right)-\lambda\right)\sigma_{2}\left(1-\sigma_{1}-\sigma_{2}\right)-\sigma_{2}\sigma_{1}\sigma_{1}\left(1-\sigma_{1}-\sigma_{2}\right)\right]+\left(\left(1-\sigma_{1}-\sigma_{2}\right)\left(\sigma_{1}+\sigma_{2}\right)-\lambda\right)\left[\left(\sigma_{1}\left(1-\sigma_{1}\right)-\lambda\right)\left(\sigma_{2}\left(1-\sigma_{2}\right)-\lambda\right)-\sigma_{2}^{2}\sigma_{1}^{2}\right]
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Let me start all over...
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $V=\left(\begin{array}{ccc}
+\sigma_{1}\left(1-\sigma_{1}\right) & -\sigma_{1}\sigma_{2} & -\sigma_{1}\sigma_{3}\\
+-\sigma_{2}\sigma_{1} & \sigma_{2}\left(1-\sigma_{2}\right) & -\sigma_{2}\sigma_{3}\\
+-\sigma_{3}\sigma_{1} & -\sigma_{3}\sigma_{2} & \sigma_{3}\left(1-\sigma_{3}\right)
+\end{array}\right)=\left(\begin{array}{ccc}
+\sigma_{1} & 0 & 0\\
+0 & \sigma_{2} & 0\\
+0 & 0 & \sigma_{3}
+\end{array}\right)-\left(\begin{array}{ccc}
+\sigma_{1} & \sigma_{2} & \sigma_{3}\end{array}\right)\left(\begin{array}{c}
+\sigma_{1}\\
+\sigma_{2}\\
+\sigma_{3}
+\end{array}\right)$
 \end_inset
 
 
