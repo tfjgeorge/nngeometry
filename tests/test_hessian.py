@@ -13,8 +13,7 @@ from tasks import (
     to_device,
     get_fullyconnect_task,
 )
-from utils import check_tensors
-from test_jacobian import update_model
+from utils import check_tensors, update_model
 
 linear_tasks = [
     get_linear_fc_task,

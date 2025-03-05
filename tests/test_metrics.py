@@ -9,7 +9,7 @@ from tasks import (
     get_fullyconnect_task,
     to_device,
 )
-from test_jacobian import get_output_vector, update_model
+from utils import get_output_vector, update_model
 
 from nngeometry.metrics import FIM, FIM_MonteCarlo
 from nngeometry.object.pspace import PMatDense
