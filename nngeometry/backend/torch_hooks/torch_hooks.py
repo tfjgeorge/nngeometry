@@ -4,10 +4,10 @@ from nngeometry.layercollection import LayerCollection
 from nngeometry.object.vector import FVector, PVector
 
 from .grads import FactoryMap
-from .._generator import AbstractGenerator
+from .._backend import AbstractBackend
 
 
-class Jacobian(AbstractGenerator):
+class TorchHooksJacobianBackend(AbstractBackend):
     """
     Computes jacobians
     :math:`\mathbf{J}_{ijk}=\\frac{\partial f\left(x_{j}\\right)_{i}}{\delta\mathbf{w}_{k}}`,

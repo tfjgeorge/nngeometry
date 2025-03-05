@@ -21,7 +21,7 @@ from tasks import (
 )
 from utils import check_ratio, check_tensors
 
-from nngeometry.generator import Jacobian
+from nngeometry.backend import TorchHooksJacobianBackend
 from nngeometry.object.fspace import FMatDense
 from nngeometry.object.map import PullBackDense, PushForwardDense, PushForwardImplicit
 from nngeometry.object.pspace import (
@@ -89,7 +89,7 @@ def make_test_deterministic():
 def test_jacobian_pushforward_dense_linear():
     for get_task in linear_tasks:
         loader, lc, parameters, model, function = get_task()
-        generator = Jacobian(
+        generator = TorchHooksJacobianBackend(
             layer_collection=lc,
             model=model,
             function=function,
@@ -112,7 +112,7 @@ def test_jacobian_pushforward_dense_nonlinear():
     for get_task in nonlinear_tasks:
         print(get_task)
         loader, lc, parameters, model, function = get_task()
-        generator = Jacobian(
+        generator = TorchHooksJacobianBackend(
             layer_collection=lc,
             model=model,
             function=function,
@@ -139,7 +139,7 @@ def test_jacobian_pushforward_dense_nonlinear():
 def test_jacobian_pushforward_implicit():
     for get_task in linear_tasks:
         loader, lc, parameters, model, function = get_task()
-        generator = Jacobian(
+        generator = TorchHooksJacobianBackend(
             layer_collection=lc,
             model=model,
             function=function,
@@ -162,7 +162,7 @@ def test_jacobian_pushforward_implicit():
 def test_jacobian_pullback_dense():
     for get_task in linear_tasks:
         loader, lc, parameters, model, function = get_task()
-        generator = Jacobian(
+        generator = TorchHooksJacobianBackend(
             layer_collection=lc,
             model=model,
             function=function,
@@ -185,7 +185,7 @@ def test_jacobian_fdense_vs_pullback():
     for get_task in linear_tasks + nonlinear_tasks:
         for centering in [True, False]:
             loader, lc, parameters, model, function = get_task()
-            generator = Jacobian(
+            generator = TorchHooksJacobianBackend(
                 layer_collection=lc,
                 model=model,
                 function=function,
@@ -225,7 +225,7 @@ def test_jacobian_eigendecomposition_fdense():
     for get_task in [get_small_conv_transpose_task]:
         for impl in ["eigh", "svd"]:
             loader, lc, parameters, model, function = get_task()
-            generator = Jacobian(
+            generator = TorchHooksJacobianBackend(
                 layer_collection=lc,
                 model=model,
                 function=function,
@@ -250,7 +250,7 @@ def test_jacobian_eigendecomposition_pdense():
     for get_task in [get_small_conv_transpose_task]:
         for impl in ["eigh", "svd"]:
             loader, lc, parameters, model, function = get_task()
-            generator = Jacobian(
+            generator = TorchHooksJacobianBackend(
                 layer_collection=lc,
                 model=model,
                 function=function,
@@ -272,7 +272,7 @@ def test_jacobian_eigendecomposition_plowrank():
     for get_task in [get_conv_task]:
         for impl in ["svd"]:
             loader, lc, parameters, model, function = get_task()
-            generator = Jacobian(
+            generator = TorchHooksJacobianBackend(
                 layer_collection=lc,
                 model=model,
                 function=function,
@@ -301,7 +301,7 @@ def test_jacobian_pdense_vs_pushforward():
     for get_task in linear_tasks + nonlinear_tasks:
         for centering in [True, False]:
             loader, lc, parameters, model, function = get_task()
-            generator = Jacobian(
+            generator = TorchHooksJacobianBackend(
                 layer_collection=lc,
                 model=model,
                 function=function,
@@ -344,7 +344,7 @@ def test_jacobian_pdense():
     for get_task in nonlinear_tasks:
         for centering in [True, False]:
             loader, lc, parameters, model, function = get_task()
-            generator = Jacobian(
+            generator = TorchHooksJacobianBackend(
                 layer_collection=lc,
                 model=model,
                 function=function,
@@ -394,7 +394,7 @@ def test_jacobian_pdense():
 
             # Test add, sub, rmul
             loader, lc, parameters, model, function = get_task()
-            generator = Jacobian(
+            generator = TorchHooksJacobianBackend(
                 layer_collection=lc,
                 model=model,
                 function=function,
@@ -419,7 +419,7 @@ def test_jacobian_pdense():
 def test_jacobian_pdiag_vs_pdense():
     for get_task in nonlinear_tasks:
         loader, lc, parameters, model, function = get_task()
-        generator = Jacobian(
+        generator = TorchHooksJacobianBackend(
             layer_collection=lc,
             model=model,
             function=function,
@@ -480,7 +480,7 @@ def test_jacobian_pdiag_vs_pdense():
 
         # Test add, sub, rmul
         loader, lc, parameters, model, function = get_task()
-        generator = Jacobian(
+        generator = TorchHooksJacobianBackend(
             layer_collection=lc,
             model=model,
             function=function,
@@ -503,7 +503,7 @@ def test_jacobian_pdiag_vs_pdense():
 def test_jacobian_pblockdiag_vs_pdense():
     for get_task in linear_tasks + nonlinear_tasks:
         loader, lc, parameters, model, function = get_task()
-        generator = Jacobian(
+        generator = TorchHooksJacobianBackend(
             layer_collection=lc,
             model=model,
             function=function,
@@ -547,7 +547,7 @@ def test_jacobian_pblockdiag_vs_pdense():
 def test_jacobian_pblockdiag():
     for get_task in nonlinear_tasks:
         loader, lc, parameters, model, function = get_task()
-        generator = Jacobian(
+        generator = TorchHooksJacobianBackend(
             layer_collection=lc,
             model=model,
             function=function,
@@ -602,7 +602,7 @@ def test_jacobian_pblockdiag():
 
         # Test add, sub, rmul
         loader, lc, parameters, model, function = get_task()
-        generator = Jacobian(
+        generator = TorchHooksJacobianBackend(
             layer_collection=lc,
             model=model,
             function=function,
@@ -626,7 +626,7 @@ def test_jacobian_pblockdiag():
 def test_jacobian_pimplicit_vs_pdense():
     for get_task in linear_tasks + nonlinear_tasks:
         loader, lc, parameters, model, function = get_task()
-        generator = Jacobian(
+        generator = TorchHooksJacobianBackend(
             layer_collection=lc,
             model=model,
             function=function,
@@ -663,7 +663,7 @@ def test_jacobian_pimplicit_vs_pdense():
 def test_jacobian_plowrank_vs_pdense():
     for get_task in nonlinear_tasks:
         loader, lc, parameters, model, function = get_task()
-        generator = Jacobian(
+        generator = TorchHooksJacobianBackend(
             layer_collection=lc,
             model=model,
             function=function,
@@ -680,7 +680,7 @@ def test_jacobian_plowrank_vs_pdense():
 def test_jacobian_plowrank():
     for get_task in nonlinear_tasks:
         loader, lc, parameters, model, function = get_task()
-        generator = Jacobian(
+        generator = TorchHooksJacobianBackend(
             layer_collection=lc,
             model=model,
             function=function,
@@ -737,7 +737,7 @@ def test_jacobian_plowrank():
 def test_jacobian_pquasidiag_vs_pdense():
     for get_task in [get_conv_task, get_fullyconnect_task]:
         loader, lc, parameters, model, function = get_task()
-        generator = Jacobian(
+        generator = TorchHooksJacobianBackend(
             layer_collection=lc,
             model=model,
             function=function,
@@ -819,7 +819,7 @@ def test_jacobian_pquasidiag_vs_pdense():
 def test_jacobian_pquasidiag():
     for get_task in [get_conv_task, get_fullyconnect_task]:
         loader, lc, parameters, model, function = get_task()
-        generator = Jacobian(
+        generator = TorchHooksJacobianBackend(
             layer_collection=lc,
             model=model,
             function=function,
@@ -851,7 +851,7 @@ def test_bn_eval_mode():
     for get_task in [get_batchnorm_fc_linear_task, get_batchnorm_conv_linear_task]:
         loader, lc, parameters, model, function = get_task()
 
-        generator = Jacobian(
+        generator = TorchHooksJacobianBackend(
             layer_collection=lc,
             model=model,
             function=function,
@@ -869,7 +869,7 @@ def test_example_passing():
     # test when passing a minibatch of examples instead of the full dataloader
     for get_task in [get_fullyconnect_task]:
         loader, lc, parameters, model, function = get_task()
-        generator = Jacobian(
+        generator = TorchHooksJacobianBackend(
             layer_collection=lc,
             model=model,
             function=function,

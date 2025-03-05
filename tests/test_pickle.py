@@ -3,7 +3,7 @@ import pickle as pkl
 from tasks import get_conv_gn_task, get_conv_task
 from utils import check_tensors
 
-from nngeometry.generator import Jacobian
+from nngeometry.backend import TorchHooksJacobianBackend
 from nngeometry.object.pspace import (
     PMatBlockDiag,
     PMatDense,
@@ -38,7 +38,7 @@ def test_layercollection_eq():
 def test_PMat_pickle():
     loader, lc, parameters, model, function = get_conv_task()
 
-    generator = Jacobian(
+    generator = TorchHooksJacobianBackend(
         layer_collection=lc,
         model=model,
         function=function,

@@ -1,7 +1,7 @@
 from torch.utils.data import DataLoader, TensorDataset
 
 
-class AbstractGenerator:
+class AbstractBackend:
 
     def _check_same_device(self):
         device = None

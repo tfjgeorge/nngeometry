@@ -1,4 +1,4 @@
-from .generator import HessianTorch
+from .backend import TorchFuncHessianBackend
 
 
 def Hessian(
@@ -9,7 +9,7 @@ def Hessian(
     layer_collection=None,
 ):
 
-    generator = HessianTorch(
+    generator = TorchFuncHessianBackend(
         layer_collection=layer_collection, model=model, function=function
     )
     return representation(generator=generator, examples=loader)

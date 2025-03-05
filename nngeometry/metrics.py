@@ -1,6 +1,6 @@
 import torch
 
-from .generator import Jacobian
+from .backend import TorchHooksJacobianBackend
 from .layercollection import LayerCollection
 
 
@@ -90,7 +90,7 @@ def FIM_MonteCarlo(
     else:
         raise NotImplementedError
 
-    generator = Jacobian(
+    generator = TorchHooksJacobianBackend(
         layer_collection=layer_collection,
         model=model,
         function=fim_function,
@@ -175,7 +175,7 @@ def FIM(
     else:
         raise NotImplementedError
 
-    generator = Jacobian(
+    generator = TorchHooksJacobianBackend(
         layer_collection=layer_collection,
         model=model,
         function=function_fim,
