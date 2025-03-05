@@ -19,7 +19,7 @@ from tasks import (
     get_small_conv_transpose_task,
     get_small_conv_wn_task,
 )
-from utils import check_ratio, check_tensors
+from utils import check_ratio, check_tensors, update_model, get_output_vector
 
 from nngeometry.backend import TorchHooksJacobianBackend
 from nngeometry.object.fspace import FMatDense
