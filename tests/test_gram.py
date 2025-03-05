@@ -1,13 +1,10 @@
 import torch
-from nngeometry.object.fspace import FMatDense
 from tasks import (
-    device,
     get_conv_gn_task,
     get_conv_task,
     get_fullyconnect_task,
 )
 
-from nngeometry.backend import TorchHooksJacobianBackend
 from nngeometry import Jacobian, GramMatrix
 from utils import check_tensors
 
