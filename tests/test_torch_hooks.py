@@ -18,6 +18,7 @@ from tasks import (
     get_linear_fc_task,
     get_small_conv_transpose_task,
     get_small_conv_wn_task,
+    device,
 )
 from utils import check_ratio, check_tensors, update_model, get_output_vector
 
@@ -56,11 +57,6 @@ nonlinear_tasks = [
     get_conv_gn_task,
     get_fullyconnect_task,
 ]
-
-if torch.cuda.is_available():
-    device = "cuda"
-else:
-    device = "cpu"
 
 
 @pytest.fixture(autouse=True)

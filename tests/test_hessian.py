@@ -5,15 +5,16 @@ from nngeometry.utils import grad
 from nngeometry.object.pspace import PMatDense
 from nngeometry.object.vector import PVector, random_pvector
 from tasks import (
-    device,
     get_conv_task,
     get_linear_fc_task,
     get_linear_conv_task,
     get_fullyconnect_onlylast_task,
-    to_device,
     get_fullyconnect_task,
+    device,
+    to_device,
 )
 from utils import check_tensors, update_model
+
 
 linear_tasks = [
     get_linear_fc_task,

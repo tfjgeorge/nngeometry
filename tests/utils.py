@@ -1,4 +1,5 @@
 import torch
+from tasks import device
 
 
 def check_ratio(vref, v2, eps=1e-3):
