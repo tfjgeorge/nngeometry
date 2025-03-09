@@ -3,9 +3,9 @@
 ![Build Status](https://github.com/tfjgeorge/nngeometry/actions/workflows/nngeometry.yml/badge.svg) [![codecov](https://codecov.io/gh/tfjgeorge/nngeometry/branch/master/graph/badge.svg)](https://codecov.io/gh/tfjgeorge/nngeometry) [![DOI](https://zenodo.org/badge/208082966.svg)](https://zenodo.org/badge/latestdoi/208082966) [![PyPI version](https://badge.fury.io/py/nngeometry.svg)](https://badge.fury.io/py/nngeometry)
 
 NNGeometry allows you to:
- - compute Gauss-Newton or **Fisher Information Matrices** (FIM), as well as any matrix that is written as the covariance of gradients w.r.t. parameters, using efficient approximations such as low-rank matrices, KFAC, EKFAC, diagonal and so on.
- - compute finite-width **Neural Tangent Kernels** (Gram matrices), even for multiple output functions.
- - compute **per-examples jacobians** of the loss w.r.t network parameters, or of any function such as the network's output.
+ - compute Gauss-Newton or **Fisher Information Matrices** (`FIM` and `FIM_MonteCarlo`), as well as any matrix that is written as the covariance of gradients w.r.t. parameters, using efficient approximations such as low-rank matrices, KFAC, EKFAC, diagonal and so on. Some of these representations also work for hessians (`Hessian`).
+ - compute finite-width **Neural Tangent Kernels** evaluated on a set of examples (`GramMatrix`), even for multiple output functions.
+ - compute **per-examples jacobians** of the loss w.r.t network parameters (`Jacobian`), or of any function such as the network's output.
  - easily and efficiently compute linear algebra operations involving these matrices **regardless of their approximation**.
  - compute **implicit** operations on these matrices, that do not require explicitely storing large matrices that would not fit in memory.
 
