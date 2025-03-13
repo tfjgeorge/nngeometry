@@ -28,8 +28,8 @@ def check_angle(v1, v2, eps=1e-3):
 
 
 def angle(v1, v2):
-    v1_flat = v1.get_flat_representation()
-    v2_flat = v2.get_flat_representation()
+    v1_flat = v1.to_torch()
+    v2_flat = v2.to_torch()
     return torch.dot(v1_flat, v2_flat) / (torch.norm(v1_flat) * torch.norm(v2_flat))
 
 

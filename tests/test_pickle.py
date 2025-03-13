@@ -53,7 +53,7 @@ def test_PMat_pickle():
         with open("/tmp/PMat.pkl", "rb") as f:
             PMat_pkl = pkl.load(f)
 
-        check_tensors(PMat.get_dense_tensor(), PMat_pkl.get_dense_tensor())
+        check_tensors(PMat.to_torch(), PMat_pkl.to_torch())
 
 
 def test_PVector_pickle():
@@ -67,4 +67,4 @@ def test_PVector_pickle():
     with open("/tmp/PVec.pkl", "rb") as f:
         vec_pkl = pkl.load(f)
 
-    check_tensors(vec.get_flat_representation(), vec_pkl.get_flat_representation())
+    check_tensors(vec.to_torch(), vec_pkl.to_torch())

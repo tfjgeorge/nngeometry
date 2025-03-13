@@ -531,7 +531,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             self._hook_savex, self._hook_compute_Jv, self.l_to_m.values()
         )
 
-        self._v = v.get_dict_representation()
+        self._v = v.to_dict()
         parameters = []
         output = dict()
         for layer_id, layer in self.layer_collection.layers.items():
@@ -608,7 +608,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             self._hook_savex, self._hook_compute_Jv, self.l_to_m.values()
         )
 
-        self._v = v.get_dict_representation()
+        self._v = v.to_dict()
 
         device = self._check_same_device()
         dtype = self._check_same_dtype()
@@ -695,7 +695,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             self._hook_savex, self._hook_compute_Jv, self.l_to_m.values()
         )
 
-        self._v = v.get_dict_representation()
+        self._v = v.to_dict()
 
         device = self._check_same_device()
         dtype = self._check_same_dtype()

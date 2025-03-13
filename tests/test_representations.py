@@ -32,10 +32,10 @@ def test_diag():
 
         prod = M_diag1.mm(M_diag2)
 
-        M_diag1_tensor = M_diag1.get_dense_tensor()
-        M_diag2_tensor = M_diag2.get_dense_tensor()
+        M_diag1_tensor = M_diag1.to_torch()
+        M_diag2_tensor = M_diag2.to_torch()
 
-        prod_tensor = prod.get_dense_tensor()
+        prod_tensor = prod.to_torch()
 
         check_tensors(torch.mm(M_diag1_tensor, M_diag2_tensor), prod_tensor)
 
@@ -52,10 +52,10 @@ def test_dense():
 
         prod = M_dense1.mm(M_dense2)
 
-        M_dense1_tensor = M_dense1.get_dense_tensor()
-        M_dense2_tensor = M_dense2.get_dense_tensor()
+        M_dense1_tensor = M_dense1.to_torch()
+        M_dense2_tensor = M_dense2.to_torch()
 
-        prod_tensor = prod.get_dense_tensor()
+        prod_tensor = prod.to_torch()
 
         check_tensors(torch.mm(M_dense1_tensor, M_dense2_tensor), prod_tensor)
 
@@ -72,9 +72,9 @@ def test_blockdiag():
 
         prod = M_blockdiag1.mm(M_blockdiag2)
 
-        M_blockdiag1_tensor = M_blockdiag1.get_dense_tensor()
-        M_blockdiag2_tensor = M_blockdiag2.get_dense_tensor()
+        M_blockdiag1_tensor = M_blockdiag1.to_torch()
+        M_blockdiag2_tensor = M_blockdiag2.to_torch()
 
-        prod_tensor = prod.get_dense_tensor()
+        prod_tensor = prod.to_torch()
 
         check_tensors(torch.mm(M_blockdiag1_tensor, M_blockdiag2_tensor), prod_tensor)

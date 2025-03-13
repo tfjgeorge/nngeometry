@@ -162,8 +162,8 @@ def test_jacobian_kfac_vs_pblockdiag():
         M_kfac = PMatKFAC(generator=generator, examples=loader)
         M_blockdiag = PMatBlockDiag(generator=generator, examples=loader)
 
-        G_kfac = M_kfac.get_dense_tensor(split_weight_bias=True)
-        G_blockdiag = M_blockdiag.get_dense_tensor()
+        G_kfac = M_kfac.to_torch(split_weight_bias=True)
+        G_blockdiag = M_blockdiag.to_torch()
         check_tensors(G_blockdiag, G_kfac * mult, only_print_diff=False)
 
 
@@ -173,8 +173,8 @@ def test_jacobian_kfac():
 
         generator = TorchHooksJacobianBackend(layer_collection=lc, model=model, function=function)
         M_kfac = PMatKFAC(generator=generator, examples=loader)
-        G_kfac_split = M_kfac.get_dense_tensor(split_weight_bias=True)
-        G_kfac = M_kfac.get_dense_tensor(split_weight_bias=False)
+        G_kfac_split = M_kfac.to_torch(split_weight_bias=True)
+        G_kfac = M_kfac.to_torch(split_weight_bias=False)
 
         # Test trace
         trace_direct = torch.trace(G_kfac_split)
@@ -193,20 +193,20 @@ def test_jacobian_kfac():
         random_v = random_pvector(lc, device)
 
         # Test mv
-        mv_direct = torch.mv(G_kfac_split, random_v.get_flat_representation())
+        mv_direct = torch.mv(G_kfac_split, random_v.to_torch())
         mv_kfac = M_kfac.mv(random_v)
-        check_tensors(mv_direct, mv_kfac.get_flat_representation())
+        check_tensors(mv_direct, mv_kfac.to_torch())
 
         # Test vTMv
         mnorm_kfac = M_kfac.vTMv(random_v)
-        mnorm_direct = torch.dot(mv_direct, random_v.get_flat_representation())
+        mnorm_direct = torch.dot(mv_direct, random_v.to_torch())
         check_ratio(mnorm_direct, mnorm_kfac)
 
         # Test pow
         M_pow = M_kfac**2
         check_tensors(
-            M_pow.get_dense_tensor(),
-            torch.mm(M_kfac.get_dense_tensor(), M_kfac.get_dense_tensor()),
+            M_pow.to_torch(),
+            torch.mm(M_kfac.to_torch(), M_kfac.to_torch()),
         )
 
         # Test inverse
@@ -218,16 +218,16 @@ def test_jacobian_kfac():
         kfac_inverse = M_kfac.inverse(regul)
         mv_back = kfac_inverse.mv(mv2 + regul * mv_kfac)
         check_tensors(
-            mv_kfac.get_flat_representation(),
-            mv_back.get_flat_representation(),
+            mv_kfac.to_torch(),
+            mv_back.to_torch(),
             eps=1e-2,
         )
 
         # Test solve
         mv_back = M_kfac.solve(mv2 + regul * mv_kfac, regul=regul)
         check_tensors(
-            mv_kfac.get_flat_representation(),
-            mv_back.get_flat_representation(),
+            mv_kfac.to_torch(),
+            mv_back.to_torch(),
             eps=1e-2,
         )
 
@@ -272,7 +272,7 @@ def test_pspace_kfac_eigendecomposition():
                 Mv = M_kfac.mv(evec_v)
                 angle_v_Mv = angle(Mv, evec_v)
                 assert angle_v_Mv < 1 + eps and angle_v_Mv > 1 - eps
-                norm_mv = torch.norm(Mv.get_flat_representation())
+                norm_mv = torch.norm(Mv.to_torch())
                 check_ratio(evals[l_id][0][i_a] * evals[l_id][1][i_g], norm_mv)
 
 
@@ -288,9 +288,9 @@ def test_kfac():
 
         prod = M_kfac1.mm(M_kfac2)
 
-        M_kfac1_tensor = M_kfac1.get_dense_tensor(split_weight_bias=True)
-        M_kfac2_tensor = M_kfac2.get_dense_tensor(split_weight_bias=True)
+        M_kfac1_tensor = M_kfac1.to_torch(split_weight_bias=True)
+        M_kfac2_tensor = M_kfac2.to_torch(split_weight_bias=True)
 
-        prod_tensor = prod.get_dense_tensor(split_weight_bias=True)
+        prod_tensor = prod.to_torch(split_weight_bias=True)
 
         check_tensors(torch.mm(M_kfac1_tensor, M_kfac2_tensor), prod_tensor)

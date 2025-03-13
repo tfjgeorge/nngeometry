@@ -79,11 +79,11 @@ def test_jacobian_pushforward_dense_linear():
         doutput_lin = push_forward.mv(dw)
 
         output_before = get_output_vector(loader, function)
-        update_model(parameters, dw.get_flat_representation())
+        update_model(parameters, dw.to_torch())
         output_after = get_output_vector(loader, function)
 
         check_tensors(
-            output_after - output_before, doutput_lin.get_flat_representation().t()
+            output_after - output_before, doutput_lin.to_torch().t()
         )
 
 
@@ -103,14 +103,14 @@ def test_jacobian_pushforward_dense_nonlinear():
         doutput_lin = push_forward.mv(dw)
 
         output_before = get_output_vector(loader, function)
-        update_model(parameters, dw.get_flat_representation())
+        update_model(parameters, dw.to_torch())
         output_after = get_output_vector(loader, function)
 
         # This is non linear, so we don't expect the finite difference
         # estimate to be very accurate. We use a larger eps value
         check_tensors(
             output_after - output_before,
-            doutput_lin.get_flat_representation().t(),
+            doutput_lin.to_torch().t(),
             eps=5e-3,
         )
 
@@ -133,8 +133,8 @@ def test_jacobian_pushforward_implicit():
         doutput_lin_implicit = implicit_push_forward.mv(dw)
 
         check_tensors(
-            doutput_lin_dense.get_flat_representation(),
-            doutput_lin_implicit.get_flat_representation(),
+            doutput_lin_dense.to_torch(),
+            doutput_lin_implicit.to_torch(),
         )
 
 
@@ -154,9 +154,9 @@ def test_jacobian_pullback_dense():
         dinput_lin = pull_back.mv(doutput_lin)
         check_ratio(
             torch.dot(
-                dw.get_flat_representation(), dinput_lin.get_flat_representation()
+                dw.to_torch(), dinput_lin.to_torch()
             ),
-            torch.norm(doutput_lin.get_flat_representation()) ** 2,
+            torch.norm(doutput_lin.to_torch()) ** 2,
         )
 
 
@@ -173,30 +173,30 @@ def test_jacobian_fdense_vs_pullback():
             pull_back = PullBackDense(generator=generator, examples=loader)
             FMat_dense = FMatDense(generator=generator, examples=loader)
 
-            n_output = FMat_dense.get_dense_tensor().size(0)
+            n_output = FMat_dense.to_torch().size(0)
             df = random_fvector(len(loader.sampler), n_output, device=device)
 
-            # Test get_dense_tensor
-            jacobian = pull_back.get_dense_tensor()
+            # Test to_torch to get dense tensor
+            jacobian = pull_back.to_torch()
             sj = jacobian.size()
             FMat_computed = torch.mm(
                 jacobian.view(-1, sj[2]), jacobian.view(-1, sj[2]).t()
             )
             check_tensors(
                 FMat_computed.view(sj[0], sj[1], sj[0], sj[1]),
-                FMat_dense.get_dense_tensor(),
+                FMat_dense.to_torch(),
                 eps=1e-4,
             )
 
             # Test vTMv
             vTMv_FMat = FMat_dense.vTMv(df)
-            Jv_pullback = pull_back.mv(df).get_flat_representation()
+            Jv_pullback = pull_back.mv(df).to_torch()
             vTMv_pullforward = torch.dot(Jv_pullback, Jv_pullback)
             check_ratio(vTMv_pullforward, vTMv_FMat)
 
             # Test frobenius
             frob_FMat = FMat_dense.frobenius_norm()
-            frob_direct = (FMat_dense.get_dense_tensor() ** 2).sum() ** 0.5
+            frob_direct = (FMat_dense.to_torch() ** 2).sum() ** 0.5
             check_ratio(frob_direct, frob_FMat)
 
 
@@ -214,7 +214,7 @@ def test_jacobian_eigendecomposition_fdense():
             FMat_dense.compute_eigendecomposition(impl=impl)
             evals, evecs = FMat_dense.get_eigendecomposition()
 
-            tensor = FMat_dense.get_dense_tensor()
+            tensor = FMat_dense.to_torch()
             s = tensor.size()
             check_tensors(
                 tensor.view(s[0] * s[1], s[2] * s[3]),
@@ -240,7 +240,7 @@ def test_jacobian_eigendecomposition_pdense():
             evals, evecs = pmat_dense.get_eigendecomposition()
 
             check_tensors(
-                pmat_dense.get_dense_tensor(), evecs @ torch.diag_embed(evals) @ evecs.T
+                pmat_dense.to_torch(), evecs @ torch.diag_embed(evals) @ evecs.T
             )
 
         with pytest.raises(NotImplementedError):
@@ -265,7 +265,7 @@ def test_jacobian_eigendecomposition_plowrank():
             assert not evecs.isnan().any()
 
             check_tensors(
-                pmat_lowrank.get_dense_tensor(),
+                pmat_lowrank.to_torch(),
                 evecs @ torch.diag_embed(evals) @ evecs.T,
             )
 
@@ -292,18 +292,18 @@ def test_jacobian_pdense_vs_pushforward():
             dw = random_pvector(lc, device=device)
             n = len(loader.sampler)
 
-            # Test get_dense_tensor
-            jacobian = push_forward.get_dense_tensor()
+            # Test to_torch
+            jacobian = push_forward.to_torch()
             sj = jacobian.size()
             PMat_computed = (
                 torch.mm(jacobian.view(-1, sj[2]).t(), jacobian.view(-1, sj[2])) / n
             )
-            check_tensors(PMat_computed, PMat_dense.get_dense_tensor())
+            check_tensors(PMat_computed, PMat_dense.to_torch())
 
             # Test vTMv
             vTMv_PMat = PMat_dense.vTMv(dw)
             Jv_pushforward = push_forward.mv(dw)
-            Jv_pushforward_flat = Jv_pushforward.get_flat_representation()
+            Jv_pushforward_flat = Jv_pushforward.to_torch()
             vTMv_pushforward = (
                 torch.dot(Jv_pushforward_flat.view(-1), Jv_pushforward_flat.view(-1))
                 / n
@@ -314,8 +314,8 @@ def test_jacobian_pdense_vs_pushforward():
             Mv_PMat = PMat_dense.mv(dw)
             Mv_pf_pb = pull_back.mv(Jv_pushforward)
             check_tensors(
-                Mv_pf_pb.get_flat_representation() / n,
-                Mv_PMat.get_flat_representation(),
+                Mv_pf_pb.to_torch() / n,
+                Mv_PMat.to_torch(),
             )
 
 
@@ -334,40 +334,40 @@ def test_jacobian_pdense():
 
             # Test get_diag
             check_tensors(
-                torch.diag(PMat_dense.get_dense_tensor()), PMat_dense.get_diag()
+                torch.diag(PMat_dense.to_torch()), PMat_dense.get_diag()
             )
 
             # Test frobenius
             frob_PMat = PMat_dense.frobenius_norm()
-            frob_direct = (PMat_dense.get_dense_tensor() ** 2).sum() ** 0.5
+            frob_direct = (PMat_dense.to_torch() ** 2).sum() ** 0.5
             check_ratio(frob_direct, frob_PMat)
 
             # Test trace
             trace_PMat = PMat_dense.trace()
-            trace_direct = torch.trace(PMat_dense.get_dense_tensor())
+            trace_direct = torch.trace(PMat_dense.to_torch())
             check_ratio(trace_PMat, trace_direct)
 
             # Test solve
             # NB: regul is high since the matrix is not full rank
             regul = 1e-3
             Mv_regul = torch.mv(
-                PMat_dense.get_dense_tensor()
+                PMat_dense.to_torch()
                 + regul * torch.eye(PMat_dense.size(0), device=device),
-                dw.get_flat_representation(),
+                dw.to_torch(),
             )
             Mv_regul = PVector(layer_collection=lc, vector_repr=Mv_regul)
             dw_using_inv = PMat_dense.solve(Mv_regul, regul=regul)
             check_tensors(
-                dw.get_flat_representation(),
-                dw_using_inv.get_flat_representation(),
+                dw.to_torch(),
+                dw_using_inv.to_torch(),
                 eps=5e-3,
             )
 
             # Test inv
             PMat_inv = PMat_dense.inverse(regul=regul)
             check_tensors(
-                dw.get_flat_representation(),
-                PMat_inv.mv(PMat_dense.mv(dw) + regul * dw).get_flat_representation(),
+                dw.to_torch(),
+                PMat_inv.mv(PMat_dense.mv(dw) + regul * dw).to_torch(),
                 eps=5e-3,
             )
 
@@ -382,16 +382,16 @@ def test_jacobian_pdense():
             PMat_dense2 = PMatDense(generator=generator, examples=loader)
 
             check_tensors(
-                PMat_dense.get_dense_tensor() + PMat_dense2.get_dense_tensor(),
-                (PMat_dense + PMat_dense2).get_dense_tensor(),
+                PMat_dense.to_torch() + PMat_dense2.to_torch(),
+                (PMat_dense + PMat_dense2).to_torch(),
             )
             check_tensors(
-                PMat_dense.get_dense_tensor() - PMat_dense2.get_dense_tensor(),
-                (PMat_dense - PMat_dense2).get_dense_tensor(),
+                PMat_dense.to_torch() - PMat_dense2.to_torch(),
+                (PMat_dense - PMat_dense2).to_torch(),
             )
             check_tensors(
-                1.23 * PMat_dense.get_dense_tensor(),
-                (1.23 * PMat_dense).get_dense_tensor(),
+                1.23 * PMat_dense.to_torch(),
+                (1.23 * PMat_dense).to_torch(),
             )
 
 
@@ -407,9 +407,9 @@ def test_jacobian_pdiag_vs_pdense():
         PMat_dense = PMatDense(generator=generator, examples=loader)
         dw = random_pvector(lc, device=device)
 
-        # Test get_dense_tensor
-        matrix_diag = PMat_diag.get_dense_tensor()
-        matrix_dense = PMat_dense.get_dense_tensor()
+        # Test to_torch
+        matrix_diag = PMat_diag.to_torch()
+        matrix_dense = PMat_dense.to_torch()
         check_tensors(torch.diag(matrix_diag), torch.diag(matrix_dense))
         assert torch.norm(matrix_diag - torch.diag(torch.diag(matrix_diag))) < 1e-5
 
@@ -420,12 +420,12 @@ def test_jacobian_pdiag_vs_pdense():
         check_ratio(torch.norm(matrix_diag), PMat_diag.frobenius_norm())
 
         # Test mv
-        mv_direct = torch.mv(matrix_diag, dw.get_flat_representation())
+        mv_direct = torch.mv(matrix_diag, dw.to_torch())
         mv_PMat_diag = PMat_diag.mv(dw)
-        check_tensors(mv_direct, mv_PMat_diag.get_flat_representation())
+        check_tensors(mv_direct, mv_PMat_diag.to_torch())
 
         # Test vTMv
-        vTMv_direct = torch.dot(mv_direct, dw.get_flat_representation())
+        vTMv_direct = torch.dot(mv_direct, dw.to_torch())
         vTMv_PMat_diag = PMat_diag.vTMv(dw)
         check_ratio(vTMv_direct, vTMv_PMat_diag)
 
@@ -434,7 +434,7 @@ def test_jacobian_pdiag_vs_pdense():
         PMat_diag_inverse = PMat_diag.inverse(regul)
         prod = torch.mm(
             matrix_diag + regul * torch.eye(lc.numel(), device=device),
-            PMat_diag_inverse.get_dense_tensor(),
+            PMat_diag_inverse.to_torch(),
         )
         check_tensors(torch.eye(lc.numel(), device=device), prod)
 
@@ -442,13 +442,13 @@ def test_jacobian_pdiag_vs_pdense():
         regul = 1e-3
         Mv_regul = torch.mv(
             matrix_diag + regul * torch.eye(PMat_diag.size(0), device=device),
-            dw.get_flat_representation(),
+            dw.to_torch(),
         )
         Mv_regul = PVector(layer_collection=lc, vector_repr=Mv_regul)
         dw_using_inv = PMat_diag.solve(Mv_regul, regul=regul)
         check_tensors(
-            dw.get_flat_representation(),
-            dw_using_inv.get_flat_representation(),
+            dw.to_torch(),
+            dw_using_inv.to_torch(),
             eps=5e-3,
         )
 
@@ -467,15 +467,15 @@ def test_jacobian_pdiag_vs_pdense():
         PMat_diag2 = PMatDiag(generator=generator, examples=loader)
 
         check_tensors(
-            PMat_diag.get_dense_tensor() + PMat_diag2.get_dense_tensor(),
-            (PMat_diag + PMat_diag2).get_dense_tensor(),
+            PMat_diag.to_torch() + PMat_diag2.to_torch(),
+            (PMat_diag + PMat_diag2).to_torch(),
         )
         check_tensors(
-            PMat_diag.get_dense_tensor() - PMat_diag2.get_dense_tensor(),
-            (PMat_diag - PMat_diag2).get_dense_tensor(),
+            PMat_diag.to_torch() - PMat_diag2.to_torch(),
+            (PMat_diag - PMat_diag2).to_torch(),
         )
         check_tensors(
-            1.23 * PMat_diag.get_dense_tensor(), (1.23 * PMat_diag).get_dense_tensor()
+            1.23 * PMat_diag.to_torch(), (1.23 * PMat_diag).to_torch()
         )
 
 
@@ -490,9 +490,9 @@ def test_jacobian_pblockdiag_vs_pdense():
         PMat_blockdiag = PMatBlockDiag(generator=generator, examples=loader)
         PMat_dense = PMatDense(generator=generator, examples=loader)
 
-        # Test get_dense_tensor
-        matrix_blockdiag = PMat_blockdiag.get_dense_tensor()
-        matrix_dense = PMat_dense.get_dense_tensor()
+        # Test to_torch
+        matrix_blockdiag = PMat_blockdiag.to_torch()
+        matrix_dense = PMat_dense.to_torch()
         for layer_id, layer in lc.layers.items():
             start = lc.p_pos[layer_id]
             # compare blocks
@@ -533,7 +533,7 @@ def test_jacobian_pblockdiag():
         )
         PMat_blockdiag = PMatBlockDiag(generator=generator, examples=loader)
         dw = random_pvector(lc, device=device)
-        dense_tensor = PMat_blockdiag.get_dense_tensor()
+        dense_tensor = PMat_blockdiag.to_torch()
 
         # Test get_diag
         check_tensors(torch.diag(dense_tensor), PMat_blockdiag.get_diag())
@@ -549,33 +549,33 @@ def test_jacobian_pblockdiag():
         check_ratio(trace_PMat, trace_direct)
 
         # Test mv
-        mv_direct = torch.mv(dense_tensor, dw.get_flat_representation())
-        check_tensors(mv_direct, PMat_blockdiag.mv(dw).get_flat_representation())
+        mv_direct = torch.mv(dense_tensor, dw.to_torch())
+        check_tensors(mv_direct, PMat_blockdiag.mv(dw).to_torch())
 
         # Test vTMV
         check_ratio(
-            torch.dot(mv_direct, dw.get_flat_representation()), PMat_blockdiag.vTMv(dw)
+            torch.dot(mv_direct, dw.to_torch()), PMat_blockdiag.vTMv(dw)
         )
 
         # Test solve
         regul = 1e-3
         Mv_regul = torch.mv(
             dense_tensor + regul * torch.eye(PMat_blockdiag.size(0), device=device),
-            dw.get_flat_representation(),
+            dw.to_torch(),
         )
         Mv_regul = PVector(layer_collection=lc, vector_repr=Mv_regul)
         dw_using_inv = PMat_blockdiag.solve(Mv_regul, regul=regul)
         check_tensors(
-            dw.get_flat_representation(),
-            dw_using_inv.get_flat_representation(),
+            dw.to_torch(),
+            dw_using_inv.to_torch(),
             eps=5e-3,
         )
 
         # Test inv
         PMat_inv = PMat_blockdiag.inverse(regul=regul)
         check_tensors(
-            dw.get_flat_representation(),
-            PMat_inv.mv(PMat_blockdiag.mv(dw) + regul * dw).get_flat_representation(),
+            dw.to_torch(),
+            PMat_inv.mv(PMat_blockdiag.mv(dw) + regul * dw).to_torch(),
             eps=5e-3,
         )
 
@@ -589,16 +589,16 @@ def test_jacobian_pblockdiag():
         PMat_blockdiag2 = PMatBlockDiag(generator=generator, examples=loader)
 
         check_tensors(
-            PMat_blockdiag.get_dense_tensor() + PMat_blockdiag2.get_dense_tensor(),
-            (PMat_blockdiag + PMat_blockdiag2).get_dense_tensor(),
+            PMat_blockdiag.to_torch() + PMat_blockdiag2.to_torch(),
+            (PMat_blockdiag + PMat_blockdiag2).to_torch(),
         )
         check_tensors(
-            PMat_blockdiag.get_dense_tensor() - PMat_blockdiag2.get_dense_tensor(),
-            (PMat_blockdiag - PMat_blockdiag2).get_dense_tensor(),
+            PMat_blockdiag.to_torch() - PMat_blockdiag2.to_torch(),
+            (PMat_blockdiag - PMat_blockdiag2).to_torch(),
         )
         check_tensors(
-            1.23 * PMat_blockdiag.get_dense_tensor(),
-            (1.23 * PMat_blockdiag).get_dense_tensor(),
+            1.23 * PMat_blockdiag.to_torch(),
+            (1.23 * PMat_blockdiag).to_torch(),
         )
 
 
@@ -625,8 +625,8 @@ def test_jacobian_pimplicit_vs_pdense():
                 PMat_implicit.mv(dw)
         else:
             check_tensors(
-                PMat_dense.mv(dw).get_flat_representation(),
-                PMat_implicit.mv(dw).get_flat_representation(),
+                PMat_dense.mv(dw).to_torch(),
+                PMat_implicit.mv(dw).to_torch(),
             )
 
         # Test vTMv
@@ -650,9 +650,9 @@ def test_jacobian_plowrank_vs_pdense():
         PMat_lowrank = PMatLowRank(generator=generator, examples=loader)
         PMat_dense = PMatDense(generator=generator, examples=loader)
 
-        # Test get_dense_tensor
-        matrix_lowrank = PMat_lowrank.get_dense_tensor()
-        matrix_dense = PMat_dense.get_dense_tensor()
+        # Test to_torch
+        matrix_lowrank = PMat_lowrank.to_torch()
+        matrix_dense = PMat_dense.to_torch()
         check_tensors(matrix_dense, matrix_lowrank)
 
 
@@ -667,7 +667,7 @@ def test_jacobian_plowrank():
         PMat_lowrank = PMatLowRank(generator=generator, examples=loader)
         dw = random_pvector(lc, device=device)
         dw = dw / dw.norm()
-        dense_tensor = PMat_lowrank.get_dense_tensor()
+        dense_tensor = PMat_lowrank.to_torch()
 
         # Test get_diag
         check_tensors(torch.diag(dense_tensor), PMat_lowrank.get_diag(), eps=1e-4)
@@ -683,13 +683,13 @@ def test_jacobian_plowrank():
         check_ratio(trace_PMat, trace_direct)
 
         # Test mv
-        mv_direct = torch.mv(dense_tensor, dw.get_flat_representation())
+        mv_direct = torch.mv(dense_tensor, dw.to_torch())
         mv = PMat_lowrank.mv(dw)
-        check_tensors(mv_direct, mv.get_flat_representation())
+        check_tensors(mv_direct, mv.to_torch())
 
         # Test vTMV
         check_ratio(
-            torch.dot(mv_direct, dw.get_flat_representation()), PMat_lowrank.vTMv(dw)
+            torch.dot(mv_direct, dw.to_torch()), PMat_lowrank.vTMv(dw)
         )
 
         # Test solve
@@ -699,8 +699,8 @@ def test_jacobian_plowrank():
         mmv = PMat_lowrank.mv(mv)
         mv_using_inv = PMat_lowrank.solve(mmv + regul * mv, regul=regul)
         check_tensors(
-            mv.get_flat_representation(),
-            mv_using_inv.get_flat_representation(),
+            mv.to_torch(),
+            mv_using_inv.to_torch(),
             eps=1e-2,
         )
         # Test inv TODO
@@ -708,8 +708,8 @@ def test_jacobian_plowrank():
         # Test add, sub, rmul
 
         check_tensors(
-            1.23 * PMat_lowrank.get_dense_tensor(),
-            (1.23 * PMat_lowrank).get_dense_tensor(),
+            1.23 * PMat_lowrank.to_torch(),
+            (1.23 * PMat_lowrank).to_torch(),
         )
 
 
@@ -724,9 +724,9 @@ def test_jacobian_pquasidiag_vs_pdense():
         PMat_qd = PMatQuasiDiag(generator=generator, examples=loader)
         PMat_dense = PMatDense(generator=generator, examples=loader)
 
-        # Test get_dense_tensor
-        matrix_qd = PMat_qd.get_dense_tensor()
-        matrix_dense = PMat_dense.get_dense_tensor()
+        # Test to_torch
+        matrix_qd = PMat_qd.to_torch()
+        matrix_dense = PMat_dense.to_torch()
 
         for layer_id, layer in lc.layers.items():
             start = lc.p_pos[layer_id]
@@ -804,10 +804,10 @@ def test_jacobian_pquasidiag():
             function=function,
         )
         PMat_qd = PMatQuasiDiag(generator=generator, examples=loader)
-        dense_tensor = PMat_qd.get_dense_tensor()
+        dense_tensor = PMat_qd.to_torch()
 
         v = random_pvector(lc, device=device)
-        v_flat = v.get_flat_representation()
+        v_flat = v.to_torch()
 
         check_tensors(torch.diag(dense_tensor), PMat_qd.get_diag())
 
@@ -816,14 +816,14 @@ def test_jacobian_pquasidiag():
         check_ratio(torch.trace(dense_tensor), PMat_qd.trace())
 
         mv = PMat_qd.mv(v)
-        check_tensors(torch.mv(dense_tensor, v_flat), mv.get_flat_representation())
+        check_tensors(torch.mv(dense_tensor, v_flat), mv.to_torch())
 
         check_ratio(torch.dot(torch.mv(dense_tensor, v_flat), v_flat), PMat_qd.vTMv(v))
 
         # Test solve
         regul = 1e-8
         v_back = PMat_qd.solve(mv + regul * v, regul=regul)
-        check_tensors(v.get_flat_representation(), v_back.get_flat_representation())
+        check_tensors(v.to_torch(), v_back.to_torch())
 
 
 def test_bn_eval_mode():
@@ -870,6 +870,6 @@ def test_example_passing():
         PMat_dense = PMatDense(generator=generator, examples=loader)
 
         check_tensors(
-            PMat_dense.get_dense_tensor(),
-            (1.0 / tot_examples * sum_mats).get_dense_tensor(),
+            PMat_dense.to_torch(),
+            (1.0 / tot_examples * sum_mats).to_torch(),
         )

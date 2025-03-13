@@ -16,5 +16,5 @@ def test_conv_impl_switch():
         PMat_dense_conv = PMatDense(generator=generator, examples=loader)
 
     check_tensors(
-        PMat_dense_unfold.get_dense_tensor(), PMat_dense_conv.get_dense_tensor()
+        PMat_dense_unfold.to_torch(), PMat_dense_conv.to_torch()
     )

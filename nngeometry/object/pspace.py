@@ -31,7 +31,7 @@ class PMatAbstract(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_dense_tensor(self):
+    def to_torch(self):
         raise NotImplementedError
 
     @abstractmethod
@@ -148,7 +148,7 @@ class PMatDense(PMatAbstract):
             # TODO: reuse LU decomposition once it is computed
             inv_v = torch.linalg.solve(
                 self.data + regul * torch.eye(self.size(0), device=self.data.device),
-                v.get_flat_representation().view(-1, 1),
+                v.to_torch().view(-1, 1),
             )
             return PVector(v.layer_collection, vector_repr=inv_v[:, 0])
         elif impl == "eigendecomposition":
@@ -165,11 +165,11 @@ class PMatDense(PMatAbstract):
         return PMatDense(generator=self.generator, data=inv_tensor)
 
     def mv(self, v):
-        v_flat = torch.mv(self.data, v.get_flat_representation())
+        v_flat = torch.mv(self.data, v.to_torch())
         return PVector(v.layer_collection, vector_repr=v_flat)
 
     def vTMv(self, v):
-        v_flat = v.get_flat_representation()
+        v_flat = v.to_torch()
         return torch.dot(v_flat, torch.mv(self.data, v_flat))
 
     def frobenius_norm(self):
@@ -177,7 +177,7 @@ class PMatDense(PMatAbstract):
 
     def project_to_diag(self, v):
         # TODO: test
-        return torch.mv(self.evecs.t(), v.get_flat_representation())
+        return torch.mv(self.evecs.t(), v.to_torch())
 
     def project_from_diag(self, v):
         # TODO: test
@@ -193,7 +193,7 @@ class PMatDense(PMatAbstract):
     def trace(self):
         return torch.trace(self.data)
 
-    def get_dense_tensor(self):
+    def to_torch(self):
         return self.data
 
     def get_diag(self):
@@ -239,20 +239,20 @@ class PMatDiag(PMatAbstract):
         return PMatDiag(generator=self.generator, data=inv_tensor)
 
     def mv(self, v):
-        v_flat = v.get_flat_representation() * self.data
+        v_flat = v.to_torch() * self.data
         return PVector(v.layer_collection, vector_repr=v_flat)
 
     def trace(self):
         return self.data.sum()
 
     def vTMv(self, v):
-        v_flat = v.get_flat_representation()
+        v_flat = v.to_torch()
         return torch.dot(v_flat, self.data * v_flat)
 
     def frobenius_norm(self):
         return torch.norm(self.data)
 
-    def get_dense_tensor(self):
+    def to_torch(self):
         return torch.diag(self.data)
 
     def get_diag(self):
@@ -263,7 +263,7 @@ class PMatDiag(PMatAbstract):
         solves v = Ax in x
         """
         # TODO: test
-        solution = v.get_flat_representation() / (self.data + regul)
+        solution = v.to_torch() / (self.data + regul)
         return PVector(layer_collection=v.layer_collection, vector_repr=solution)
 
     def __add__(self, other):
@@ -305,7 +305,7 @@ class PMatBlockDiag(PMatAbstract):
         # TODO test
         return sum([torch.trace(b) for b in self.data.values()])
 
-    def get_dense_tensor(self):
+    def to_torch(self):
         s = self.generator.layer_collection.numel()
         M = torch.zeros((s, s), device=self.generator.get_device())
         for layer_id in self.generator.layer_collection.layers.keys():
@@ -322,7 +322,7 @@ class PMatBlockDiag(PMatAbstract):
         return torch.cat(diag)
 
     def mv(self, vs):
-        vs_dict = vs.get_dict_representation()
+        vs_dict = vs.to_dict()
         out_dict = dict()
         for layer_id, layer in self.generator.layer_collection.layers.items():
             v = vs_dict[layer_id][0].view(-1)
@@ -339,7 +339,7 @@ class PMatBlockDiag(PMatAbstract):
         return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
 
     def solve(self, vs, regul=1e-8):
-        vs_dict = vs.get_dict_representation()
+        vs_dict = vs.to_dict()
         out_dict = dict()
         for layer_id, layer in self.generator.layer_collection.layers.items():
             v = vs_dict[layer_id][0].view(-1)
@@ -375,7 +375,7 @@ class PMatBlockDiag(PMatAbstract):
 
     def vTMv(self, vector):
         # TODO test
-        vector_dict = vector.get_dict_representation()
+        vector_dict = vector.to_dict()
         norm2 = 0
         for layer_id, layer in self.generator.layer_collection.layers.items():
             v = vector_dict[layer_id][0].view(-1)
@@ -466,7 +466,7 @@ class PMatKFAC(PMatAbstract):
 
 
     def solve(self, vs, regul=1e-8, use_pi=True):
-        vs_dict = vs.get_dict_representation()
+        vs_dict = vs.to_dict()
         out_dict = dict()
         for layer_id, layer in self.generator.layer_collection.layers.items():
             vw = vs_dict[layer_id][0]
@@ -495,7 +495,7 @@ class PMatKFAC(PMatAbstract):
             out_dict[layer_id] = solve_tuple
         return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
 
-    def get_dense_tensor(self, split_weight_bias=True):
+    def to_torch(self, split_weight_bias=True):
         """
         - split_weight_bias (bool): if True then the parameters are ordered in
         the same way as in the dense or blockdiag representation, but it
@@ -546,7 +546,7 @@ class PMatKFAC(PMatAbstract):
         return torch.cat(diags)
 
     def mv(self, vs):
-        vs_dict = vs.get_dict_representation()
+        vs_dict = vs.to_dict()
         out_dict = dict()
         for layer_id, layer in self.generator.layer_collection.layers.items():
             vw = vs_dict[layer_id][0]
@@ -564,7 +564,7 @@ class PMatKFAC(PMatAbstract):
         return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
 
     def vTMv(self, vector):
-        vector_dict = vector.get_dict_representation()
+        vector_dict = vector.to_dict()
         norm2 = 0
         for layer_id, layer in self.generator.layer_collection.layers.items():
             v = vector_dict[layer_id][0].view(vector_dict[layer_id][0].size(0), -1)
@@ -647,7 +647,7 @@ class PMatEKFAC(PMatAbstract):
         else:
             self.data = data
 
-    def get_dense_tensor(self, split_weight_bias=True):
+    def to_torch(self, split_weight_bias=True):
         """
         - split_weight_bias (bool): if True then the parameters are ordered in
         the same way as in the dense or blockdiag representation, but it
@@ -704,7 +704,7 @@ class PMatEKFAC(PMatAbstract):
         self.data = (self.data[0], self.generator.get_kfe_diag(self.data[0], examples))
 
     def mv(self, vs):
-        vs_dict = vs.get_dict_representation()
+        vs_dict = vs.to_dict()
         out_dict = dict()
         evecs, diags = self.data
         for l_id, l in self.generator.layer_collection.layers.items():
@@ -726,7 +726,7 @@ class PMatEKFAC(PMatAbstract):
         return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
 
     def vTMv(self, vector):
-        vector_dict = vector.get_dict_representation()
+        vector_dict = vector.to_dict()
         evecs, diags = self.data
         norm2 = 0
         for l_id in vector_dict.keys():
@@ -761,7 +761,7 @@ class PMatEKFAC(PMatAbstract):
         return self.pow(pow)
 
     def solve(self, vs, regul=1e-8):
-        vs_dict = vs.get_dict_representation()
+        vs_dict = vs.to_dict()
         out_dict = dict()
         evecs, diags = self.data
         for l_id, l in self.generator.layer_collection.layers.items():
@@ -822,7 +822,7 @@ class PMatImplicit(PMatAbstract):
     def frobenius_norm(self):
         raise NotImplementedError
 
-    def get_dense_tensor(self):
+    def to_torch(self):
         raise NotImplementedError
 
     def solve(self, v):
@@ -845,10 +845,10 @@ class PMatLowRank(PMatAbstract):
 
     def vTMv(self, v):
         data_mat = self.data.view(-1, self.data.size(2))
-        Av = torch.mv(data_mat, v.get_flat_representation())
+        Av = torch.mv(data_mat, v.to_torch())
         return torch.dot(Av, Av)
 
-    def get_dense_tensor(self):
+    def to_torch(self):
         # you probably don't want to do that: you are
         # loosing the benefit of having a low rank representation
         # of your matrix but instead compute the potentially
@@ -860,7 +860,7 @@ class PMatLowRank(PMatAbstract):
 
     def mv(self, v):
         data_mat = self.data.view(-1, self.data.size(2))
-        v_flat = torch.mv(data_mat.t(), torch.mv(data_mat, v.get_flat_representation()))
+        v_flat = torch.mv(data_mat.t(), torch.mv(data_mat, v.to_torch()))
         return PVector(v.layer_collection, vector_repr=v_flat)
 
     def compute_eigendecomposition(self, impl="svd"):
@@ -890,7 +890,7 @@ class PMatLowRank(PMatAbstract):
 
     def solve(self, b, regul=1e-8):
         u, s, v = torch.svd(self.data.view(-1, self.data.size(2)))
-        x = torch.mv(v, torch.mv(v.t(), b.get_flat_representation()) / (s**2 + regul))
+        x = torch.mv(v, torch.mv(v.t(), b.to_torch()) / (s**2 + regul))
         return PVector(b.layer_collection, vector_repr=x)
 
     def get_diag(self):
@@ -916,7 +916,7 @@ class PMatQuasiDiag(PMatAbstract):
         else:
             self.data = generator.get_covariance_quasidiag(examples)
 
-    def get_dense_tensor(self):
+    def to_torch(self):
         s = self.generator.layer_collection.numel()
         device = self.generator.get_device()
         M = torch.zeros((s, s), device=device)
@@ -974,7 +974,7 @@ class PMatQuasiDiag(PMatAbstract):
         )
 
     def vTMv(self, vs):
-        vs_dict = vs.get_dict_representation()
+        vs_dict = vs.to_dict()
         out = 0
         for layer_id, layer in self.generator.layer_collection.layers.items():
             diag, cross = self.data[layer_id]
@@ -998,7 +998,7 @@ class PMatQuasiDiag(PMatAbstract):
         return out
 
     def mv(self, vs):
-        vs_dict = vs.get_dict_representation()
+        vs_dict = vs.to_dict()
         out_dict = dict()
         for layer_id, layer in self.generator.layer_collection.layers.items():
             diag, cross = self.data[layer_id]
@@ -1023,7 +1023,7 @@ class PMatQuasiDiag(PMatAbstract):
         return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
 
     def solve(self, vs, regul=1e-8):
-        vs_dict = vs.get_dict_representation()
+        vs_dict = vs.to_dict()
         out_dict = dict()
         for layer_id, layer in self.generator.layer_collection.layers.items():
             diag, cross = self.data[layer_id]

@@ -92,7 +92,7 @@ class PVector:
 
         Note. This is an inplace operation
         """
-        dict_repr = self.get_dict_representation()
+        dict_repr = self.to_dict()
         layer_collection = LayerCollection.from_model(model)
         l_to_m, _ = layer_collection.get_layerid_module_maps(model)
         for layer_id, layer in layer_collection.layers.items():
@@ -107,7 +107,7 @@ class PVector:
 
         Note. This is an inplace operation
         """
-        dict_repr = self.get_dict_representation()
+        dict_repr = self.to_dict()
         layer_collection = LayerCollection.from_model(model)
         l_to_m, _ = layer_collection.get_layerid_module_maps(model)
         for layer_id, layer in layer_collection.layers.items():
@@ -163,7 +163,7 @@ class PVector:
         if self.vector_repr is not None:
             return PVector(self.layer_collection, vector_repr=self.vector_repr.detach())
 
-    def get_flat_representation(self):
+    def to_torch(self):
         """
         Returns a Pytorch 1d tensor of the flatten vector.
 
@@ -182,7 +182,7 @@ class PVector:
         else:
             return NotImplementedError
 
-    def get_dict_representation(self):
+    def to_dict(self):
         if self.dict_repr is not None:
             return self.dict_repr
         elif self.vector_repr is not None:
@@ -267,7 +267,7 @@ class PVector:
             return PVector(
                 self.layer_collection,
                 vector_repr=(
-                    self.get_flat_representation() + other.get_flat_representation()
+                    self.to_torch() + other.to_torch()
                 ),
             )
 
@@ -291,7 +291,7 @@ class PVector:
             return PVector(
                 self.layer_collection,
                 vector_repr=(
-                    self.get_flat_representation() - other.get_flat_representation()
+                    self.to_torch() - other.to_torch()
                 ),
             )
 
@@ -318,7 +318,7 @@ class PVector:
         """
         if self.vector_repr is not None or other.vector_repr is not None:
             return torch.dot(
-                self.get_flat_representation(), other.get_flat_representation()
+                self.to_torch(), other.to_torch()
             )
         else:
             dot_ = 0
@@ -346,7 +346,7 @@ class FVector:
     def __init__(self, vector_repr=None):
         self.vector_repr = vector_repr
 
-    def get_flat_representation(self):
+    def to_torch(self):
         if self.vector_repr is not None:
             return self.vector_repr
         else:

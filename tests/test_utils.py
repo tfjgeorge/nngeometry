@@ -26,7 +26,7 @@ def test_grad_dict_repr():
     grad_direct = PVector.from_model_grad(model)
 
     check_tensors(
-        grad_direct.get_flat_representation(), grad_nng.get_flat_representation()
+        grad_direct.to_torch(), grad_nng.to_torch()
     )
 
 

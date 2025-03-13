@@ -26,7 +26,7 @@ def test_jacobian_vs_fdense():
         FMat_dense = FMatDense(generator=backend, examples=loader)
 
         jacobian = Jacobian(model=model, function=function, loader=loader)
-        jacobian_torch = jacobian.get_dense_tensor()
+        jacobian_torch = jacobian.to_torch()
         sj = jacobian_torch.size()
         FMat_computed = torch.mm(
             jacobian_torch.view(-1, sj[2]), jacobian_torch.view(-1, sj[2]).t()
@@ -34,6 +34,6 @@ def test_jacobian_vs_fdense():
 
         check_tensors(
             FMat_computed.view(sj[0], sj[1], sj[0], sj[1]),
-            FMat_dense.get_dense_tensor(),
+            FMat_dense.to_torch(),
             eps=1e-4,
         )
