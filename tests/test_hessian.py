@@ -56,7 +56,7 @@ def test_hessian_vs_FIM():
             function=f,
         )
 
-        check_tensors(F.get_dense_tensor(), H.get_dense_tensor() / len(loader.sampler))
+        check_tensors(F.to_torch(), H.to_torch() / len(loader.sampler))
 
 
 def test_H_vs_linearization():
@@ -87,7 +87,7 @@ def test_H_vs_linearization():
         dw = random_pvector(lc, device=device)
         dw = step / dw.norm() * dw
 
-        update_model(parameters, dw.get_flat_representation())
+        update_model(parameters, dw.to_torch())
 
         loss = torch.nn.functional.cross_entropy(model(X), y, reduction="sum")
         grad_after = grad(loss, params)
@@ -95,6 +95,6 @@ def test_H_vs_linearization():
         delta = H.mv(dw)
 
         check_tensors(
-            (grad_after - grad_before).get_flat_representation(),
-            delta.get_flat_representation(),
+            (grad_after - grad_before).to_torch(),
+            delta.to_torch(),
         )

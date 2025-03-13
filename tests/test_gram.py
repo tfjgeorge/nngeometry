@@ -18,7 +18,7 @@ def test_gram_vs_jacobian():
         gram = GramMatrix(model=model, function=function, loader=loader)
         jacobian = Jacobian(model=model, function=function, loader=loader)
 
-        jacobian_torch = jacobian.get_dense_tensor()
+        jacobian_torch = jacobian.to_torch()
         sj = jacobian_torch.size()
         gram_computed = torch.mm(
             jacobian_torch.view(-1, sj[2]), jacobian_torch.view(-1, sj[2]).t()
@@ -26,6 +26,6 @@ def test_gram_vs_jacobian():
 
         check_tensors(
             gram_computed.view(sj[0], sj[1], sj[0], sj[1]),
-            gram.get_dense_tensor(),
+            gram.to_torch(),
             eps=1e-4,
         )

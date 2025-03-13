@@ -53,9 +53,9 @@ def test_FIM_MC_vs_linearization():
                 dw = step / dw.norm() * dw
 
                 output_before = get_output_vector(loader, function)
-                update_model(parameters, dw.get_flat_representation())
+                update_model(parameters, dw.to_torch())
                 output_after = get_output_vector(loader, function)
-                update_model(parameters, -dw.get_flat_representation())
+                update_model(parameters, -dw.to_torch())
 
                 KL = tF.kl_div(
                     tF.log_softmax(output_before, dim=1),
@@ -93,9 +93,9 @@ def test_FIM_vs_linearization_classif_logits():
             dw = step / dw.norm() * dw
 
             output_before = get_output_vector(loader, function)
-            update_model(parameters, dw.get_flat_representation())
+            update_model(parameters, dw.to_torch())
             output_after = get_output_vector(loader, function)
-            update_model(parameters, -dw.get_flat_representation())
+            update_model(parameters, -dw.to_torch())
 
             KL = tF.kl_div(
                 tF.log_softmax(output_before, dim=1),
@@ -131,9 +131,9 @@ def test_FIM_vs_linearization_classif_binary_logits():
         dw = step / dw.norm() * dw
 
         logits_before = get_output_vector(loader, function)
-        update_model(parameters, dw.get_flat_representation())
+        update_model(parameters, dw.to_torch())
         logits_after = get_output_vector(loader, function)
-        update_model(parameters, -dw.get_flat_representation())
+        update_model(parameters, -dw.to_torch())
 
         log_prob_1_before = tF.logsigmoid(logits_before)
         log_prob_0_before = tF.logsigmoid(-logits_before)
@@ -174,9 +174,9 @@ def test_FIM_vs_linearization_regression():
             dw = step / dw.norm() * dw
 
             output_before = get_output_vector(loader, function)
-            update_model(parameters, dw.get_flat_representation())
+            update_model(parameters, dw.to_torch())
             output_after = get_output_vector(loader, function)
-            update_model(parameters, -dw.get_flat_representation())
+            update_model(parameters, -dw.to_torch())
 
             diff = ((output_before - output_after) ** 2).sum() / output_before.size(0)
 
@@ -213,9 +213,9 @@ def test_FIM_MC_vs_linearization_segmentation():
             dw = step / dw.norm() * dw
 
             output_before = get_output_vector(loader, function)
-            update_model(parameters, dw.get_flat_representation())
+            update_model(parameters, dw.to_torch())
             output_after = get_output_vector(loader, function)
-            update_model(parameters, -dw.get_flat_representation())
+            update_model(parameters, -dw.to_torch())
 
             KL = tF.kl_div(
                 tF.log_softmax(output_before, dim=1),
