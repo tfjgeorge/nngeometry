@@ -158,6 +158,16 @@ class PMatDense(PMatAbstract):
         else:
             raise NotImplementedError
 
+    def solveJ(self, J, regul=1e-8):
+        """
+        solves J = AX in X
+        """
+        inv_v = torch.linalg.solve(
+            self.data + regul * torch.eye(self.size(0), device=self.data.device),
+            J.to_torch()[0].t(),
+        )
+        return inv_v
+
     def inverse(self, regul=1e-8):
         inv_tensor = torch.inverse(
             self.data + regul * torch.eye(self.size(0), device=self.data.device)
@@ -460,10 +470,9 @@ class PMatKFAC(PMatAbstract):
             )
             pow_data[layer_id] = (pow_a, pow_g)
         return PMatKFAC(generator=self.generator, data=pow_data)
-    
+
     def __pow__(self, pow):
         return self.pow(pow)
-
 
     def solve(self, vs, regul=1e-8, use_pi=True):
         vs_dict = vs.to_dict()
@@ -784,6 +793,19 @@ class PMatEKFAC(PMatAbstract):
                 )
             out_dict[l_id] = inv_tuple
         return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
+
+    def solveJ(self, J, regul=1e-8):
+        J_dense = J.to_torch()
+
+        vs_solve = []
+        for i in range(J_dense.size(1)):
+            v = PVector(
+                layer_collection=J.generator.layer_collection,
+                vector_repr=J_dense[0, i, :],
+            )
+            vs_solve.append(self.solve(v, regul=regul).to_torch())
+
+        return torch.stack(vs_solve).t()
 
     def __rmul__(self, x):
         evecs, diags = self.data
