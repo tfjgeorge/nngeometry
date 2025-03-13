@@ -33,22 +33,22 @@ def test_pspace_ekfac_vs_kfac():
 
         # here KFAC and EKFAC should be the same
         for split in [True, False]:
-            diff = M_kfac.get_dense_tensor(
+            diff = M_kfac.to_torch(
                 split_weight_bias=split
-            ) - M_ekfac.get_dense_tensor(split_weight_bias=split)
+            ) - M_ekfac.to_torch(split_weight_bias=split)
             assert torch.norm(diff) < eps
 
         # now we compute the exact diagonal:
         M_ekfac.update_diag(loader)
         assert torch.norm(
-            M_kfac.get_dense_tensor() - M_blockdiag.get_dense_tensor()
-        ) > torch.norm(M_ekfac.get_dense_tensor() - M_blockdiag.get_dense_tensor())
+            M_kfac.to_torch() - M_blockdiag.to_torch()
+        ) > torch.norm(M_ekfac.to_torch() - M_blockdiag.to_torch())
 
 
 def test_pspace_ekfac_vs_direct():
     """
     Check EKFAC basis operations against direct computation using
-    get_dense_tensor
+    to_torch
     """
     for get_task in [get_conv1d_task, get_fullyconnect_task, get_conv_task]:
         loader, lc, parameters, model, function = get_task()
@@ -64,51 +64,51 @@ def test_pspace_ekfac_vs_direct():
         # the second time we will have called update_diag
         for i in range(2):
             vTMv_direct = torch.dot(
-                torch.mv(M_ekfac.get_dense_tensor(), v.get_flat_representation()),
-                v.get_flat_representation(),
+                torch.mv(M_ekfac.to_torch(), v.to_torch()),
+                v.to_torch(),
             )
             vTMv_ekfac = M_ekfac.vTMv(v)
             check_ratio(vTMv_direct, vTMv_ekfac)
 
             trace_ekfac = M_ekfac.trace()
-            trace_direct = torch.trace(M_ekfac.get_dense_tensor())
+            trace_direct = torch.trace(M_ekfac.to_torch())
             check_ratio(trace_direct, trace_ekfac)
 
             frob_ekfac = M_ekfac.frobenius_norm()
-            frob_direct = torch.norm(M_ekfac.get_dense_tensor())
+            frob_direct = torch.norm(M_ekfac.to_torch())
             check_ratio(frob_direct, frob_ekfac)
 
             mv_direct = torch.mv(
-                M_ekfac.get_dense_tensor(), v.get_flat_representation()
+                M_ekfac.to_torch(), v.to_torch()
             )
             mv_ekfac = M_ekfac.mv(v)
-            check_tensors(mv_direct, mv_ekfac.get_flat_representation())
+            check_tensors(mv_direct, mv_ekfac.to_torch())
 
             # Test pow
             check_tensors(
-                (M_ekfac**2).get_dense_tensor(),
-                torch.mm(M_ekfac.get_dense_tensor(), M_ekfac.get_dense_tensor()),
+                (M_ekfac**2).to_torch(),
+                torch.mm(M_ekfac.to_torch(), M_ekfac.to_torch()),
             )
             check_tensors(
                 torch.mm(
-                    (M_ekfac ** (1 / 3)).get_dense_tensor(),
-                    (M_ekfac ** (2 / 3)).get_dense_tensor(),
+                    (M_ekfac ** (1 / 3)).to_torch(),
+                    (M_ekfac ** (2 / 3)).to_torch(),
                 ),
-                M_ekfac.get_dense_tensor(),
+                M_ekfac.to_torch(),
             )
 
             # Test inverse
             regul = 1e-5
             M_inv = M_ekfac.inverse(regul=regul)
             v_back = M_inv.mv(mv_ekfac + regul * v)
-            check_tensors(v.get_flat_representation(), v_back.get_flat_representation())
+            check_tensors(v.to_torch(), v_back.to_torch())
 
             # Test solve
             v_back = M_ekfac.solve(mv_ekfac + regul * v, regul=regul)
-            check_tensors(v.get_flat_representation(), v_back.get_flat_representation())
+            check_tensors(v.to_torch(), v_back.to_torch())
 
             # Test rmul
             M_mul = 1.23 * M_ekfac
-            check_tensors(1.23 * M_ekfac.get_dense_tensor(), M_mul.get_dense_tensor())
+            check_tensors(1.23 * M_ekfac.to_torch(), M_mul.to_torch())
 
             M_ekfac.update_diag(loader)

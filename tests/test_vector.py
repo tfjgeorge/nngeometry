@@ -38,9 +38,9 @@ def test_from_dict_to_pvector():
     eps = 1e-8
     model = ConvNet()
     v = PVector.from_model(model)
-    d1 = v.get_dict_representation()
-    v2 = PVector(v.layer_collection, vector_repr=v.get_flat_representation())
-    d2 = v2.get_dict_representation()
+    d1 = v.to_dict()
+    v2 = PVector(v.layer_collection, vector_repr=v.to_torch())
+    d2 = v2.to_dict()
     assert d1.keys() == d2.keys()
     for k in d1.keys():
         assert torch.norm(d1[k][0] - d2[k][0]) < eps
@@ -56,8 +56,8 @@ def test_add():
     sumr1r2 = r1 + r2
     assert (
         torch.norm(
-            sumr1r2.get_flat_representation()
-            - (r1.get_flat_representation() + r2.get_flat_representation())
+            sumr1r2.to_torch()
+            - (r1.to_torch() + r2.to_torch())
         )
         < 1e-5
     )
@@ -67,8 +67,8 @@ def test_add():
     sumr1r2 = r1 + r2
     assert (
         torch.norm(
-            sumr1r2.get_flat_representation()
-            - (r1.get_flat_representation() + r2.get_flat_representation())
+            sumr1r2.to_torch()
+            - (r1.to_torch() + r2.to_torch())
         )
         < 1e-5
     )
@@ -78,8 +78,8 @@ def test_add():
     sumr1r2 = r1 + r2
     assert (
         torch.norm(
-            sumr1r2.get_flat_representation()
-            - (r1.get_flat_representation() + r2.get_flat_representation())
+            sumr1r2.to_torch()
+            - (r1.to_torch() + r2.to_torch())
         )
         < 1e-5
     )
@@ -93,8 +93,8 @@ def test_sub():
     sumr1r2 = r1 - r2
     assert (
         torch.norm(
-            sumr1r2.get_flat_representation()
-            - (r1.get_flat_representation() - r2.get_flat_representation())
+            sumr1r2.to_torch()
+            - (r1.to_torch() - r2.to_torch())
         )
         < 1e-5
     )
@@ -104,8 +104,8 @@ def test_sub():
     sumr1r2 = r1 - r2
     assert (
         torch.norm(
-            sumr1r2.get_flat_representation()
-            - (r1.get_flat_representation() - r2.get_flat_representation())
+            sumr1r2.to_torch()
+            - (r1.to_torch() - r2.to_torch())
         )
         < 1e-5
     )
@@ -115,8 +115,8 @@ def test_sub():
     sumr1r2 = r1 - r2
     assert (
         torch.norm(
-            sumr1r2.get_flat_representation()
-            - (r1.get_flat_representation() - r2.get_flat_representation())
+            sumr1r2.to_torch()
+            - (r1.to_torch() - r2.to_torch())
         )
         < 1e-5
     )
@@ -129,7 +129,7 @@ def test_pow():
     sqrt_r1 = r1**3
     assert (
         torch.norm(
-            sqrt_r1.get_flat_representation() - r1.get_flat_representation() ** 3
+            sqrt_r1.to_torch() - r1.to_torch() ** 3
         )
         < 1e-5
     )
@@ -138,7 +138,7 @@ def test_pow():
     sqrt_r1 = r1**3
     assert (
         torch.norm(
-            sqrt_r1.get_flat_representation() - r1.get_flat_representation() ** 3
+            sqrt_r1.to_torch() - r1.to_torch() ** 3
         )
         < 1e-5
     )
@@ -153,17 +153,17 @@ def test_clone():
 
     for layer_id, layer in pvec.layer_collection.layers.items():
         m = l_to_m[layer_id]
-        assert m.weight is pvec.get_dict_representation()[layer_id][0]
-        assert m.weight is not pvec_clone.get_dict_representation()[layer_id][0]
+        assert m.weight is pvec.to_dict()[layer_id][0]
+        assert m.weight is not pvec_clone.to_dict()[layer_id][0]
         assert (
-            torch.norm(m.weight - pvec_clone.get_dict_representation()[layer_id][0])
+            torch.norm(m.weight - pvec_clone.to_dict()[layer_id][0])
             < eps
         )
         if m.bias is not None:
-            assert m.bias is pvec.get_dict_representation()[layer_id][1]
-            assert m.bias is not pvec_clone.get_dict_representation()[layer_id][1]
+            assert m.bias is pvec.to_dict()[layer_id][1]
+            assert m.bias is not pvec_clone.to_dict()[layer_id][1]
             assert (
-                torch.norm(m.bias - pvec_clone.get_dict_representation()[layer_id][1])
+                torch.norm(m.bias - pvec_clone.to_dict()[layer_id][1])
                 < eps
             )
 
@@ -175,10 +175,10 @@ def test_detach():
     pvec_clone = pvec.clone()
 
     # first check grad on pvec_clone
-    loss = torch.norm(pvec_clone.get_flat_representation())
+    loss = torch.norm(pvec_clone.to_torch())
     loss.backward()
-    pvec_clone_dict = pvec_clone.get_dict_representation()
-    pvec_dict = pvec.get_dict_representation()
+    pvec_clone_dict = pvec_clone.to_dict()
+    pvec_dict = pvec.to_dict()
     for layer_id, layer in pvec.layer_collection.layers.items():
         assert torch.norm(pvec_dict[layer_id][0].grad) > eps
         assert pvec_clone_dict[layer_id][0].grad is None
@@ -190,7 +190,7 @@ def test_detach():
 
     # second check that detached grad stays at 0 when detaching
     y = torch.tensor(1.0, requires_grad=True)
-    loss = torch.norm(pvec.detach().get_flat_representation()) + y
+    loss = torch.norm(pvec.detach().to_torch()) + y
     loss.backward()
     for layer_id, layer in pvec.layer_collection.layers.items():
         assert torch.norm(pvec_dict[layer_id][0].grad) < eps
@@ -203,10 +203,10 @@ def test_norm():
     layer_collection = LayerCollection.from_model(model)
 
     v = random_pvector(layer_collection)
-    check_ratio(torch.norm(v.get_flat_representation()), v.norm())
+    check_ratio(torch.norm(v.to_torch()), v.norm())
 
     v = random_pvector_dict(layer_collection)
-    check_ratio(torch.norm(v.get_flat_representation()), v.norm())
+    check_ratio(torch.norm(v.to_torch()), v.norm())
 
 
 def test_from_to_model():
@@ -239,14 +239,14 @@ def test_dot():
     r2 = random_pvector(layer_collection)
     dotr1r2 = r1.dot(r2)
     check_ratio(
-        torch.dot(r1.get_flat_representation(), r2.get_flat_representation()), dotr1r2
+        torch.dot(r1.to_torch(), r2.to_torch()), dotr1r2
     )
 
     r1 = random_pvector_dict(layer_collection)
     r2 = random_pvector_dict(layer_collection)
     dotr1r2 = r1.dot(r2)
     check_ratio(
-        torch.dot(r1.get_flat_representation(), r2.get_flat_representation()), dotr1r2
+        torch.dot(r1.to_torch(), r2.to_torch()), dotr1r2
     )
 
     r1 = random_pvector(layer_collection)
@@ -254,10 +254,10 @@ def test_dot():
     dotr1r2 = r1.dot(r2)
     dotr2r1 = r2.dot(r1)
     check_ratio(
-        torch.dot(r1.get_flat_representation(), r2.get_flat_representation()), dotr1r2
+        torch.dot(r1.to_torch(), r2.to_torch()), dotr1r2
     )
     check_ratio(
-        torch.dot(r1.get_flat_representation(), r2.get_flat_representation()), dotr2r1
+        torch.dot(r1.to_torch(), r2.to_torch()), dotr2r1
     )
 
 
@@ -266,7 +266,7 @@ def test_size():
     layer_collection = LayerCollection.from_model(model)
 
     v = random_pvector(layer_collection)
-    assert v.size() == v.get_flat_representation().size()
+    assert v.size() == v.to_torch().size()
 
     v = random_pvector_dict(layer_collection)
-    assert v.size() == v.get_flat_representation().size()
+    assert v.size() == v.to_torch().size()

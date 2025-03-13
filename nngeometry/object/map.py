@@ -19,12 +19,12 @@ class PushForwardDense(AbstractPushForward):
         else:
             self.data = generator.get_jacobian(examples)
 
-    def get_dense_tensor(self):
+    def to_torch(self):
         return self.data
 
     def mv(self, v):
         v_flat = torch.mv(
-            self.data.view(-1, self.data.size(-1)), v.get_flat_representation()
+            self.data.view(-1, self.data.size(-1)), v.to_torch()
         )
         v_flat = v_flat.view(self.data.size(0), self.data.size(1))
         return FVector(vector_repr=v_flat)
@@ -54,12 +54,12 @@ class PullBackDense(PullBackAbstract):
         else:
             self.data = generator.get_jacobian(examples)
 
-    def get_dense_tensor(self):
+    def to_torch(self):
         return self.data
 
     def mv(self, v):
         v_flat = torch.mv(
             self.data.view(-1, self.data.size(-1)).t(),
-            v.get_flat_representation().view(-1),
+            v.to_torch().view(-1),
         )
         return PVector(self.generator.layer_collection, vector_repr=v_flat)

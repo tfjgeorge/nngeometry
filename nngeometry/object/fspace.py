@@ -31,11 +31,11 @@ class FMatDense(FMatAbstract):
 
     def mv(self, v):
         # TODO: test
-        v_flat = torch.mv(self.data, v.get_flat_representation())
+        v_flat = torch.mv(self.data, v.to_torch())
         return FVector(vector_repr=v_flat)
 
     def vTMv(self, v):
-        v_flat = v.get_flat_representation().view(-1)
+        v_flat = v.to_torch().view(-1)
         sd = self.data.size()
         return torch.dot(
             v_flat, torch.mv(self.data.view(sd[0] * sd[1], sd[2] * sd[3]), v_flat)
@@ -48,13 +48,13 @@ class FMatDense(FMatAbstract):
         # TODO: test
         return PVector(
             model=v.model,
-            vector_repr=torch.mv(self.evecs.t(), v.get_flat_representation()),
+            vector_repr=torch.mv(self.evecs.t(), v.to_torch()),
         )
 
     def project_from_diag(self, v):
         # TODO: test
         return PVector(
-            model=v.model, vector_repr=torch.mv(self.evecs, v.get_flat_representation())
+            model=v.model, vector_repr=torch.mv(self.evecs, v.to_torch())
         )
 
     def get_eigendecomposition(self):
@@ -69,7 +69,7 @@ class FMatDense(FMatAbstract):
         # TODO: test
         return torch.trace(self.data)
 
-    def get_dense_tensor(self):
+    def to_torch(self):
         return self.data
 
     def __add__(self, other):
