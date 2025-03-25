@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
+from collections import OrderedDict
 
 import torch
 
 from nngeometry.backend import DummyGenerator
+from nngeometry.object.map import PFMapDense
 
 from ..maths import kronecker
 from .vector import PVector
@@ -665,7 +667,7 @@ class PMatEKFAC(PMatAbstract):
         """
         _, diags = self.data
         s = self.generator.layer_collection.numel()
-        M = torch.zeros((s, s), device=self.generator.get_device())
+        M = torch.zeros((s, s), device=self.generator.get_device(), dtype=self.generator.get_dtype())
         KFE_layers = self.get_KFE(split_weight_bias=split_weight_bias)
         for layer_id, _ in self.generator.layer_collection.layers.items():
             diag = diags[layer_id]
@@ -795,17 +797,36 @@ class PMatEKFAC(PMatAbstract):
         return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
 
     def solveJ(self, J, regul=1e-8):
-        J_dense = J.to_torch()
+        out_dict = OrderedDict()
+        evecs, diags = self.data
+        for l_id, vals in J.iter_by_module():
 
-        vs_solve = []
-        for i in range(J_dense.size(1)):
-            v = PVector(
-                layer_collection=J.generator.layer_collection,
-                vector_repr=J_dense[0, i, :],
-            )
-            vs_solve.append(self.solve(v, regul=regul).to_torch())
+            diag = diags[l_id]
+            evecs_a, evecs_g = evecs[l_id]
+            vw = vals[0]
+            sw = vw.size()
+            v = vw.view(sw[0], sw[1], sw[2], -1)
+            if len(vals) > 1:
+                vb = vals[1]
+                v = torch.cat([v, vb.unsqueeze(3)], dim=3)
 
-        return torch.stack(vs_solve).t()
+            v_kfe = torch.einsum("ijkl,ka,lb->ijab", v, evecs_g, evecs_a)
+
+            sv_kfe = v_kfe.size()
+            inv_kfe = v_kfe / (diag.reshape(1, sv_kfe[2], sv_kfe[3]) + regul)
+
+            inv = torch.einsum("ijkl,ak,bl->ijab", inv_kfe, evecs_g, evecs_a)
+
+            if len(vals) > 1:
+                inv_tuple = (
+                    inv[:, :, :, :-1].contiguous().view(*sw),
+                    inv[:, :, :, -1].contiguous(),
+                )
+            else:
+                inv_tuple = (inv.view(*sw),)
+            out_dict[l_id] = inv_tuple
+
+        return PFMapDense.from_dict(generator=self.generator, data_dict=out_dict)
 
     def __rmul__(self, x):
         evecs, diags = self.data

@@ -24,7 +24,7 @@ from utils import check_ratio, check_tensors, update_model, get_output_vector
 
 from nngeometry.backend import TorchHooksJacobianBackend
 from nngeometry.object.fspace import FMatDense
-from nngeometry.object.map import PullBackDense, PushForwardDense, PushForwardImplicit
+from nngeometry.object.map import PFMapDense, PFMapImplicit
 from nngeometry.object.pspace import (
     PMatBlockDiag,
     PMatDense,
@@ -73,34 +73,31 @@ def test_jacobian_pushforward_dense_linear():
             model=model,
             function=function,
         )
-        push_forward = PushForwardDense(generator=generator, examples=loader)
+        push_forward = PFMapDense(generator=generator, examples=loader)
         dw = random_pvector(lc, device=device)
 
-        doutput_lin = push_forward.mv(dw)
+        doutput_lin = push_forward.jvp(dw)
 
         output_before = get_output_vector(loader, function)
         update_model(parameters, dw.to_torch())
         output_after = get_output_vector(loader, function)
 
-        check_tensors(
-            output_after - output_before, doutput_lin.to_torch().t()
-        )
+        check_tensors(output_after - output_before, doutput_lin.to_torch().t())
 
 
 def test_jacobian_pushforward_dense_nonlinear():
     for get_task in nonlinear_tasks:
-        print(get_task)
         loader, lc, parameters, model, function = get_task()
         generator = TorchHooksJacobianBackend(
             layer_collection=lc,
             model=model,
             function=function,
         )
-        push_forward = PushForwardDense(generator=generator, examples=loader)
+        push_forward = PFMapDense(generator=generator, examples=loader)
         dw = random_pvector(lc, device=device)
         dw = 1e-5 / dw.norm() * dw
 
-        doutput_lin = push_forward.mv(dw)
+        doutput_lin = push_forward.jvp(dw)
 
         output_before = get_output_vector(loader, function)
         update_model(parameters, dw.to_torch())
@@ -123,14 +120,12 @@ def test_jacobian_pushforward_implicit():
             model=model,
             function=function,
         )
-        dense_push_forward = PushForwardDense(generator=generator, examples=loader)
-        implicit_push_forward = PushForwardImplicit(
-            generator=generator, examples=loader
-        )
+        dense_push_forward = PFMapDense(generator=generator, examples=loader)
+        implicit_push_forward = PFMapImplicit(generator=generator, examples=loader)
         dw = random_pvector(lc, device=device)
 
-        doutput_lin_dense = dense_push_forward.mv(dw)
-        doutput_lin_implicit = implicit_push_forward.mv(dw)
+        doutput_lin_dense = dense_push_forward.jvp(dw)
+        doutput_lin_implicit = implicit_push_forward.jvp(dw)
 
         check_tensors(
             doutput_lin_dense.to_torch(),
@@ -146,16 +141,14 @@ def test_jacobian_pullback_dense():
             model=model,
             function=function,
         )
-        pull_back = PullBackDense(generator=generator, examples=loader)
-        push_forward = PushForwardDense(generator=generator, examples=loader)
+        pull_back = PFMapDense(generator=generator, examples=loader)
+        push_forward = PFMapDense(generator=generator, examples=loader)
         dw = random_pvector(lc, device=device)
 
-        doutput_lin = push_forward.mv(dw)
-        dinput_lin = pull_back.mv(doutput_lin)
+        doutput_lin = push_forward.jvp(dw)
+        dinput_lin = pull_back.vjp(doutput_lin)
         check_ratio(
-            torch.dot(
-                dw.to_torch(), dinput_lin.to_torch()
-            ),
+            torch.dot(dw.to_torch(), dinput_lin.to_torch()),
             torch.norm(doutput_lin.to_torch()) ** 2,
         )
 
@@ -170,7 +163,7 @@ def test_jacobian_fdense_vs_pullback():
                 function=function,
                 centering=centering,
             )
-            pull_back = PullBackDense(generator=generator, examples=loader)
+            pull_back = PFMapDense(generator=generator, examples=loader)
             FMat_dense = FMatDense(generator=generator, examples=loader)
 
             n_output = FMat_dense.to_torch().size(0)
@@ -190,7 +183,7 @@ def test_jacobian_fdense_vs_pullback():
 
             # Test vTMv
             vTMv_FMat = FMat_dense.vTMv(df)
-            Jv_pullback = pull_back.mv(df).to_torch()
+            Jv_pullback = pull_back.vjp(df).to_torch()
             vTMv_pullforward = torch.dot(Jv_pullback, Jv_pullback)
             check_ratio(vTMv_pullforward, vTMv_FMat)
 
@@ -286,8 +279,8 @@ def test_jacobian_pdense_vs_pushforward():
                 function=function,
                 centering=centering,
             )
-            push_forward = PushForwardDense(generator=generator, examples=loader)
-            pull_back = PullBackDense(generator=generator, data=push_forward.data)
+            push_forward = PFMapDense(generator=generator, examples=loader)
+            pull_back = PFMapDense(generator=generator, data=push_forward.data)
             PMat_dense = PMatDense(generator=generator, examples=loader)
             dw = random_pvector(lc, device=device)
             n = len(loader.sampler)
@@ -302,7 +295,7 @@ def test_jacobian_pdense_vs_pushforward():
 
             # Test vTMv
             vTMv_PMat = PMat_dense.vTMv(dw)
-            Jv_pushforward = push_forward.mv(dw)
+            Jv_pushforward = push_forward.jvp(dw)
             Jv_pushforward_flat = Jv_pushforward.to_torch()
             vTMv_pushforward = (
                 torch.dot(Jv_pushforward_flat.view(-1), Jv_pushforward_flat.view(-1))
@@ -312,7 +305,7 @@ def test_jacobian_pdense_vs_pushforward():
 
             # Test Mv
             Mv_PMat = PMat_dense.mv(dw)
-            Mv_pf_pb = pull_back.mv(Jv_pushforward)
+            Mv_pf_pb = pull_back.vjp(Jv_pushforward)
             check_tensors(
                 Mv_pf_pb.to_torch() / n,
                 Mv_PMat.to_torch(),
@@ -333,9 +326,7 @@ def test_jacobian_pdense():
             dw = random_pvector(lc, device=device)
 
             # Test get_diag
-            check_tensors(
-                torch.diag(PMat_dense.to_torch()), PMat_dense.get_diag()
-            )
+            check_tensors(torch.diag(PMat_dense.to_torch()), PMat_dense.get_diag())
 
             # Test frobenius
             frob_PMat = PMat_dense.frobenius_norm()
@@ -474,9 +465,7 @@ def test_jacobian_pdiag_vs_pdense():
             PMat_diag.to_torch() - PMat_diag2.to_torch(),
             (PMat_diag - PMat_diag2).to_torch(),
         )
-        check_tensors(
-            1.23 * PMat_diag.to_torch(), (1.23 * PMat_diag).to_torch()
-        )
+        check_tensors(1.23 * PMat_diag.to_torch(), (1.23 * PMat_diag).to_torch())
 
 
 def test_jacobian_pblockdiag_vs_pdense():
@@ -553,9 +542,7 @@ def test_jacobian_pblockdiag():
         check_tensors(mv_direct, PMat_blockdiag.mv(dw).to_torch())
 
         # Test vTMV
-        check_ratio(
-            torch.dot(mv_direct, dw.to_torch()), PMat_blockdiag.vTMv(dw)
-        )
+        check_ratio(torch.dot(mv_direct, dw.to_torch()), PMat_blockdiag.vTMv(dw))
 
         # Test solve
         regul = 1e-3
@@ -688,9 +675,7 @@ def test_jacobian_plowrank():
         check_tensors(mv_direct, mv.to_torch())
 
         # Test vTMV
-        check_ratio(
-            torch.dot(mv_direct, dw.to_torch()), PMat_lowrank.vTMv(dw)
-        )
+        check_ratio(torch.dot(mv_direct, dw.to_torch()), PMat_lowrank.vTMv(dw))
 
         # Test solve
         # We will try to recover mv, which is in the span of the
