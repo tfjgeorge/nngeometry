@@ -4,7 +4,7 @@ from nngeometry.object.vector import PVector
 
 
 def display_correl(M, axis):
-    M = M.get_dense_tensor()
+    M = M.to_torch()
     diag = torch.diag(M)
     dM = (diag + diag.mean() / 100) ** 0.5
     correl = torch.abs(M) / dM.unsqueeze(0) / dM.unsqueeze(1)
