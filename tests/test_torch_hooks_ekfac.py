@@ -118,7 +118,7 @@ def test_pspace_ekfac_vs_direct():
                 generator=generator,
                 data=stacked_mv + regul * stacked_v,
             )
-            J_back = M_ekfac.solveJ(jaco, regul=regul)
+            J_back = M_ekfac.solve(jaco, regul=regul)
 
             check_tensors(
                 stacked_v,

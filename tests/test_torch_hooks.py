@@ -361,7 +361,7 @@ def test_jacobian_pdense():
                 generator=generator,
                 data=stacked_mv + regul * stacked_v,
             )
-            J_back = PMat_dense.solveJ(jaco, regul=regul)
+            J_back = PMat_dense.solve(jaco, regul=regul)
 
             check_tensors(
                 stacked_v,
