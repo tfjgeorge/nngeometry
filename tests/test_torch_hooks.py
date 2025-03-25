@@ -341,17 +341,31 @@ def test_jacobian_pdense():
             # Test solve
             # NB: regul is high since the matrix is not full rank
             regul = 1e-3
-            Mv_regul = torch.mv(
-                PMat_dense.to_torch()
-                + regul * torch.eye(PMat_dense.size(0), device=device),
-                dw.to_torch(),
+            Mv_torch = torch.mv(PMat_dense.to_torch(), dw.to_torch())
+            Mv_regul = PVector(
+                layer_collection=lc, vector_repr=Mv_torch + regul * dw.to_torch()
             )
-            Mv_regul = PVector(layer_collection=lc, vector_repr=Mv_regul)
-            dw_using_inv = PMat_dense.solve(Mv_regul, regul=regul)
+            dw_solve = PMat_dense.solve(Mv_regul, regul=regul)
             check_tensors(
                 dw.to_torch(),
-                dw_using_inv.to_torch(),
+                dw_solve.to_torch(),
                 eps=5e-3,
+            )
+
+            # Test solve with jacobian
+            # TODO improve
+            c = 1.678
+            stacked_mv = torch.stack((Mv_torch, c * Mv_torch)).unsqueeze(0)
+            stacked_v = torch.stack((dw.to_torch(), c * dw.to_torch())).unsqueeze(0)
+            jaco = PFMapDense(
+                generator=generator,
+                data=stacked_mv + regul * stacked_v,
+            )
+            J_back = PMat_dense.solveJ(jaco, regul=regul)
+
+            check_tensors(
+                stacked_v,
+                J_back.to_torch(),
             )
 
             # Test inv

@@ -108,6 +108,7 @@ def test_pspace_ekfac_vs_direct():
             check_tensors(v.to_torch(), v_back.to_torch())
 
             # Test solve with jacobian
+            # TODO improve
             c = 1.678
             stacked_mv = torch.stack(
                 (mv_ekfac.to_torch(), c * mv_ekfac.to_torch())

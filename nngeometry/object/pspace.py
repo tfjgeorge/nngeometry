@@ -164,11 +164,14 @@ class PMatDense(PMatAbstract):
         """
         solves J = AX in X
         """
+        J_torch = J.to_torch()
+        sJ = J_torch.size()
         inv_v = torch.linalg.solve(
             self.data + regul * torch.eye(self.size(0), device=self.data.device),
-            J.to_torch()[0].t(),
+            J_torch.view(-1, sJ[-1]),
+            left=False,
         )
-        return inv_v
+        return PFMapDense(generator=self.generator, data=inv_v.reshape(*sJ))
 
     def inverse(self, regul=1e-8):
         inv_tensor = torch.inverse(
@@ -667,7 +670,9 @@ class PMatEKFAC(PMatAbstract):
         """
         _, diags = self.data
         s = self.generator.layer_collection.numel()
-        M = torch.zeros((s, s), device=self.generator.get_device(), dtype=self.generator.get_dtype())
+        M = torch.zeros(
+            (s, s), device=self.generator.get_device(), dtype=self.generator.get_dtype()
+        )
         KFE_layers = self.get_KFE(split_weight_bias=split_weight_bias)
         for layer_id, _ in self.generator.layer_collection.layers.items():
             diag = diags[layer_id]
