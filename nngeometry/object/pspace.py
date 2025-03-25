@@ -169,11 +169,8 @@ class PMatDense(PMatAbstract):
         # TODO: test
         if impl in ["default", "solve"]:
             # TODO: reuse LU decomposition once it is computed
-            inv_v = torch.linalg.solve(
-                self.data + regul * torch.eye(self.size(0), device=self.data.device),
-                v.to_torch().view(-1, 1),
-            )
-            return PVector(v.layer_collection, vector_repr=inv_v[:, 0])
+            inv_v = self._solve_cached(v.to_torch().view(1,-1), regul=regul)
+            return PVector(v.layer_collection, vector_repr=inv_v[0,:])
         elif impl == "eigendecomposition":
             v_eigenbasis = self.project_to_diag(v)
             inv_v_eigenbasis = v_eigenbasis / (self.evals + regul)
@@ -188,14 +185,24 @@ class PMatDense(PMatAbstract):
         if impl in ["default", "solve"]:
             J_torch = J.to_torch()
             sJ = J_torch.size()
-            inv_v = torch.linalg.solve(
-                self.data + regul * torch.eye(self.size(0), device=self.data.device),
-                J_torch.view(-1, sJ[-1]),
-                left=False,
-            )
+            inv_v = self._solve_cached(J_torch.view(-1, sJ[-1]), regul=regul)
             return PFMapDense(generator=self.generator, data=inv_v.reshape(*sJ))
         else:
             raise NotImplementedError
+
+    def _solve_cached(self, b, regul):
+        try:  # check for cache
+            assert self._ldl_regul == regul
+            LD, pivots = self._ldl_factors
+        except (
+            AttributeError, AssertionError
+        ):  # ldl decomposition is not currently cached for regul value
+            LD, pivots = torch.linalg.ldl_factor(
+                self.data + regul * torch.eye(self.size(0), device=self.data.device),
+            )
+            self._ldl_regul = regul
+            self._ldl_factors = (LD, pivots)
+        return torch.linalg.ldl_solve(LD, pivots, b.t()).t()
 
     def inverse(self, regul=1e-8):
         inv_tensor = torch.inverse(
