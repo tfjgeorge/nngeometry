@@ -1,5 +1,6 @@
 import pytest
 import torch
+from nngeometry.object.map import PFMapDense
 from tasks import device, get_conv_task, get_conv1d_task, get_fullyconnect_task
 from utils import check_ratio, check_tensors
 
@@ -33,16 +34,16 @@ def test_pspace_ekfac_vs_kfac():
 
         # here KFAC and EKFAC should be the same
         for split in [True, False]:
-            diff = M_kfac.to_torch(
+            diff = M_kfac.to_torch(split_weight_bias=split) - M_ekfac.to_torch(
                 split_weight_bias=split
-            ) - M_ekfac.to_torch(split_weight_bias=split)
+            )
             assert torch.norm(diff) < eps
 
         # now we compute the exact diagonal:
         M_ekfac.update_diag(loader)
-        assert torch.norm(
-            M_kfac.to_torch() - M_blockdiag.to_torch()
-        ) > torch.norm(M_ekfac.to_torch() - M_blockdiag.to_torch())
+        assert torch.norm(M_kfac.to_torch() - M_blockdiag.to_torch()) > torch.norm(
+            M_ekfac.to_torch() - M_blockdiag.to_torch()
+        )
 
 
 def test_pspace_ekfac_vs_direct():
@@ -59,10 +60,11 @@ def test_pspace_ekfac_vs_direct():
         )
 
         M_ekfac = PMatEKFAC(generator=generator, examples=loader)
-        v = random_pvector(lc, device=device)
+        v = random_pvector(lc, device=device, dtype=torch.double)
 
         # the second time we will have called update_diag
         for i in range(2):
+
             vTMv_direct = torch.dot(
                 torch.mv(M_ekfac.to_torch(), v.to_torch()),
                 v.to_torch(),
@@ -78,9 +80,7 @@ def test_pspace_ekfac_vs_direct():
             frob_direct = torch.norm(M_ekfac.to_torch())
             check_ratio(frob_direct, frob_ekfac)
 
-            mv_direct = torch.mv(
-                M_ekfac.to_torch(), v.to_torch()
-            )
+            mv_direct = torch.mv(M_ekfac.to_torch(), v.to_torch())
             mv_ekfac = M_ekfac.mv(v)
             check_tensors(mv_direct, mv_ekfac.to_torch())
 
@@ -103,9 +103,27 @@ def test_pspace_ekfac_vs_direct():
             v_back = M_inv.mv(mv_ekfac + regul * v)
             check_tensors(v.to_torch(), v_back.to_torch())
 
-            # Test solve
+            # Test solve with vector
             v_back = M_ekfac.solve(mv_ekfac + regul * v, regul=regul)
             check_tensors(v.to_torch(), v_back.to_torch())
+
+            # Test solve with jacobian
+            # TODO improve
+            c = 1.678
+            stacked_mv = torch.stack(
+                (mv_ekfac.to_torch(), c * mv_ekfac.to_torch())
+            ).unsqueeze(0)
+            stacked_v = torch.stack((v.to_torch(), c * v.to_torch())).unsqueeze(0)
+            jaco = PFMapDense(
+                generator=generator,
+                data=stacked_mv + regul * stacked_v,
+            )
+            J_back = M_ekfac.solve(jaco, regul=regul)
+
+            check_tensors(
+                stacked_v,
+                J_back.to_torch(),
+            )
 
             # Test rmul
             M_mul = 1.23 * M_ekfac

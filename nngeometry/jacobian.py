@@ -1,4 +1,4 @@
-from nngeometry.object.map import PushForwardDense
+from nngeometry.object.map import PFMapDense
 from nngeometry.backend import TorchHooksJacobianBackend
 
 
@@ -6,7 +6,7 @@ def Jacobian(
     model,
     loader,
     function=None,
-    representation=PushForwardDense,
+    representation=PFMapDense,
     layer_collection=None,
 ):
 

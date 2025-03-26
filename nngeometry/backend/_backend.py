@@ -24,6 +24,9 @@ class AbstractBackend:
     def get_device(self):
         return self._check_same_device()
 
+    def get_dtype(self):
+        return self._check_same_dtype()
+
     def _get_dataloader(self, examples):
         if isinstance(examples, DataLoader):
             return examples
