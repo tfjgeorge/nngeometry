@@ -109,7 +109,8 @@ def test_FIM_vs_linearization_classif_logits():
             quots.append(quot.item())
 
         mean_quotient = sum(quots) / len(quots)
-        assert mean_quotient > 1 - 5e-2 and mean_quotient < 1 + 5e-2
+
+        assert mean_quotient > 1 - 1e-3 and mean_quotient < 1 + 1e-3
 
 
 def test_FIM_vs_linearization_classif_binary_logits():

@@ -1,3 +1,4 @@
+from functools import partial
 import torch
 
 from .backend import TorchHooksJacobianBackend
@@ -151,11 +152,44 @@ def FIM(
         layer_collection = LayerCollection.from_model(model)
 
     if variant == "classif_logits":
+        # This uses "An Exact Cholesky Decomposition and the
+        # Generalized Inverse of the Variance-Covariance Matrix
+        # of the Multinomial Distribution, with Applications"
+        # Tanabe and Sagae, 1992
 
-        def function_fim(*d):
-            log_probs = torch.log_softmax(function(*d), dim=1)
-            probs = torch.exp(log_probs).detach()
-            return log_probs * probs**0.5
+        def function_fim(*d, tri_cache):
+            logits = function(*d)
+            n_out = logits.size(1)
+            p = torch.softmax(logits, dim=1).detach()
+            q = 1 - p.cumsum(dim=1)
+            d = (
+                p[:, :-1]
+                * q[:, :-1]
+                / torch.cat((torch.ones(size=(q.size(0), 1)), q[:, :-2]), dim=1)
+            )
+
+            # TODO this allocates memory (once since it is cached)
+            # for the only purpose of performing a mm with a triangular matrix
+            # -> replace with trmm when it is wrapped in torch
+            if len(tri_cache) == 0:
+                tri_cache.append(
+                    torch.tril(torch.ones(size=(n_out, n_out)), diagonal=-1)
+                )
+            tri = tri_cache[0]
+
+            x_p = logits * p
+            x_p = torch.mm(x_p, tri)
+            x_p = x_p[:, :-1]
+            x_p = x_p / (q[:, :-1] + torch.finfo().eps)  # avoid divide by 0
+            x_p = logits[:, :-1] - x_p
+            x_p = x_p * d**0.5
+
+            return x_p
+
+        # caches the tri allocation, this should be automatically GCed
+        tri_cache = []
+
+        function_fim = partial(function_fim, tri_cache=tri_cache)
 
     elif variant == "classif_binary_logits":
 
@@ -180,4 +214,5 @@ def FIM(
         model=model,
         function=function_fim,
     )
+
     return representation(generator=generator, examples=loader)
