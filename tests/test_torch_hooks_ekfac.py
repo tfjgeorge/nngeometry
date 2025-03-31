@@ -110,10 +110,12 @@ def test_pspace_ekfac_vs_direct():
             # Test solve with jacobian
             # TODO improve
             c = 1.678
-            stacked_mv = torch.stack(
-                (mv_ekfac.to_torch(), c * mv_ekfac.to_torch())
-            ).unsqueeze(0)
-            stacked_v = torch.stack((v.to_torch(), c * v.to_torch())).unsqueeze(0)
+            stacked_mv = torch.stack([c**i * mv_direct for i in range(6)]).reshape(
+                2, 3, -1
+            )
+            stacked_v = torch.stack([c**i * v.to_torch() for i in range(6)]).reshape(
+                2, 3, -1
+            )
             jaco = PFMapDense(
                 generator=generator,
                 data=stacked_mv + regul * stacked_v,

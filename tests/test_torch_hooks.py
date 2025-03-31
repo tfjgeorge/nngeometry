@@ -355,8 +355,12 @@ def test_jacobian_pdense():
             # Test solve with jacobian
             # TODO improve
             c = 1.678
-            stacked_mv = torch.stack((Mv_torch, c * Mv_torch)).unsqueeze(0)
-            stacked_v = torch.stack((dw.to_torch(), c * dw.to_torch())).unsqueeze(0)
+            stacked_mv = torch.stack([c**i * Mv_torch for i in range(6)]).reshape(
+                2, 3, -1
+            )
+            stacked_v = torch.stack([c**i * dw.to_torch() for i in range(6)]).reshape(
+                2, 3, -1
+            )
             jaco = PFMapDense(
                 generator=generator,
                 data=stacked_mv + regul * stacked_v,
@@ -574,8 +578,10 @@ def test_jacobian_pblockdiag():
         # TODO improve
         c = 1.678
         Mv_torch = mv_nng.to_torch()
-        stacked_mv = torch.stack((Mv_torch, c * Mv_torch)).unsqueeze(0)
-        stacked_v = torch.stack((dw.to_torch(), c * dw.to_torch())).unsqueeze(0)
+        stacked_mv = torch.stack([c**i * Mv_torch for i in range(6)]).reshape(2, 3, -1)
+        stacked_v = torch.stack([c**i * dw.to_torch() for i in range(6)]).reshape(
+            2, 3, -1
+        )
         jaco = PFMapDense(
             generator=generator,
             data=stacked_mv + regul * stacked_v,
