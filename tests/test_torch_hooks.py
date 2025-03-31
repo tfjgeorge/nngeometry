@@ -355,8 +355,12 @@ def test_jacobian_pdense():
             # Test solve with jacobian
             # TODO improve
             c = 1.678
-            stacked_mv = torch.stack((Mv_torch, c * Mv_torch)).unsqueeze(0)
-            stacked_v = torch.stack((dw.to_torch(), c * dw.to_torch())).unsqueeze(0)
+            stacked_mv = torch.stack([c**i * Mv_torch for i in range(6)]).reshape(
+                2, 3, -1
+            )
+            stacked_v = torch.stack([c**i * dw.to_torch() for i in range(6)]).reshape(
+                2, 3, -1
+            )
             jaco = PFMapDense(
                 generator=generator,
                 data=stacked_mv + regul * stacked_v,
@@ -552,24 +556,40 @@ def test_jacobian_pblockdiag():
         check_ratio(trace_PMat, trace_direct)
 
         # Test mv
-        mv_direct = torch.mv(dense_tensor, dw.to_torch())
-        check_tensors(mv_direct, PMat_blockdiag.mv(dw).to_torch())
+        mv_torch = torch.mv(dense_tensor, dw.to_torch())
+        mv_nng = PMat_blockdiag.mv(dw)
+        check_tensors(mv_torch, mv_nng.to_torch())
 
         # Test vTMV
-        check_ratio(torch.dot(mv_direct, dw.to_torch()), PMat_blockdiag.vTMv(dw))
+        check_ratio(torch.dot(mv_torch, dw.to_torch()), PMat_blockdiag.vTMv(dw))
 
         # Test solve
         regul = 1e-3
-        Mv_regul = torch.mv(
-            dense_tensor + regul * torch.eye(PMat_blockdiag.size(0), device=device),
-            dw.to_torch(),
-        )
-        Mv_regul = PVector(layer_collection=lc, vector_repr=Mv_regul)
+        Mv_regul = mv_nng + regul * dw
+        Mv_regul = PVector(layer_collection=lc, vector_repr=Mv_regul.to_torch())
         dw_using_inv = PMat_blockdiag.solve(Mv_regul, regul=regul)
         check_tensors(
             dw.to_torch(),
             dw_using_inv.to_torch(),
             eps=5e-3,
+        )
+
+        # Test solve with jacobian
+        # TODO improve
+        c = 1.678
+        Mv_torch = mv_nng.to_torch()
+        stacked_mv = torch.stack([c**i * Mv_torch for i in range(6)]).reshape(2, 3, -1)
+        stacked_v = torch.stack([c**i * dw.to_torch() for i in range(6)]).reshape(
+            2, 3, -1
+        )
+        jaco = PFMapDense(
+            generator=generator,
+            data=stacked_mv + regul * stacked_v,
+        )
+        J_back = PMat_blockdiag.solve(jaco, regul=regul)
+        check_tensors(
+            stacked_v,
+            J_back.to_torch(),
         )
 
         # Test inv
@@ -702,6 +722,7 @@ def test_jacobian_plowrank():
             mv_using_inv.to_torch(),
             eps=1e-2,
         )
+
         # Test inv TODO
 
         # Test add, sub, rmul

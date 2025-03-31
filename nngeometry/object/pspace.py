@@ -63,20 +63,22 @@ class PMatAbstract(ABC):
     def solvePVec(self, b, regul, impl):
         raise NotImplementedError
 
-    def solvePFMat(self, b, regul, impl):
+    def solvePFMap(self, b, regul, impl):
         J_dense = b.to_torch()
+        sJ = J_dense.size()
+        J_dense = J_dense.reshape(sJ[0] * sJ[1], sJ[2])
 
         vs_solve = []
-        for i in range(J_dense.size(1)):
+        for i in range(J_dense.size(0)):
             v = PVector(
                 layer_collection=b.generator.layer_collection,
-                vector_repr=J_dense[0, i, :],
+                vector_repr=J_dense[i, :],
             )
-            vs_solve.append(
-                self.solvePVec(v, regul=regul).to_torch(), regul=regul, impl=impl
-            )
+            vs_solve.append(self.solvePVec(v, regul=regul, impl=impl).to_torch())
 
-        return torch.stack(vs_solve).t()
+        return PFMapDense(
+            generator=self.generator, data=torch.stack(vs_solve).reshape(*sJ)
+        )
 
     def solve(self, b, regul, impl="default"):
         """
@@ -169,8 +171,8 @@ class PMatDense(PMatAbstract):
         # TODO: test
         if impl in ["default", "solve"]:
             # TODO: reuse LU decomposition once it is computed
-            inv_v = self._solve_cached(v.to_torch().view(1,-1), regul=regul)
-            return PVector(v.layer_collection, vector_repr=inv_v[0,:])
+            inv_v = self._solve_cached(v.to_torch().view(1, -1), regul=regul)
+            return PVector(v.layer_collection, vector_repr=inv_v[0, :])
         elif impl == "eigendecomposition":
             v_eigenbasis = self.project_to_diag(v)
             inv_v_eigenbasis = v_eigenbasis / (self.evals + regul)
@@ -195,7 +197,8 @@ class PMatDense(PMatAbstract):
             assert self._ldl_regul == regul
             LD, pivots = self._ldl_factors
         except (
-            AttributeError, AssertionError
+            AttributeError,
+            AssertionError,
         ):  # ldl decomposition is not currently cached for regul value
             LD, pivots = torch.linalg.ldl_factor(
                 self.data + regul * torch.eye(self.size(0), device=self.data.device),
