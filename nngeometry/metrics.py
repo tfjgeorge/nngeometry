@@ -159,13 +159,16 @@ def FIM(
 
         def function_fim(*d, tri_cache):
             logits = function(*d)
+            device = logits.device
             n_out = logits.size(1)
             p = torch.softmax(logits, dim=1).detach()
             q = 1 - p.cumsum(dim=1)
             d = (
                 p[:, :-1]
                 * q[:, :-1]
-                / torch.cat((torch.ones(size=(q.size(0), 1)), q[:, :-2]), dim=1)
+                / torch.cat(
+                    (torch.ones(size=(q.size(0), 1), device=device), q[:, :-2]), dim=1
+                )
             )
 
             # TODO this allocates memory (once since it is cached)
@@ -173,7 +176,9 @@ def FIM(
             # -> replace with trmm when it is wrapped in torch
             if len(tri_cache) == 0:
                 tri_cache.append(
-                    torch.tril(torch.ones(size=(n_out, n_out)), diagonal=-1)
+                    torch.tril(
+                        torch.ones(size=(n_out, n_out), device=device), diagonal=-1
+                    )
                 )
             tri = tri_cache[0]
 
@@ -214,5 +219,5 @@ def FIM(
         model=model,
         function=function_fim,
     )
-
+    
     return representation(generator=generator, examples=loader)
