@@ -32,9 +32,11 @@ class TorchFuncHessianBackend(AbstractBackend):
             return self.function(prediction, y)
 
         for d in loader:
-            inputs = d[0]
+            inputs = d[0].to(device)
 
-            H_mb = torch.func.hessian(compute_loss)(self.params_dict, inputs, d[1])
+            H_mb = torch.func.hessian(compute_loss)(
+                self.params_dict, inputs, d[1].to(device)
+            )
 
             for layer_id_x, layer_x in self.layer_collection.layers.items():
                 start_x = self.layer_collection.p_pos[layer_id_x]
