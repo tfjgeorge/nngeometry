@@ -2,9 +2,9 @@ name: test
 
 on:
   push:
-    branches: ["master"]
+    branches: ["main"]
   pull_request:
-    branches: ["master"]
+    branches: ["main"]
 
 jobs:
   test:
@@ -15,5 +15,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.9"
-      - run: uv run python -m pytest -n auto --cov=src/nngeometry --cov-report=xml
+      - run: uv run python -m pytest -n auto --cov=src/nngeometry --cov-report=xml --find-links https://download.pytorch.org/whl/cpu
       - uses: codecov/codecov-action@v5
