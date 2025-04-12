@@ -1,6 +1,6 @@
 name: Test and publish to PyPI
 
-on: [push]
+on: [push,workflow_dispatch]
 
 jobs:
   pytest:
@@ -68,7 +68,7 @@ jobs:
       with:
         name: python-package-distributions
         path: dist/
-        
+
   publish-to-testpypi:
     name: Publish Python 🐍 distribution 📦 to TestPyPI
     needs:
