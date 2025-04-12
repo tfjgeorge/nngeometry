@@ -1,0 +1,3 @@
+torch>=2.0.1 @ https://download.pytorch.org/whl/cpu
+torchvision>=0.9.1
+requests>=2.24.0
