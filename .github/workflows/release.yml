@@ -1,12 +1,11 @@
 name: release
 
 on:
-  - release:
+  release:
     types: [published]
-  - workflow_dispatch
+  workflow_dispatch
 
 jobs:
-
   release:
 
     runs-on: ubuntu-latest
