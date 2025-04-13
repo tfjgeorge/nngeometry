@@ -531,6 +531,8 @@ class PMatKFAC(PMatAbstract):
             if layer.has_bias():
                 v = torch.cat([v, vs_dict[layer_id][1].unsqueeze(1)], dim=1)
             a, g = self.data[layer_id]
+            if layer.transposed:
+                a, g = g, a
             if use_pi:
                 pi = (torch.trace(a) / torch.trace(g) * g.size(0) / a.size(0)) ** 0.5
             else:
@@ -601,6 +603,8 @@ class PMatKFAC(PMatAbstract):
         diags = []
         for layer_id, layer in self.generator.layer_collection.layers.items():
             a, g = self.data[layer_id]
+            if layer.transposed:
+                a, g = g, a
             diag_of_block = torch.diag(g).view(-1, 1) * torch.diag(a).view(1, -1)
             if split_weight_bias and layer.has_bias():
                 diags.append(diag_of_block[:, :-1].contiguous().view(-1))
@@ -619,6 +623,8 @@ class PMatKFAC(PMatAbstract):
             if layer.has_bias():
                 v = torch.cat([v, vs_dict[layer_id][1].unsqueeze(1)], dim=1)
             a, g = self.data[layer_id]
+            if layer.transposed:
+                a, g = g, a
             mv = torch.mm(torch.mm(g, v), a)
             if layer.has_bias():
                 mv_tuple = (mv[:, :-1].contiguous().view(*sw), mv[:, -1].contiguous())
@@ -635,6 +641,8 @@ class PMatKFAC(PMatAbstract):
             if layer.has_bias():
                 v = torch.cat([v, vector_dict[layer_id][1].unsqueeze(1)], dim=1)
             a, g = self.data[layer_id]
+            if layer.transposed:
+                a, g = g, a
             norm2 += torch.dot(torch.mm(torch.mm(g, v), a).view(-1), v.view(-1))
         return norm2
 
@@ -706,9 +714,9 @@ class PMatEKFAC(PMatAbstract):
                 evals_g, evecs_g = torch.linalg.eigh(g)
                 evecs[layer_id] = (evecs_a, evecs_g)
                 if layer.transposed:
-                    diags[layer_id] = evals_a[:,None] * evals_g[None,:]
+                    diags[layer_id] = evals_a[:, None] * evals_g[None, :]
                 else:
-                    diags[layer_id] = evals_g[:,None] * evals_a[None,:]
+                    diags[layer_id] = evals_g[:, None] * evals_a[None, :]
                 del a, g, kfac_blocks[layer_id]
             self.data = (evecs, diags)
         else:
@@ -777,18 +785,20 @@ class PMatEKFAC(PMatAbstract):
         for l_id, l in self.generator.layer_collection.layers.items():
             diag = diags[l_id]
             evecs_a, evecs_g = evecs[l_id]
+            if l.transposed:
+                evecs_a, evecs_g = evecs_g, evecs_a
             vw = vs_dict[l_id][0]
             sw = vw.size()
             v = vw.view(sw[0], -1)
-            if l.bias is not None:
+            if l.has_bias():
                 v = torch.cat([v, vs_dict[l_id][1].unsqueeze(1)], dim=1)
             v_kfe = torch.mm(torch.mm(evecs_g.t(), v), evecs_a)
             mv_kfe = v_kfe * diag.view(*v_kfe.size())
             mv = torch.mm(torch.mm(evecs_g, mv_kfe), evecs_a.t())
-            if l.bias is None:
-                mv_tuple = (mv.view(*sw),)
-            else:
+            if l.has_bias():
                 mv_tuple = (mv[:, :-1].contiguous().view(*sw), mv[:, -1].contiguous())
+            else:
+                mv_tuple = (mv.view(*sw),)
             out_dict[l_id] = mv_tuple
         return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
 
@@ -796,8 +806,10 @@ class PMatEKFAC(PMatAbstract):
         vector_dict = vector.to_dict()
         evecs, diags = self.data
         norm2 = 0
-        for l_id in vector_dict.keys():
+        for l_id, l in vector.layer_collection.layers.items():
             evecs_a, evecs_g = evecs[l_id]
+            if l.transposed:
+                evecs_a, evecs_g = evecs_g, evecs_a
             diag = diags[l_id]
             v = vector_dict[l_id][0].view(vector_dict[l_id][0].size(0), -1)
             if len(vector_dict[l_id]) > 1:
@@ -837,21 +849,23 @@ class PMatEKFAC(PMatAbstract):
         for l_id, l in self.generator.layer_collection.layers.items():
             diag = diags[l_id]
             evecs_a, evecs_g = evecs[l_id]
+            if l.transposed:
+                evecs_a, evecs_g = evecs_g, evecs_a
             vw = vs_dict[l_id][0]
             sw = vw.size()
             v = vw.view(sw[0], -1)
-            if l.bias is not None:
+            if l.has_bias():
                 v = torch.cat([v, vs_dict[l_id][1].unsqueeze(1)], dim=1)
             v_kfe = torch.mm(torch.mm(evecs_g.t(), v), evecs_a)
             inv_kfe = v_kfe / (diag.view(*v_kfe.size()) + regul)
             inv = torch.mm(torch.mm(evecs_g, inv_kfe), evecs_a.t())
-            if l.bias is None:
-                inv_tuple = (inv.view(*sw),)
-            else:
+            if l.has_bias():
                 inv_tuple = (
                     inv[:, :-1].contiguous().view(*sw),
                     inv[:, -1].contiguous(),
                 )
+            else:
+                inv_tuple = (inv.view(*sw),)
             out_dict[l_id] = inv_tuple
         return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
 
@@ -861,10 +875,12 @@ class PMatEKFAC(PMatAbstract):
 
         out_dict = OrderedDict()
         evecs, diags = self.data
-        for l_id, vals in J.iter_by_module():
+        for l_id, layer, vals in J.iter_by_module():
 
             diag = diags[l_id]
             evecs_a, evecs_g = evecs[l_id]
+            if layer.transposed:
+                evecs_a, evecs_g = evecs_g, evecs_a
             vw = vals[0]
             sw = vw.size()
             v = vw.view(sw[0], sw[1], sw[2], -1)

@@ -62,7 +62,12 @@ def test_pspace_ekfac_vs_direct():
     Check EKFAC basic operations against direct computation using
     to_torch
     """
-    for get_task in [get_conv1d_task, get_fullyconnect_task, get_conv_task]:
+    for get_task in [
+        get_embedding_task,
+        get_conv1d_task,
+        get_fullyconnect_task,
+        get_conv_task,
+    ]:
         loader, lc, parameters, model, function = get_task()
         model.train()
 
