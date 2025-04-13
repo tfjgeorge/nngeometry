@@ -1,4 +1,4 @@
-hatchname: release
+name: release
 
 on:
   release:
