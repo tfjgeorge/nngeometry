@@ -18,6 +18,7 @@ from tasks import (
     get_linear_fc_task,
     get_small_conv_transpose_task,
     get_small_conv_wn_task,
+    get_embedding_task,
     device,
 )
 from utils import check_ratio, check_tensors, update_model, get_output_vector
@@ -36,6 +37,7 @@ from nngeometry.object.pspace import (
 from nngeometry.object.vector import PVector, random_fvector, random_pvector
 
 linear_tasks = [
+    get_embedding_task,
     get_linear_fc_task,
     get_linear_conv_task,
     get_batchnorm_fc_linear_task,

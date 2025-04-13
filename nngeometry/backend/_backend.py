@@ -1,4 +1,7 @@
 from torch.utils.data import DataLoader, TensorDataset
+import torch
+
+differentiable_dtypes = [torch.float16, torch.float32, torch.float64]
 
 
 class AbstractBackend:
@@ -38,3 +41,15 @@ class AbstractBackend:
 
     def _infer_device(self, layer_id):
         return self.l_to_m[layer_id].weight.device
+
+    def _infer_differentiable_leafs(self, input):
+        if input.dtype in differentiable_dtypes:
+            input.requires_grad = True
+            return [input]
+        else:
+            # find Embeddings
+            embedding_parameters = []
+            for module in self.l_to_m.values():
+                if isinstance(module, torch.nn.Embedding):
+                    embedding_parameters.append(next(module.parameters()))
+            return embedding_parameters

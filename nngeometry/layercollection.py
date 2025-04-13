@@ -26,6 +26,7 @@ class LayerCollection:
         "ConvTranspose2d",
         "Conv1d",
         "LayerNorm",
+        "Embedding",
     ]
 
     def __init__(self, layers=None):
@@ -147,6 +148,10 @@ class LayerCollection:
             return LayerNormLayer(
                 normalized_shape=mod.normalized_shape, bias=(mod.bias is not None)
             )
+        elif mod_class == "Embedding":
+            return EmbeddingLayer(
+                embedding_dim=mod.embedding_dim, num_embeddings=mod.num_embeddings
+            )
 
     def numel(self):
         """
@@ -194,13 +199,17 @@ class LayerCollection:
 
 
 class AbstractLayer(ABC):
+    transposed = False
 
     def __repr__(self):
         repr = f"{self.__class__}\n - weight = {self.weight}"
-        if self.bias is not None:
+        if self.has_bias():
             return repr + f"\n - bias   = {self.bias}"
         else:
             return repr
+
+    def has_bias(self):
+        return hasattr(self, "bias") and self.bias is not None
 
 
 class Conv2dLayer(AbstractLayer):
@@ -302,6 +311,24 @@ class LinearLayer(AbstractLayer):
         return (
             self.in_features == other.in_features
             and self.out_features == other.out_features
+        )
+
+
+class EmbeddingLayer(AbstractLayer):
+    transposed = True
+
+    def __init__(self, num_embeddings, embedding_dim):
+        self.num_embeddings = num_embeddings
+        self.embedding_dim = embedding_dim
+        self.weight = Parameter(num_embeddings, embedding_dim)
+
+    def numel(self):
+        return self.weight.numel()
+
+    def __eq__(self, other):
+        return (
+            self.num_embeddings == other.num_embeddings
+            and self.embedding_dim == other.embedding_dim
         )
 
 
@@ -447,4 +474,4 @@ class Parameter(object):
         return self.size == other.size
 
     def __repr__(self):
-        return f'Parameter with shape {self.size}'
+        return f"Parameter with shape {self.size}"

@@ -49,14 +49,14 @@ class PFMapDense(PFMap):
                 self.data.size(0), self.data.size(1), *layer.weight.size
             )
             start += layer.weight.numel()
-            if layer.bias is not None:
+            if layer.has_bias():
                 b = self.data[:, :, start : start + layer.bias.numel()].view(
                     self.data.size(0), self.data.size(1), *layer.bias.size
                 )
                 start += layer.bias.numel()
-                yield layer_id, (w, b)
+                yield layer_id, layer, (w, b)
             else:
-                yield layer_id, (w,)
+                yield layer_id, layer, (w,)
 
     def from_dict(generator, data_dict):
         parts = []

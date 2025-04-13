@@ -1,7 +1,13 @@
 import pytest
 import torch
 from nngeometry.object.map import PFMapDense
-from tasks import device, get_conv_task, get_conv1d_task, get_fullyconnect_task
+from tasks import (
+    device,
+    get_conv_task,
+    get_conv1d_task,
+    get_fullyconnect_task,
+    get_embedding_task,
+)
 from utils import check_ratio, check_tensors
 
 from nngeometry.backend import TorchHooksJacobianBackend
@@ -21,7 +27,12 @@ def test_pspace_ekfac_vs_kfac():
     sense of the Frobenius norm
     """
     eps = 1e-4
-    for get_task in [get_conv1d_task, get_fullyconnect_task, get_conv_task]:
+    for get_task in [
+        get_embedding_task,
+        get_conv1d_task,
+        get_fullyconnect_task,
+        get_conv_task,
+    ]:
         loader, lc, parameters, model, function = get_task()
         model.train()
         generator = TorchHooksJacobianBackend(
@@ -48,10 +59,15 @@ def test_pspace_ekfac_vs_kfac():
 
 def test_pspace_ekfac_vs_direct():
     """
-    Check EKFAC basis operations against direct computation using
+    Check EKFAC basic operations against direct computation using
     to_torch
     """
-    for get_task in [get_conv1d_task, get_fullyconnect_task, get_conv_task]:
+    for get_task in [
+        get_embedding_task,
+        get_conv1d_task,
+        get_fullyconnect_task,
+        get_conv_task,
+    ]:
         loader, lc, parameters, model, function = get_task()
         model.train()
 
