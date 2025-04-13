@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"
 
 [project]
@@ -42,10 +42,7 @@ packages = ["nngeometry"]
 known-first-party = ["nngeometry"]
 
 [tool.hatch.version]
-source = "vcs"
-
-[tool.hatch.version.raw-options]
-local_scheme = "no-local-version"
+source = "uv-dynamic-versioning"
 
 [dependency-groups]
 dev=[
