@@ -241,7 +241,7 @@ def check_bn_training(mod):
     # check that BN layers are in eval mode
     if mod.training:
         raise NotImplementedError(
-            "NNGeometry's Jacobian generator can"
+            "NNGeometry's Torch Hook backend can"
             + " only handle BatchNorm in evaluation mode"
         )
 
@@ -451,11 +451,19 @@ class Conv1dJacobianFactory(JacobianFactory):
         )
         buffer.add_((indiv_gw**2).sum(dim=0).view(-1))
 
+def check_embedding_arguments(mod):
+    # check that embedding layers are set up with supported arguments
+    if mod.max_norm is not None or mod.scale_grad_by_freq or mod.sparse:
+        raise NotImplementedError(
+            """NNGeometry's Torch Hook backend can currently only
+            handle Embedding layers with default arguments"""
+        )
 
 class EmbeddingJacobianFactory(JacobianFactory):
 
     @classmethod
     def flat_grad(cls, buffer, mod, layer, x, gy):
+        check_embedding_arguments(mod)
         x_s = x.size()
         x_onehot = F.one_hot(x.squeeze(), num_classes=layer.num_embeddings).reshape(
             x_s[0], x_s[1], -1

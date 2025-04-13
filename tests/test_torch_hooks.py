@@ -69,7 +69,6 @@ def make_test_deterministic():
 
 def test_jacobian_pushforward_dense_linear():
     for get_task in linear_tasks:
-        print(get_task)
         loader, lc, parameters, model, function = get_task()
         generator = TorchHooksJacobianBackend(
             layer_collection=lc,
