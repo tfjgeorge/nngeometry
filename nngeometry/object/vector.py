@@ -196,7 +196,7 @@ class PVector:
         parts = []
         for layer_id, layer in self.layer_collection.layers.items():
             parts.append(self.dict_repr[layer_id][0].view(-1))
-            if hasattr(layer, "bias") and layer.bias is not None:
+            if layer.has_bias():
                 parts.append(self.dict_repr[layer_id][1].view(-1))
         return torch.cat(parts)
 
@@ -208,7 +208,7 @@ class PVector:
                 *layer.weight.size
             )
             start += layer.weight.numel()
-            if hasattr(layer, "bias") and layer.bias is not None:
+            if layer.has_bias():
                 b = self.vector_repr[start : start + layer.bias.numel()].view(
                     *layer.bias.size
                 )
@@ -238,7 +238,7 @@ class PVector:
         if self.dict_repr is not None:
             v_dict = dict()
             for l_id, l in self.layer_collection.layers.items():
-                if l.bias:
+                if l.has_bias():
                     v_dict[l_id] = (
                         x * self.dict_repr[l_id][0],
                         x * self.dict_repr[l_id][1],
@@ -253,7 +253,7 @@ class PVector:
         if self.dict_repr is not None and other.dict_repr is not None:
             v_dict = dict()
             for l_id, l in self.layer_collection.layers.items():
-                if l.bias is not None:
+                if l.has_bias():
                     v_dict[l_id] = (
                         self.dict_repr[l_id][0] + other.dict_repr[l_id][0],
                         self.dict_repr[l_id][1] + other.dict_repr[l_id][1],

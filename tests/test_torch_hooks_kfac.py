@@ -9,6 +9,7 @@ from tasks import (
     get_mnist,
     to_device_model,
     get_conv1d_task,
+    get_embedding_task,
 )
 from torch.utils.data import DataLoader, Subset
 from utils import angle, check_ratio, check_tensors
@@ -168,10 +169,17 @@ def test_jacobian_kfac_vs_pblockdiag():
 
 
 def test_jacobian_kfac():
-    for get_task in [get_conv1d_task, get_fullyconnect_task, get_conv_task]:
+    for get_task in [
+        get_embedding_task,
+        get_conv1d_task,
+        get_fullyconnect_task,
+        get_conv_task,
+    ]:
         loader, lc, parameters, model, function = get_task()
 
-        generator = TorchHooksJacobianBackend(layer_collection=lc, model=model, function=function)
+        generator = TorchHooksJacobianBackend(
+            layer_collection=lc, model=model, function=function
+        )
         M_kfac = PMatKFAC(generator=generator, examples=loader)
         G_kfac_split = M_kfac.to_torch(split_weight_bias=True)
         G_kfac = M_kfac.to_torch(split_weight_bias=False)
@@ -241,7 +249,9 @@ def test_pspace_kfac_eigendecomposition():
     eps = 1e-3
     loader, lc, parameters, model, function = get_fullyconnect_task()
 
-    generator = TorchHooksJacobianBackend(layer_collection=lc, model=model, function=function)
+    generator = TorchHooksJacobianBackend(
+        layer_collection=lc, model=model, function=function
+    )
 
     M_kfac = PMatKFAC(generator=generator, examples=loader)
     M_kfac.compute_eigendecomposition()
@@ -281,8 +291,12 @@ def test_kfac():
         loader, lc, parameters, model1, function1 = get_task()
         _, _, _, model2, function2 = get_task()
 
-        generator1 = TorchHooksJacobianBackend(layer_collection=lc, model=model1, function=function1)
-        generator2 = TorchHooksJacobianBackend(layer_collection=lc, model=model2, function=function1)
+        generator1 = TorchHooksJacobianBackend(
+            layer_collection=lc, model=model1, function=function1
+        )
+        generator2 = TorchHooksJacobianBackend(
+            layer_collection=lc, model=model2, function=function1
+        )
         M_kfac1 = PMatKFAC(generator=generator1, examples=loader)
         M_kfac2 = PMatKFAC(generator=generator2, examples=loader)
 

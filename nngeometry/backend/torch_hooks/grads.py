@@ -451,6 +451,7 @@ class Conv1dJacobianFactory(JacobianFactory):
         )
         buffer.add_((indiv_gw**2).sum(dim=0).view(-1))
 
+
 def check_embedding_arguments(mod):
     # check that embedding layers are set up with supported arguments
     if mod.max_norm is not None or mod.scale_grad_by_freq or mod.sparse:
@@ -459,19 +460,34 @@ def check_embedding_arguments(mod):
             handle Embedding layers with default arguments"""
         )
 
+
 class EmbeddingJacobianFactory(JacobianFactory):
 
     @classmethod
     def flat_grad(cls, buffer, mod, layer, x, gy):
         check_embedding_arguments(mod)
         x_s = x.size()
-        x_onehot = F.one_hot(x.squeeze(), num_classes=layer.num_embeddings).reshape(
-            x_s[0], x_s[1], -1
-        )
+        x_onehot = F.one_hot(x, num_classes=layer.num_embeddings)
         w_numel = layer.weight.numel()
         buffer[:, :w_numel].add_(
             torch.bmm(x_onehot.transpose(1, 2).to(gy.dtype), gy).view(x_s[0], -1)
         )
+
+    @classmethod
+    def kfac_gg(cls, buffer, mod, layer, x, gy):
+        spatial_locations = gy.size(1)
+        os = gy.size(2)
+        # DS_tilda in KFC
+        DS_tilda = gy.view(-1, os)
+        buffer.add_(torch.mm(DS_tilda.t(), DS_tilda) / spatial_locations)
+
+    @classmethod
+    def kfac_xx(cls, buffer, mod, layer, x, gy):
+        x_s = x.size()
+        x_onehot = F.one_hot(x, num_classes=layer.num_embeddings).reshape(
+            x_s[0] * x_s[1], -1
+        )
+        buffer.add_(torch.mm(x_onehot.t(), x_onehot))
 
 
 FactoryMap = {

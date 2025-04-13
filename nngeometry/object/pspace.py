@@ -528,7 +528,7 @@ class PMatKFAC(PMatAbstract):
             vw = vs_dict[layer_id][0]
             sw = vw.size()
             v = vw.view(sw[0], -1)
-            if layer.bias is not None:
+            if layer.has_bias():
                 v = torch.cat([v, vs_dict[layer_id][1].unsqueeze(1)], dim=1)
             a, g = self.data[layer_id]
             if use_pi:
@@ -541,13 +541,13 @@ class PMatKFAC(PMatAbstract):
             solve_g, _, _, _ = torch.linalg.lstsq(g_reg, v)
             solve_a, _, _, _ = torch.linalg.lstsq(a_reg, solve_g.t())
             solve_a = solve_a.t()
-            if layer.bias is None:
-                solve_tuple = (solve_a.view(*sw),)
-            else:
+            if layer.has_bias():
                 solve_tuple = (
                     solve_a[:, :-1].contiguous().view(*sw),
                     solve_a[:, -1].contiguous(),
                 )
+            else:
+                solve_tuple = (solve_a.view(*sw),)
             out_dict[layer_id] = solve_tuple
         return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
 
@@ -564,7 +564,7 @@ class PMatKFAC(PMatAbstract):
             a, g = self.data[layer_id]
             start = self.generator.layer_collection.p_pos[layer_id]
             sAG = a.size(0) * g.size(0)
-            if split_weight_bias and layer.bias:
+            if split_weight_bias and  layer.has_bias():
                 reconstruct = torch.cat(
                     [
                         torch.cat(
@@ -594,7 +594,7 @@ class PMatKFAC(PMatAbstract):
         for layer_id, layer in self.generator.layer_collection.layers.items():
             a, g = self.data[layer_id]
             diag_of_block = torch.diag(g).view(-1, 1) * torch.diag(a).view(1, -1)
-            if split_weight_bias and layer.bias:
+            if split_weight_bias and  layer.has_bias():
                 diags.append(diag_of_block[:, :-1].contiguous().view(-1))
                 diags.append(diag_of_block[:, -1:].view(-1))
             else:
@@ -608,11 +608,11 @@ class PMatKFAC(PMatAbstract):
             vw = vs_dict[layer_id][0]
             sw = vw.size()
             v = vw.view(sw[0], -1)
-            if layer.bias is not None:
+            if layer.has_bias():
                 v = torch.cat([v, vs_dict[layer_id][1].unsqueeze(1)], dim=1)
             a, g = self.data[layer_id]
             mv = torch.mm(torch.mm(g, v), a)
-            if layer.bias:
+            if layer.has_bias():
                 mv_tuple = (mv[:, :-1].contiguous().view(*sw), mv[:, -1].contiguous())
             else:
                 mv_tuple = (mv.view(*sw),)
@@ -624,7 +624,7 @@ class PMatKFAC(PMatAbstract):
         norm2 = 0
         for layer_id, layer in self.generator.layer_collection.layers.items():
             v = vector_dict[layer_id][0].view(vector_dict[layer_id][0].size(0), -1)
-            if layer.bias is not None:
+            if layer.has_bias():
                 v = torch.cat([v, vector_dict[layer_id][1].unsqueeze(1)], dim=1)
             a, g = self.data[layer_id]
             norm2 += torch.dot(torch.mm(torch.mm(g, v), a).view(-1), v.view(-1))

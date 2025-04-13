@@ -269,7 +269,10 @@ class TorchHooksJacobianBackend(AbstractBackend):
             elif layer_class == "Conv1dLayer":
                 sG = layer.out_channels
                 sA = layer.in_channels * layer.kernel_size[0]
-            if layer.bias is not None:
+            elif layer_class == "EmbeddingLayer":
+                sG = layer.embedding_dim
+                sA = layer.num_embeddings
+            if layer.has_bias():
                 sA += 1
             self._blocks[layer_id] = (
                 torch.zeros((sA, sA), device=device, dtype=dtype),
@@ -544,7 +547,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 raise NotImplementedError
             parameters.append(mod.weight)
             output[mod.weight] = torch.zeros_like(mod.weight)
-            if hasattr(layer, "bias") and layer.bias is not None:
+            if layer.has_bias():
                 parameters.append(mod.bias)
                 output[mod.bias] = torch.zeros_like(mod.bias)
 
@@ -587,7 +590,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         output_dict = dict()
         for layer_id, layer in self.layer_collection.layers.items():
             mod = self.l_to_m[layer_id]
-            if hasattr(layer, "bias") and layer.bias is not None:
+            if layer.has_bias():
                 output_dict[layer_id] = (
                     output[mod.weight] / n_examples,
                     output[mod.bias] / n_examples,
@@ -809,7 +812,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         layer_id = self.m_to_l[mod]
         layer = self.layer_collection[layer_id]
         block = self._blocks[layer_id]
-        if mod_class in ["Linear", "Conv2d", "Conv1d"]:
+        if mod_class in ["Linear", "Conv2d", "Conv1d", "Embedding"]:
             FactoryMap[layer.__class__].kfac_gg(block[1], mod, layer, x, gy)
             if self.i_output == 0:
                 # do this only once if n_output > 1
@@ -865,7 +868,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             layer = self.layer_collection.layers[layer_id]
             v_weight = self._v[layer_id][0]
             v_bias = None
-            if hasattr(layer, "bias") and layer.bias is not None:
+            if layer.has_bias():
                 v_bias = self._v[layer_id][1]
             FactoryMap[layer.__class__].Jv(
                 self._Jv[self.i_output, self.start : self.start + bs],

@@ -202,11 +202,13 @@ class AbstractLayer(ABC):
 
     def __repr__(self):
         repr = f"{self.__class__}\n - weight = {self.weight}"
-        if hasattr(self, "bias") and self.bias is not None:
+        if self.has_bias():
             return repr + f"\n - bias   = {self.bias}"
         else:
             return repr
 
+    def has_bias(self):
+        return hasattr(self, "bias") and self.bias is not None
 
 class Conv2dLayer(AbstractLayer):
     def __init__(self, in_channels, out_channels, kernel_size, bias=True):
@@ -310,10 +312,10 @@ class LinearLayer(AbstractLayer):
         )
 
 
-class EmbeddingLayer(LinearLayer):
+class EmbeddingLayer(AbstractLayer):
     def __init__(self, num_embeddings, embedding_dim):
         self.num_embeddings = num_embeddings
-        self.out_features = embedding_dim
+        self.embedding_dim = embedding_dim
         self.weight = Parameter(embedding_dim, num_embeddings)
 
     def numel(self):
