@@ -1,7 +1,11 @@
-name: release
+hatchname: release
 
-on: workflow_dispatch
-
+on:
+  push:
+    tags:
+      # Publish on any tag starting with a `v`, e.g. v1.2.3
+      - v*
+      
 jobs:
   release:
 
