@@ -70,13 +70,14 @@ class PVector:
         self.dict_repr = dict_repr
 
     @staticmethod
-    def from_model(model):
+    def from_model(model, layer_collection=None):
         """
         Creates a PVector using the current values of the given
         model
         """
         dict_repr = dict()
-        layer_collection = LayerCollection.from_model(model)
+        if layer_collection is None:
+            layer_collection = LayerCollection.from_model(model)
         l_to_m, _ = layer_collection.get_layerid_module_maps(model)
         for layer_id, layer in layer_collection.layers.items():
             mod = l_to_m[layer_id]
@@ -117,13 +118,14 @@ class PVector:
             mod.weight.data.add_(dict_repr[layer_id][0])
 
     @staticmethod
-    def from_model_grad(model):
+    def from_model_grad(model, layer_collection=None):
         """
         Creates a PVector using the current values of the `.grad`
         fields of parameters of the given model
         """
         dict_repr = dict()
-        layer_collection = LayerCollection.from_model(model)
+        if layer_collection is None:
+            layer_collection = LayerCollection.from_model(model)
         l_to_m, _ = layer_collection.get_layerid_module_maps(model)
         for layer_id, layer in layer_collection.layers.items():
             mod = l_to_m[layer_id]
