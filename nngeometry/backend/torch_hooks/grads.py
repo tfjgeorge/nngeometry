@@ -475,11 +475,12 @@ class EmbeddingJacobianFactory(JacobianFactory):
 
     @classmethod
     def kfac_gg(cls, buffer, mod, layer, x, gy):
+        # this uses the same suming and scaling as KFC
         spatial_locations = gy.size(1)
         os = gy.size(2)
         # DS_tilda in KFC
-        DS_tilda = gy.view(-1, os)
-        buffer.add_(torch.mm(DS_tilda.t(), DS_tilda) / spatial_locations)
+        gy = gy.view(-1, os)
+        buffer.add_(torch.mm(gy.t(), gy) / spatial_locations)
 
     @classmethod
     def kfac_xx(cls, buffer, mod, layer, x, gy):
@@ -487,7 +488,29 @@ class EmbeddingJacobianFactory(JacobianFactory):
         x_onehot = F.one_hot(x, num_classes=layer.num_embeddings).reshape(
             x_s[0] * x_s[1], -1
         )
-        buffer.add_(torch.mm(x_onehot.t(), x_onehot))
+        buffer.add_(torch.mm(x_onehot.t(), x_onehot).to(buffer.dtype))
+
+    @classmethod
+    def kfe_diag(cls, buffer, mod, layer, x, gy, evecs_a, evecs_g):
+        # x is bs * spatial
+        # gy is bs * spatial * embedding_dim
+        gy_s = gy.size()
+        x_s = x.size()
+
+        # project x to kfe
+        x_onehot = F.one_hot(x, num_classes=layer.num_embeddings).reshape(
+            x_s[0] * x_s[1], -1
+        )
+        x_kfe = torch.mm(x_onehot.to(evecs_a.dtype), evecs_a).view(x_s[0], x_s[1], -1)
+
+        # project gy to kfe
+        gy = gy.view(-1, gy_s[2])
+        gy_kfe = torch.mm(gy, evecs_g).view(*gy_s)
+
+        # per example gradients in KFE
+        indiv_gw = torch.bmm(x_kfe.transpose(1, 2), gy_kfe).view(x_s[0], -1)
+
+        buffer.add_((indiv_gw**2).sum(dim=0).view(-1))
 
 
 FactoryMap = {

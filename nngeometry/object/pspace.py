@@ -740,7 +740,7 @@ class PMatEKFAC(PMatAbstract):
         KFE = dict()
         for layer_id, layer in self.generator.layer_collection.layers.items():
             evecs_a, evecs_g = evecs[layer_id]
-            if split_weight_bias and layer.bias:
+            if split_weight_bias and layer.has_bias():
                 kronecker(evecs_g, evecs_a[:-1, :])
                 kronecker(evecs_g, evecs_a[-1:, :].contiguous())
                 KFE[layer_id] = torch.cat(
