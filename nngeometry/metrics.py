@@ -167,7 +167,11 @@ def FIM(
                 p[:, :-1]
                 * q[:, :-1]
                 / torch.cat(
-                    (torch.ones(size=(q.size(0), 1), device=device), q[:, :-2]), dim=1
+                    (
+                        torch.ones(size=(q.size(0), 1), device=device),
+                        q[:, :-2] + torch.finfo().eps,
+                    ),
+                    dim=1,
                 )
             )
 
@@ -219,5 +223,5 @@ def FIM(
         model=model,
         function=function_fim,
     )
-    
+
     return representation(generator=generator, examples=loader)
