@@ -14,6 +14,7 @@ from nngeometry.layercollection import (
     WeightNorm2dLayer,
     Conv1dLayer,
     LayerNormLayer,
+    EmbeddingLayer,
 )
 
 from .grads_conv import conv2d_backward, convtranspose2d_backward, conv1d_backward
@@ -451,6 +452,20 @@ class Conv1dJacobianFactory(JacobianFactory):
         buffer.add_((indiv_gw**2).sum(dim=0).view(-1))
 
 
+class EmbeddingJacobianFactory(JacobianFactory):
+
+    @classmethod
+    def flat_grad(cls, buffer, mod, layer, x, gy):
+        x_s = x.size()
+        x_onehot = F.one_hot(x.squeeze(), num_classes=layer.num_embeddings).reshape(
+            x_s[0], x_s[1], -1
+        )
+        w_numel = layer.weight.numel()
+        buffer[:, :w_numel].add_(
+            torch.bmm(x_onehot.transpose(1, 2).to(gy.dtype), gy).view(x_s[0], -1)
+        )
+
+
 FactoryMap = {
     LinearLayer: LinearJacobianFactory,
     Conv1dLayer: Conv1dJacobianFactory,
@@ -464,4 +479,6 @@ FactoryMap = {
     Cosine1dLayer: Cosine1dJacobianFactory,
     Affine1dLayer: Affine1dJacobianFactory,
     LayerNormLayer: LayerNormJacobianFactory,
+    LayerNormLayer: LayerNormJacobianFactory,
+    EmbeddingLayer: EmbeddingJacobianFactory,
 }

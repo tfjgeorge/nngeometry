@@ -79,7 +79,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self.i_output = 0
         for d in loader:
             inputs = d[0]
-            inputs.requires_grad = True
+            grad_wrt = self._infer_differentiable_leafs(inputs)
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
             n_output = output.size(-1)
@@ -88,7 +88,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 self.grads.zero_()
                 torch.autograd.grad(
                     output[i],
-                    [inputs],
+                    grad_wrt,
                     retain_graph=i < n_output - 1,
                     only_inputs=True,
                 )
@@ -128,7 +128,8 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self.start = 0
         for d in loader:
             inputs = d[0]
-            inputs.requires_grad = True
+            grad_wrt = self._infer_differentiable_leafs(inputs)
+
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
             n_output = output.size(-1)
@@ -136,7 +137,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             for i in range(n_output):
                 torch.autograd.grad(
                     output[i],
-                    [inputs],
+                    grad_wrt,
                     retain_graph=i < n_output - 1,
                     only_inputs=True,
                 )
@@ -179,14 +180,14 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         for d in loader:
             inputs = d[0]
-            inputs.requires_grad = True
+            grad_wrt = self._infer_differentiable_leafs(inputs)
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
             n_output = output.size(-1)
             for i in range(n_output):
                 torch.autograd.grad(
                     output[i],
-                    [inputs],
+                    grad_wrt,
                     retain_graph=i < n_output - 1,
                     only_inputs=True,
                 )
@@ -224,14 +225,15 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         for d in loader:
             inputs = d[0]
-            inputs.requires_grad = True
+            grad_wrt = self._infer_differentiable_leafs(inputs)
+
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
             n_output = output.size(-1)
             for i in range(n_output):
                 torch.autograd.grad(
                     output[i],
-                    [inputs],
+                    grad_wrt,
                     retain_graph=i < n_output - 1,
                     only_inputs=True,
                 )
@@ -276,7 +278,8 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         for d in loader:
             inputs = d[0]
-            inputs.requires_grad = True
+            grad_wrt = self._infer_differentiable_leafs(inputs)
+
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
             n_output = output.size(-1)
@@ -284,7 +287,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 retain_graph = self.i_output < n_output - 1
                 torch.autograd.grad(
                     output[self.i_output],
-                    [inputs],
+                    grad_wrt,
                     retain_graph=retain_graph,
                     only_inputs=True,
                 )
@@ -329,14 +332,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self.start = 0
         for d in loader:
             inputs = d[0]
-            differentiate_wrt = []
-            if inputs.dtype in [
-                torch.float16,
-                torch.float32,
-                torch.float64,
-            ]:
-                inputs.requires_grad = True
-                differentiate_wrt.append(inputs)
+            grad_wrt = self._infer_differentiable_leafs(inputs)
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
             n_output = output.size(-1)
@@ -345,7 +341,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 retain_graph = self.i_output < n_output - 1
                 torch.autograd.grad(
                     output[self.i_output],
-                    differentiate_wrt,
+                    grad_wrt,
                     retain_graph=retain_graph,
                     only_inputs=True,
                 )
@@ -391,7 +387,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         for i_outer, d in enumerate(loader):
             # used in hooks to switch between store/compute
             inputs_outer = d[0]
-            inputs_outer.requires_grad = True
+            grad_wrt_outer = self._infer_differentiable_leafs(inputs_outer)
             bs_outer = inputs_outer.size(0)
             self.outerloop_switch = True
             output_outer = self.function(*d).view(bs_outer, -1).sum(dim=0)
@@ -402,7 +398,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 self.outerloop_switch = True
                 torch.autograd.grad(
                     output_outer[self.i_output_outer],
-                    [inputs_outer],
+                    grad_wrt_outer,
                     retain_graph=True,
                     only_inputs=True,
                 )
@@ -413,13 +409,13 @@ class TorchHooksJacobianBackend(AbstractBackend):
                     if i_inner > i_outer:
                         break
                     inputs_inner = d[0]
-                    inputs_inner.requires_grad = True
+                    grad_wrt_inner = self._infer_differentiable_leafs(inputs_inner)
                     bs_inner = inputs_inner.size(0)
                     output_inner = self.function(*d).view(bs_inner, n_output).sum(dim=0)
                     for self.i_output_inner in range(n_output):
                         torch.autograd.grad(
                             output_inner[self.i_output_inner],
-                            [inputs_inner],
+                            grad_wrt_inner,
                             retain_graph=True,
                             only_inputs=True,
                         )
@@ -506,7 +502,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         for d in loader:
             inputs = d[0]
-            inputs.requires_grad = True
+            grad_wrt = self._infer_differentiable_leafs(inputs)
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
             n_output = output.size(-1)
@@ -514,7 +510,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 retain_graph = self.i_output < n_output - 1
                 torch.autograd.grad(
                     output[self.i_output],
-                    [inputs],
+                    grad_wrt,
                     retain_graph=retain_graph,
                     only_inputs=True,
                 )
@@ -548,7 +544,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 raise NotImplementedError
             parameters.append(mod.weight)
             output[mod.weight] = torch.zeros_like(mod.weight)
-            if layer.bias is not None:
+            if hasattr(layer, "bias") and layer.bias is not None:
                 parameters.append(mod.bias)
                 output[mod.bias] = torch.zeros_like(mod.bias)
 
@@ -561,7 +557,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self.start = 0
         for d in loader:
             inputs = d[0]
-            inputs.requires_grad = True
+            grad_wrt = self._infer_differentiable_leafs(inputs)
             bs = inputs.size(0)
 
             f_output = self.function(*d).view(bs, -1)
@@ -573,7 +569,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 self.compute_switch = True
                 torch.autograd.grad(
                     f_output[:, i].sum(dim=0),
-                    [inputs],
+                    grad_wrt,
                     retain_graph=True,
                     only_inputs=True,
                 )
@@ -591,13 +587,13 @@ class TorchHooksJacobianBackend(AbstractBackend):
         output_dict = dict()
         for layer_id, layer in self.layer_collection.layers.items():
             mod = self.l_to_m[layer_id]
-            if layer.bias is None:
-                output_dict[layer_id] = (output[mod.weight] / n_examples,)
-            else:
+            if hasattr(layer, "bias") and layer.bias is not None:
                 output_dict[layer_id] = (
                     output[mod.weight] / n_examples,
                     output[mod.bias] / n_examples,
                 )
+            else:
+                output_dict[layer_id] = (output[mod.weight] / n_examples,)
 
         # remove hooks
         self.xs = dict()
@@ -634,7 +630,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self.compute_switch = True
         for d in loader:
             inputs = d[0]
-            inputs.requires_grad = True
+            grad_wrt = self._infer_differentiable_leafs(inputs)
             bs = inputs.size(0)
 
             f_output = self.function(*d).view(bs, -1).sum(dim=0)
@@ -645,7 +641,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
                 torch.autograd.grad(
                     f_output[i],
-                    [inputs],
+                    grad_wrt,
                     retain_graph=i < n_output - 1,
                     only_inputs=True,
                 )
@@ -675,14 +671,14 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self._trace = torch.tensor(0.0, device=device)
         for d in loader:
             inputs = d[0]
-            inputs.requires_grad = True
+            grad_wrt = self._infer_differentiable_leafs(inputs)
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
             n_output = output.size(-1)
             for i in range(n_output):
                 torch.autograd.grad(
                     output[i],
-                    [inputs],
+                    grad_wrt,
                     retain_graph=i < n_output - 1,
                     only_inputs=True,
                 )
@@ -718,7 +714,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self.compute_switch = True
         for d in loader:
             inputs = d[0]
-            inputs.requires_grad = True
+            grad_wrt = self._infer_differentiable_leafs(inputs)
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
             n_output = output.size(-1)
@@ -727,7 +723,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 retain_graph = self.i_output < n_output - 1
                 torch.autograd.grad(
                     output[self.i_output],
-                    [inputs],
+                    grad_wrt,
                     retain_graph=retain_graph,
                     only_inputs=True,
                 )
@@ -869,7 +865,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             layer = self.layer_collection.layers[layer_id]
             v_weight = self._v[layer_id][0]
             v_bias = None
-            if layer.bias is not None:
+            if hasattr(layer, "bias") and layer.bias is not None:
                 v_bias = self._v[layer_id][1]
             FactoryMap[layer.__class__].Jv(
                 self._Jv[self.i_output, self.start : self.start + bs],

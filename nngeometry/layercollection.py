@@ -202,7 +202,7 @@ class AbstractLayer(ABC):
 
     def __repr__(self):
         repr = f"{self.__class__}\n - weight = {self.weight}"
-        if self.bias is not None:
+        if hasattr(self, "bias") and self.bias is not None:
             return repr + f"\n - bias   = {self.bias}"
         else:
             return repr
@@ -310,11 +310,11 @@ class LinearLayer(AbstractLayer):
         )
 
 
-class EmbeddingLayer(AbstractLayer):
+class EmbeddingLayer(LinearLayer):
     def __init__(self, num_embeddings, embedding_dim):
         self.num_embeddings = num_embeddings
-        self.embedding_dim = embedding_dim
-        self.weight = Parameter(num_embeddings, embedding_dim)
+        self.out_features = embedding_dim
+        self.weight = Parameter(embedding_dim, num_embeddings)
 
     def numel(self):
         return self.weight.numel()
@@ -468,4 +468,4 @@ class Parameter(object):
         return self.size == other.size
 
     def __repr__(self):
-        return f'Parameter with shape {self.size}'
+        return f"Parameter with shape {self.size}"

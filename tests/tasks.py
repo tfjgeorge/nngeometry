@@ -198,7 +198,6 @@ class EmbeddingNet(nn.Module):
 
     def forward(self, x):
         output = self.embedding_layer(x)
-        print(output.size())
         return output.sum(axis=1)
 
 
@@ -215,7 +214,7 @@ def get_embedding_task():
         return net(input)
 
     layer_collection = LayerCollection.from_model(net)
-    return (train_loader, layer_collection, net.parameters(), net, output_fn, 3)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn)
 
 
 class LinearConvNet(nn.Module):
