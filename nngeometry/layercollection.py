@@ -199,6 +199,7 @@ class LayerCollection:
 
 
 class AbstractLayer(ABC):
+    transposed = False
 
     def __repr__(self):
         repr = f"{self.__class__}\n - weight = {self.weight}"
@@ -209,6 +210,7 @@ class AbstractLayer(ABC):
 
     def has_bias(self):
         return hasattr(self, "bias") and self.bias is not None
+
 
 class Conv2dLayer(AbstractLayer):
     def __init__(self, in_channels, out_channels, kernel_size, bias=True):
@@ -313,6 +315,8 @@ class LinearLayer(AbstractLayer):
 
 
 class EmbeddingLayer(AbstractLayer):
+    transposed = True
+
     def __init__(self, num_embeddings, embedding_dim):
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim

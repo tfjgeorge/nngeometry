@@ -1,4 +1,6 @@
-def kronecker(A, B):
+def kronecker(A, B, transpose=False):
+    if transpose:
+        A, B = B, A
     sA = A.size()
     sB = B.size()
     return (

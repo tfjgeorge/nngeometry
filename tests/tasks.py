@@ -203,7 +203,7 @@ class EmbeddingNet(nn.Module):
 
 def get_embedding_task():
     train_set = TensorDataset(
-        torch.LongTensor([[1, 2, 4, 5], [4, 3, 2, 9]]), torch.LongTensor([2, 0])
+        torch.randint(0, 10, size=(8, 4)), torch.randint(0, 3, size=(8,))
     )
     train_loader = DataLoader(dataset=train_set, batch_size=2, shuffle=False)
     net = EmbeddingNet()
