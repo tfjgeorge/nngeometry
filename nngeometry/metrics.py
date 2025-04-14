@@ -157,48 +157,28 @@ def FIM(
         # of the Multinomial Distribution, with Applications"
         # Tanabe and Sagae, 1992
 
-        def function_fim(*d, tri_cache):
+        def function_fim(*d):
             logits = function(*d)
-            device = logits.device
-            n_out = logits.size(1)
             p = torch.softmax(logits, dim=1).detach()
             q = 1 - p.cumsum(dim=1)
+
+            # Multiply by L
+            logits_p = logits * p
+            pixi = logits_p.sum(dim=1, keepdim=True) - logits_p.cumsum(dim=1)
+
+            logits_L = (
+                logits[:, :-1] - pixi[:, :-1] / (q + torch.finfo(q.dtype).eps)[:, :-1]
+            )
+
             d = (
                 p[:, :-1]
                 * q[:, :-1]
-                / torch.cat(
-                    (
-                        torch.ones(size=(q.size(0), 1), device=device),
-                        q[:, :-2] + torch.finfo().eps,
-                    ),
-                    dim=1,
-                )
+                / (p[:, :-1] + q[:, :-1] + torch.finfo(q.dtype).eps)
             )
 
-            # TODO this allocates memory (once since it is cached)
-            # for the only purpose of performing a mm with a triangular matrix
-            # -> replace with trmm when it is wrapped in torch
-            if len(tri_cache) == 0:
-                tri_cache.append(
-                    torch.tril(
-                        torch.ones(size=(n_out, n_out), device=device), diagonal=-1
-                    )
-                )
-            tri = tri_cache[0]
-
-            x_p = logits * p
-            x_p = torch.mm(x_p, tri)
-            x_p = x_p[:, :-1]
-            x_p = x_p / (q[:, :-1] + torch.finfo().eps)  # avoid divide by 0
-            x_p = logits[:, :-1] - x_p
-            x_p = x_p * d**0.5
+            x_p = logits_L * d**0.5
 
             return x_p
-
-        # caches the tri allocation, this should be automatically GCed
-        tri_cache = []
-
-        function_fim = partial(function_fim, tri_cache=tri_cache)
 
     elif variant == "classif_binary_logits":
 
