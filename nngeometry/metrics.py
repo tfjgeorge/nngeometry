@@ -1,4 +1,6 @@
 from functools import partial
+from enum import StrEnum
+
 import torch
 
 from .backend import TorchHooksJacobianBackend
@@ -122,8 +124,8 @@ def FIM(
     representation : class
         The parameter matrix representation that will be used to store
         the matrix
-    variants : string 'classif_logits' or 'regression', optional
-            (default='classif_logits')
+    variant : string 'classif_logits' or 'classif_binary_logits' or
+        'regression', optional (default='classif_logits')
         Variant to use depending on how you interpret your neural network.
         Possible choices are:
          - 'classif_logits' the NN returns logits to be used in a softmax
@@ -151,52 +153,7 @@ def FIM(
     if layer_collection is None:
         layer_collection = LayerCollection.from_model(model)
 
-    if variant == "classif_logits":
-        # This uses "An Exact Cholesky Decomposition and the
-        # Generalized Inverse of the Variance-Covariance Matrix
-        # of the Multinomial Distribution, with Applications"
-        # Tanabe and Sagae, 1992
-
-        def function_fim(*d):
-            logits = function(*d)
-            p = torch.softmax(logits, dim=1).detach()
-            q = 1 - p.cumsum(dim=1)
-
-            # Multiply by L
-            logits_p = logits * p
-            pixi = logits_p.sum(dim=1, keepdim=True) - logits_p.cumsum(dim=1)
-
-            logits_L = (
-                logits[:, :-1] - pixi[:, :-1] / (q + torch.finfo(q.dtype).eps)[:, :-1]
-            )
-
-            d = (
-                p[:, :-1]
-                * q[:, :-1]
-                / (p[:, :-1] + q[:, :-1] + torch.finfo(q.dtype).eps)
-            )
-
-            x_p = logits_L * d**0.5
-
-            return x_p
-
-    elif variant == "classif_binary_logits":
-
-        # derivation is in log_sigm.lyx
-        def function_fim(*d):
-            logit = function(*d)
-            probs = torch.nn.functional.sigmoid(logit).detach()
-            coef = torch.sqrt(probs * (1 - probs))
-            return logit * coef
-
-    elif variant == "regression":
-
-        def function_fim(*d):
-            estimates = function(*d)
-            return estimates
-
-    else:
-        raise NotImplementedError
+    function_fim = partial(SQRT_VAR[variant], function)
 
     generator = TorchHooksJacobianBackend(
         layer_collection=layer_collection,
@@ -205,3 +162,46 @@ def FIM(
     )
 
     return representation(generator=generator, examples=loader)
+
+
+class FIM_Types(StrEnum):
+    CLASSIF_LOGITS = "classif_logits"
+    CLASSIF_BINARY_LOGITS = "classif_binary_logits"
+    REGRESSION = "regression"
+
+
+def _sqrt_var_classif_logits(function, *d):
+    logits = function(*d)
+    p = torch.softmax(logits, dim=1).detach()
+    q = 1 - p.cumsum(dim=1)
+
+    # Multiply by L
+    logits_p = logits * p
+    pixi = logits_p.sum(dim=1, keepdim=True) - logits_p.cumsum(dim=1)
+
+    logits_L = logits[:, :-1] - pixi[:, :-1] / (q + torch.finfo(q.dtype).eps)[:, :-1]
+
+    d = p[:, :-1] * q[:, :-1] / (p[:, :-1] + q[:, :-1] + torch.finfo(q.dtype).eps)
+
+    x_p = logits_L * d**0.5
+
+    return x_p
+
+
+def _sqrt_var_classif_binary_logits(function, *d):
+    logit = function(*d)
+    probs = torch.nn.functional.sigmoid(logit).detach()
+    coef = torch.sqrt(probs * (1 - probs))
+    return logit * coef
+
+
+def _sqrt_var_regression(function, *d):
+    estimates = function(*d)
+    return estimates
+
+
+SQRT_VAR = {
+    FIM_Types.CLASSIF_LOGITS: _sqrt_var_classif_logits,
+    FIM_Types.CLASSIF_BINARY_LOGITS: _sqrt_var_classif_binary_logits,
+    FIM_Types.REGRESSION: _sqrt_var_regression,
+}
