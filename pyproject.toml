@@ -44,7 +44,7 @@ known-first-party = ["nngeometry"]
 [tool.uv-dynamic-versioning]
 vcs = "git"
 style = "pep440"
-metadata = false
+format = "{major}.{minor}.{patch}.dev{distance}"
 
 [tool.hatch.version]
 source = "uv-dynamic-versioning"
