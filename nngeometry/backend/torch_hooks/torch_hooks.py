@@ -31,7 +31,6 @@ class TorchHooksJacobianBackend(AbstractBackend):
     def __init__(self, model, function=None, centering=False, layer_collection=None):
         self.model = model
         self.handles = []
-        self.xs = dict()
         self.centering = centering
 
         # this contains functions that require knowledge of number of
@@ -78,6 +77,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self.start = 0
         self.i_output = 0
         for d in loader:
+            self.xs = dict()
             inputs = d[0]
             grad_wrt = self._infer_differentiable_leafs(inputs)
             bs = inputs.size(0)
@@ -102,7 +102,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         # remove hooks
         del self.grads
-        self.xs = dict()
+        del self.xs
         for h in self.handles:
             h.remove()
 
@@ -127,6 +127,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self.diag_m = torch.zeros((n_parameters,), device=device, dtype=dtype)
         self.start = 0
         for d in loader:
+            self.xs = dict()
             inputs = d[0]
             grad_wrt = self._infer_differentiable_leafs(inputs)
 
@@ -145,7 +146,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         # remove hooks
         del self.diag_m
-        self.xs = dict()
+        del self.xs
         for h in self.handles:
             h.remove()
 
@@ -179,6 +180,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 )
 
         for d in loader:
+            self.xs = dict()
             inputs = d[0]
             grad_wrt = self._infer_differentiable_leafs(inputs)
             bs = inputs.size(0)
@@ -200,7 +202,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         # remove hooks
         del self._blocks
-        self.xs = dict()
+        del self.xs
         for h in self.handles:
             h.remove()
 
@@ -224,6 +226,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             self._blocks[layer_id] = torch.zeros((s, s), device=device, dtype=dtype)
 
         for d in loader:
+            self.xs = dict()
             inputs = d[0]
             grad_wrt = self._infer_differentiable_leafs(inputs)
 
@@ -241,7 +244,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         # remove hooks
         del self._blocks
-        self.xs = dict()
+        del self.xs
         for h in self.handles:
             h.remove()
 
@@ -280,6 +283,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             )
 
         for d in loader:
+            self.xs = dict()
             inputs = d[0]
             grad_wrt = self._infer_differentiable_leafs(inputs)
 
@@ -307,7 +311,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         # remove hooks
         del self._blocks
         del self.i_output
-        self.xs = dict()
+        del self.xs
         for h in self.handles:
             h.remove()
 
@@ -334,6 +338,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         self.start = 0
         for d in loader:
+            self.xs = dict()
             inputs = d[0]
             grad_wrt = self._infer_differentiable_leafs(inputs)
             bs = inputs.size(0)
@@ -357,7 +362,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         del self.grads
         del self.start
         del self.i_output
-        self.xs = dict()
+        del self.xs
         for h in self.handles:
             h.remove()
 
@@ -383,11 +388,10 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         self.delayed_for_n_ouput.append(_f)
 
-        self.x_outer = dict()
-        self.x_inner = dict()
         self.gy_outer = dict()
         self.e_outer = 0
         for i_outer, d in enumerate(loader):
+            self.x_outer = dict()
             # used in hooks to switch between store/compute
             inputs_outer = d[0]
             grad_wrt_outer = self._infer_differentiable_leafs(inputs_outer)
@@ -409,6 +413,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
                 self.e_inner = 0
                 for i_inner, d in enumerate(loader):
+                    self.x_inner = dict()
                     if i_inner > i_outer:
                         break
                     inputs_inner = d[0]
@@ -507,6 +512,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             self._diags[layer_id] = torch.zeros((sG * sA), device=device, dtype=dtype)
 
         for d in loader:
+            self.xs = dict()
             inputs = d[0]
             grad_wrt = self._infer_differentiable_leafs(inputs)
             bs = inputs.size(0)
@@ -528,7 +534,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         # remove hooks
         del self._diags
         del self._kfe
-        self.xs = dict()
+        del self.xs
         for h in self.handles:
             h.remove()
 
@@ -562,6 +568,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self.i_output = 0
         self.start = 0
         for d in loader:
+            self.xs = dict()
             inputs = d[0]
             grad_wrt = self._infer_differentiable_leafs(inputs)
             bs = inputs.size(0)
@@ -602,7 +609,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 output_dict[layer_id] = (output[mod.weight] / n_examples,)
 
         # remove hooks
-        self.xs = dict()
+        del self.xs
         del self._Jv
         del self._v
         del self.compute_switch
@@ -635,6 +642,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         norm2 = 0
         self.compute_switch = True
         for d in loader:
+            self.xs = dict()
             inputs = d[0]
             grad_wrt = self._infer_differentiable_leafs(inputs)
             bs = inputs.size(0)
@@ -655,7 +663,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         norm = norm2 / n_examples
 
         # remove hooks
-        self.xs = dict()
+        del self.xs
         del self._Jv
         del self._v
         del self.compute_switch
@@ -676,6 +684,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         self._trace = torch.tensor(0.0, device=device)
         for d in loader:
+            self.xs = dict()
             inputs = d[0]
             grad_wrt = self._infer_differentiable_leafs(inputs)
             bs = inputs.size(0)
@@ -691,7 +700,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         trace = self._trace / n_examples
 
         # remove hooks
-        self.xs = dict()
+        del self.xs
         del self._trace
         for h in self.handles:
             h.remove()
@@ -719,6 +728,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self.start = 0
         self.compute_switch = True
         for d in loader:
+            self.xs = dict()
             inputs = d[0]
             grad_wrt = self._infer_differentiable_leafs(inputs)
             bs = inputs.size(0)
@@ -737,7 +747,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         Jv = self._Jv
 
         # remove hooks
-        self.xs = dict()
+        del self.xs
         del self._Jv
         del self._v
         del self.start
