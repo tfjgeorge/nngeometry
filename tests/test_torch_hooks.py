@@ -1,12 +1,14 @@
 import pytest
 import torch
 from tasks import (
+    device,
     get_batchnorm_conv_linear_task,
     get_batchnorm_fc_linear_task,
     get_conv1d_task,
     get_conv_gn_task,
     get_conv_skip_task,
     get_conv_task,
+    get_embedding_task,
     get_fullyconnect_affine_task,
     get_fullyconnect_cosine_task,
     get_fullyconnect_onlylast_task,
@@ -18,11 +20,11 @@ from tasks import (
     get_linear_fc_task,
     get_small_conv_transpose_task,
     get_small_conv_wn_task,
-    get_embedding_task,
-    device,
 )
-from utils import check_ratio, check_tensors, update_model, get_output_vector
+from torch import nn
+from utils import check_ratio, check_tensors, get_output_vector, update_model
 
+from nngeometry import Jacobian
 from nngeometry.backend import TorchHooksJacobianBackend
 from nngeometry.object.fspace import FMatDense
 from nngeometry.object.map import PFMapDense, PFMapImplicit
@@ -895,3 +897,13 @@ def test_example_passing():
             PMat_dense.to_torch(),
             (1.0 / tot_examples * sum_mats).to_torch(),
         )
+
+
+def test_shared_parameters():
+    # test that shared parameters (e.g. using twice the same layer)
+    # is detected and raises an error
+    model = nn.Sequential(*[nn.Linear(4, 4)] * 2)
+    d = torch.rand((5, 4))
+
+    with pytest.raises(NotImplementedError):
+        J = Jacobian(model, (d,), lambda x: model(x))

@@ -760,6 +760,11 @@ class TorchHooksJacobianBackend(AbstractBackend):
         return handles
 
     def _hook_savex(self, mod, i):
+        if mod in self.xs:
+            raise NotImplementedError(
+                """Passing through the same layer twice, this is not
+                currently implemented with TorchHook backend"""
+            )
         self.xs[mod] = i[0]
 
     def _hook_savex_io(self, mod, i):
