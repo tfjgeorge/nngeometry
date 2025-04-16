@@ -170,22 +170,38 @@ class FIM_Types(StrEnum):
     REGRESSION = "regression"
 
 
+def _proj_to_L_multinomial(x, p, q):
+    # n -> n-1
+    eps = torch.finfo(p.dtype).eps
+    pixi = p * x
+    pixi = pixi.sum(dim=1, keepdim=True) - pixi.cumsum(dim=1)
+    return x[:, :-1] - pixi[:, :-1] / torch.clip(q[:, :-1], eps, 1)
+
+
+def _diag_var_multinomial(p, q):
+    eps = torch.finfo(p.dtype).eps
+    return p[:, :-1] * q[:, :-1] / torch.clip(p[:, :-1] + q[:, :-1], eps, 1)
+
+
 def _sqrt_var_classif_logits(function, *d):
-    logits = function(*d)
-    p = torch.softmax(logits, dim=1).detach()
+    # This uses the symbolic expression from:
+    # An Exact Cholesky Decomposition and the Generalized Inverse of
+    # the Variance-Covariance  Matrix of the Multinomial Distribution,
+    # with Applications
+    # Kunio Tanabe and Masahiko Sagae 1992
+
+    x = function(*d)  # logits
+    p = torch.softmax(x, dim=1).detach()
     q = 1 - p.cumsum(dim=1)
 
     # Multiply by L
-    logits_p = logits * p
-    pixi = logits_p.sum(dim=1, keepdim=True) - logits_p.cumsum(dim=1)
+    x_L = _proj_to_L_multinomial(x, p, q)
 
-    logits_L = logits[:, :-1] - pixi[:, :-1] / (q + torch.finfo(q.dtype).eps)[:, :-1]
+    # get diagonal
+    d = _diag_var_multinomial(p, q)
 
-    d = p[:, :-1] * q[:, :-1] / (p[:, :-1] + q[:, :-1] + torch.finfo(q.dtype).eps)
-
-    x_p = logits_L * d**0.5
-
-    return x_p
+    x_L = x_L * torch.clip(d, 0, 1) ** 0.5
+    return x_L
 
 
 def _sqrt_var_classif_binary_logits(function, *d):
