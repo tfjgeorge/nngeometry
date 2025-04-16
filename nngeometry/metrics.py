@@ -184,6 +184,12 @@ def _diag_var_multinomial(p, q):
 
 
 def _sqrt_var_classif_logits(function, *d):
+    # This uses the symbolic expression from:
+    # An Exact Cholesky Decomposition and the Generalized Inverse of
+    # the Variance-Covariance  Matrix of the Multinomial Distribution,
+    # with Applications
+    # Kunio Tanabe and Masahiko Sagae 1992
+
     x = function(*d)  # logits
     p = torch.softmax(x, dim=1).detach()
     q = 1 - p.cumsum(dim=1)
