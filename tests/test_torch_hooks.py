@@ -163,7 +163,6 @@ def test_jacobian_pullback_dense():
 
 def test_jacobian_fdense_vs_pullback():
     for get_task in linear_tasks + nonlinear_tasks:
-        print(get_task)
         for centering in [True, False]:
             loader, lc, parameters, model, function = get_task()
             generator = TorchHooksJacobianBackend(
