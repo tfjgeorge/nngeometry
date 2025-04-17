@@ -4,6 +4,12 @@ from collections import OrderedDict
 import torch
 
 from nngeometry.backend import DummyGenerator
+from nngeometry.layercollection import (
+    Conv1dLayer,
+    Conv2dLayer,
+    EmbeddingLayer,
+    LinearLayer,
+)
 from nngeometry.object.map import PFMap, PFMapDense
 
 from ..maths import kronecker
@@ -1177,6 +1183,49 @@ class PMatQuasiDiag(PMatAbstract):
 
             out_dict[layer_id] = (solve_w.view(*s_w), solve_b)
         return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
+
+
+class PMatMixed(PMatAbstract):
+    def __init__(self, generator, data=None, examples=None):
+        pass
+
+
+class PMatKFACDense(PMatMixed):
+    def __init__(self, generator, data=None, examples=None):
+        super().__init__(
+            generator,
+            data=data,
+            examples=examples,
+            default_representation=PMatDense,
+            map_layers_to={
+                PMatKFAC,
+                [
+                    LinearLayer,
+                    Conv1dLayer,
+                    Conv2dLayer,
+                    EmbeddingLayer,
+                ],
+            },
+        )
+
+
+class PMatEKFACDense(PMatMixed):
+    def __init__(self, generator, data=None, examples=None):
+        super().__init__(
+            generator,
+            data=data,
+            examples=examples,
+            default_representation=PMatDense,
+            map_layers_to={
+                PMatEKFAC,
+                [
+                    LinearLayer,
+                    Conv1dLayer,
+                    Conv2dLayer,
+                    EmbeddingLayer,
+                ],
+            },
+        )
 
 
 def bdot(A, B):
