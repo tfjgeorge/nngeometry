@@ -1,16 +1,17 @@
 import pytest
 import torch
-from nngeometry.object.map import PFMapDense
 from tasks import (
     device,
-    get_conv_task,
     get_conv1d_task,
-    get_fullyconnect_task,
+    get_conv_task,
     get_embedding_task,
+    get_fullyconnect_task,
+    get_linear_3d_task,
 )
 from utils import check_ratio, check_tensors
 
 from nngeometry.backend import TorchHooksJacobianBackend
+from nngeometry.object.map import PFMapDense
 from nngeometry.object.pspace import PMatBlockDiag, PMatEKFAC, PMatKFAC
 from nngeometry.object.vector import random_pvector
 
@@ -28,6 +29,7 @@ def test_pspace_ekfac_vs_kfac():
     """
     eps = 1e-4
     for get_task in [
+        get_linear_3d_task,
         get_embedding_task,
         get_conv1d_task,
         get_fullyconnect_task,

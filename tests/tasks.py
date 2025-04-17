@@ -598,3 +598,25 @@ def get_layernorm_conv_task():
 
     layer_collection = LayerCollection.from_model(net)
     return (train_loader, layer_collection, net.parameters(), net, output_fn)
+
+
+class Linear3D(nn.Module):
+    def __init__(self):
+        super(Linear3D, self).__init__()
+        self.layer = nn.Linear(4, 3)
+
+    def forward(self, x):
+        x = self.layer(x)
+        return x.sum(dim=1)
+
+
+def get_linear_3d_task():
+    train_set = TensorDataset(torch.rand(size=(12, 5, 4)), torch.randint(high=3, size=(12,)))
+    train_loader = DataLoader(dataset=train_set, batch_size=7, shuffle=False)
+    model = Linear3D()
+
+    def output_fn(input, target):
+        return model(to_device(input))
+
+    layer_collection = LayerCollection.from_model(model)
+    return (train_loader, layer_collection, model.parameters(), model, output_fn)

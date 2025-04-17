@@ -4,12 +4,13 @@ import pytest
 import torch
 import torch.nn as nn
 from tasks import (
+    get_conv1d_task,
     get_conv_task,
+    get_embedding_task,
     get_fullyconnect_task,
     get_mnist,
     to_device_model,
-    get_conv1d_task,
-    get_embedding_task,
+    get_linear_3d_task,
 )
 from torch.utils.data import DataLoader, Subset
 from utils import angle, check_ratio, check_tensors
@@ -174,6 +175,7 @@ def test_jacobian_kfac():
         get_conv1d_task,
         get_fullyconnect_task,
         get_conv_task,
+        get_linear_3d_task,
     ]:
         loader, lc, parameters, model, function = get_task()
 
