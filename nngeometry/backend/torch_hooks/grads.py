@@ -5,19 +5,19 @@ from nngeometry.layercollection import (
     Affine1dLayer,
     BatchNorm1dLayer,
     BatchNorm2dLayer,
+    Conv1dLayer,
     Conv2dLayer,
     ConvTranspose2dLayer,
     Cosine1dLayer,
+    EmbeddingLayer,
     GroupNormLayer,
+    LayerNormLayer,
     LinearLayer,
     WeightNorm1dLayer,
     WeightNorm2dLayer,
-    Conv1dLayer,
-    LayerNormLayer,
-    EmbeddingLayer,
 )
 
-from .grads_conv import conv2d_backward, convtranspose2d_backward, conv1d_backward
+from .grads_conv import conv1d_backward, conv2d_backward, convtranspose2d_backward
 
 
 class JacobianFactory:
@@ -68,14 +68,18 @@ class LinearJacobianFactory(JacobianFactory):
     def flat_grad(cls, buffer, mod, layer, x, gy):
         bs = x.size(0)
         w_numel = layer.weight.numel()
-        buffer[:, :w_numel].add_(
-            torch.bmm(gy.unsqueeze(2), x.unsqueeze(1)).view(bs, -1)
-        )
+        if gy.ndim == 2:
+            gy = gy[:, None, :]
+            x = x[:, None, :]
+        buffer[:, :w_numel].add_(torch.bmm(gy.transpose(1, 2), x).view(bs, -1))
         if layer.bias is not None:
-            buffer[:, w_numel:].add_(gy)
+            buffer[:, w_numel:].add_(gy.sum(dim=1))
 
     @classmethod
     def diag(cls, buffer, mod, layer, x, gy):
+        if gy.ndim > 2:
+            return super(LinearJacobianFactory, cls).diag(buffer, mod, layer, x, gy)
+
         w_numel = layer.weight.numel()
         buffer[:w_numel].add_(torch.mm(gy.t() ** 2, x**2).view(-1))
         if layer.bias is not None:
@@ -83,39 +87,80 @@ class LinearJacobianFactory(JacobianFactory):
 
     @classmethod
     def kxy(cls, buffer, mod, layer, x_i, gy_i, x_o, gy_o):
+        if gy_i.ndim > 2:
+            return super(LinearJacobianFactory, cls).kxy(
+                buffer, mod, layer, x_i, gy_i, x_o, gy_o
+            )
         buffer.add_(torch.mm(x_i, x_o.t()) * torch.mm(gy_i, gy_o.t()))
         if layer.bias is not None:
             buffer.add_(torch.mm(gy_i, gy_o.t()))
 
     @classmethod
     def Jv(cls, buffer, mod, layer, x, gy, v, v_bias):
-        buffer.add_((torch.mm(x, v.t()) * gy).sum(dim=1))
+        x_s = x.size()
+        gy_s = gy.size()
+        buffer.add_(
+            (torch.mm(x.reshape(-1, x_s[-1]), v.t()) * gy.reshape(-1, gy_s[-1]))
+            .reshape(x_s[0], -1)
+            .sum(dim=1)
+        )
+
         if layer.bias is not None:
-            buffer.add_(torch.mv(gy.contiguous(), v_bias))
+            if gy.ndim == 2:
+                buffer.add_(torch.mv(gy, v_bias))
+            elif gy.ndim == 3:
+                buffer.add_(
+                    torch.mv(gy.reshape(-1, gy_s[-1]), v_bias)
+                    .reshape(gy_s[0], gy_s[1])
+                    .sum(dim=1)
+                )
 
     @classmethod
     def trace(cls, buffer, mod, layer, x, gy):
+        if gy.ndim > 2:
+            return super(LinearJacobianFactory, cls).trace(buffer, mod, layer, x, gy)
+
         buffer.add_(torch.mm(gy.t() ** 2, x**2).sum())
         if layer.bias is not None:
             buffer.add_((gy**2).sum())
 
     @classmethod
     def kfac_xx(cls, buffer, mod, layer, x, gy):
+        if x.ndim == 3:
+            x = x.reshape(-1, x.size(-1))
         if layer.bias is not None:
             x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
         buffer.add_(torch.mm(x.t(), x))
 
     @classmethod
     def kfac_gg(cls, buffer, mod, layer, x, gy):
-        buffer.add_(torch.mm(gy.t(), gy))
+        spatial_locations = 1
+        if gy.ndim == 3:
+            spatial_locations = gy.size(1)
+            gy = gy.reshape(-1, gy.size(-1))
+
+        buffer.add_(torch.mm(gy.t(), gy)) / spatial_locations
 
     @classmethod
     def kfe_diag(cls, buffer, mod, layer, x, gy, evecs_a, evecs_g):
-        if layer.bias is not None:
-            x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
-        gy_kfe = torch.mm(gy, evecs_g)
-        x_kfe = torch.mm(x, evecs_a)
-        buffer.add_(torch.mm(gy_kfe.t() ** 2, x_kfe**2).view(-1))
+        x_s = x.size()
+        gy_s = gy.size()
+        if gy.ndim == 2:
+            if layer.bias is not None:
+                x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
+            gy_kfe = torch.mm(gy, evecs_g)
+            x_kfe = torch.mm(x, evecs_a)
+            buffer.add_(torch.mm(gy_kfe.t() ** 2, x_kfe**2).view(-1))
+        elif gy.ndim == 3:
+            if layer.bias is not None:
+                x = torch.cat([x, torch.ones_like(x[:, :, :1])], dim=2)
+            gy_kfe = torch.mm(gy.view(-1, gy_s[2]), evecs_g)
+            x_kfe = torch.mm(x.view(-1, evecs_a.size(0)), evecs_a)
+
+            per_ex_kfe_grad = torch.bmm(
+                gy_kfe.view(*gy_s).transpose(1, 2), x_kfe.view(x_s[0], x_s[1], -1)
+            )
+            buffer.add_((per_ex_kfe_grad**2).sum(dim=0).view(-1))
 
     @classmethod
     def quasidiag(cls, buffer_diag, buffer_cross, mod, layer, x, gy):
@@ -276,12 +321,17 @@ class LayerNormJacobianFactory(JacobianFactory):
     @classmethod
     def flat_grad(cls, buffer, mod, layer, x, gy):
         w_numel = layer.weight.numel()
+        bs = x.size(0)
         x_normalized = F.layer_norm(
             x, normalized_shape=mod.normalized_shape, eps=mod.eps
         )
-        buffer[:, :w_numel].add_((gy * x_normalized).reshape(x.size(0), -1))
+
+        gy = gy.view(bs, -1, *mod.normalized_shape)
+        x_normalized = x_normalized.view(bs, -1, *mod.normalized_shape)
+
+        buffer[:, :w_numel].add_((gy * x_normalized).sum(dim=1).view(bs, -1))
         if layer.bias is not None:
-            buffer[:, w_numel:].add_(gy.reshape(x.size(0), -1))
+            buffer[:, w_numel:].add_(gy.sum(dim=1).view(bs, -1))
 
 
 class GroupNormJacobianFactory(JacobianFactory):

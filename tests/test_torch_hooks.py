@@ -14,8 +14,10 @@ from tasks import (
     get_fullyconnect_onlylast_task,
     get_fullyconnect_task,
     get_fullyconnect_wn_task,
+    get_layernorm_3d_task,
     get_layernorm_conv_task,
     get_layernorm_task,
+    get_linear_3d_task,
     get_linear_conv_task,
     get_linear_fc_task,
     get_small_conv_transpose_task,
@@ -39,6 +41,7 @@ from nngeometry.object.pspace import (
 from nngeometry.object.vector import PVector, random_fvector, random_pvector
 
 linear_tasks = [
+    get_layernorm_3d_task,
     get_embedding_task,
     get_linear_fc_task,
     get_linear_conv_task,
@@ -48,6 +51,7 @@ linear_tasks = [
 ]
 
 nonlinear_tasks = [
+    get_linear_3d_task,
     get_layernorm_conv_task,
     get_layernorm_task,
     get_conv1d_task,
