@@ -14,6 +14,7 @@ from tasks import (
     get_fullyconnect_onlylast_task,
     get_fullyconnect_task,
     get_fullyconnect_wn_task,
+    get_layernorm_3d_task,
     get_layernorm_conv_task,
     get_layernorm_task,
     get_linear_3d_task,
@@ -40,6 +41,7 @@ from nngeometry.object.pspace import (
 from nngeometry.object.vector import PVector, random_fvector, random_pvector
 
 linear_tasks = [
+    get_layernorm_3d_task,
     get_embedding_task,
     get_linear_fc_task,
     get_linear_conv_task,
@@ -161,6 +163,7 @@ def test_jacobian_pullback_dense():
 
 def test_jacobian_fdense_vs_pullback():
     for get_task in linear_tasks + nonlinear_tasks:
+        print(get_task)
         for centering in [True, False]:
             loader, lc, parameters, model, function = get_task()
             generator = TorchHooksJacobianBackend(
