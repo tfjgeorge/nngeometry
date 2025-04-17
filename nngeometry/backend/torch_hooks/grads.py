@@ -87,14 +87,13 @@ class LinearJacobianFactory(JacobianFactory):
 
     @classmethod
     def kxy(cls, buffer, mod, layer, x_i, gy_i, x_o, gy_o):
-        if gy_i.ndim == 2:
-            buffer.add_(torch.mm(x_i, x_o.t()) * torch.mm(gy_i, gy_o.t()))
-            if layer.bias is not None:
-                buffer.add_(torch.mm(gy_i, gy_o.t()))
-        elif gy_i.ndim == 3:
-            super(LinearJacobianFactory, cls).kxy(
+        if gy_i.ndim > 2:
+            return super(LinearJacobianFactory, cls).kxy(
                 buffer, mod, layer, x_i, gy_i, x_o, gy_o
             )
+        buffer.add_(torch.mm(x_i, x_o.t()) * torch.mm(gy_i, gy_o.t()))
+        if layer.bias is not None:
+            buffer.add_(torch.mm(gy_i, gy_o.t()))
 
     @classmethod
     def Jv(cls, buffer, mod, layer, x, gy, v, v_bias):
