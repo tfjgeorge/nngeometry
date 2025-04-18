@@ -157,12 +157,13 @@ def test_jacobian_kfac_vs_pblockdiag():
         loader, lc, parameters, model, function = get_task()
 
         generator = TorchHooksJacobianBackend(
-            layer_collection=lc,
             model=model,
             function=function,
         )
-        M_kfac = PMatKFAC(generator=generator, examples=loader)
-        M_blockdiag = PMatBlockDiag(generator=generator, examples=loader)
+        M_kfac = PMatKFAC(generator=generator, examples=loader, layer_collection=lc)
+        M_blockdiag = PMatBlockDiag(
+            generator=generator, examples=loader, layer_collection=lc
+        )
 
         G_kfac = M_kfac.to_torch(split_weight_bias=True)
         G_blockdiag = M_blockdiag.to_torch()
@@ -179,10 +180,8 @@ def test_jacobian_kfac():
     ]:
         loader, lc, parameters, model, function = get_task()
 
-        generator = TorchHooksJacobianBackend(
-            layer_collection=lc, model=model, function=function
-        )
-        M_kfac = PMatKFAC(generator=generator, examples=loader)
+        generator = TorchHooksJacobianBackend(model=model, function=function)
+        M_kfac = PMatKFAC(generator=generator, examples=loader, layer_collection=lc)
         G_kfac_split = M_kfac.to_torch(split_weight_bias=True)
         G_kfac = M_kfac.to_torch(split_weight_bias=False)
 
@@ -251,11 +250,9 @@ def test_pspace_kfac_eigendecomposition():
     eps = 1e-3
     loader, lc, parameters, model, function = get_fullyconnect_task()
 
-    generator = TorchHooksJacobianBackend(
-        layer_collection=lc, model=model, function=function
-    )
+    generator = TorchHooksJacobianBackend(model=model, function=function)
 
-    M_kfac = PMatKFAC(generator=generator, examples=loader)
+    M_kfac = PMatKFAC(generator=generator, examples=loader, layer_collection=lc)
     M_kfac.compute_eigendecomposition()
     evals, evecs = M_kfac.get_eigendecomposition()
     # Loop through all vectors in KFE
@@ -293,14 +290,10 @@ def test_kfac():
         loader, lc, parameters, model1, function1 = get_task()
         _, _, _, model2, function2 = get_task()
 
-        generator1 = TorchHooksJacobianBackend(
-            layer_collection=lc, model=model1, function=function1
-        )
-        generator2 = TorchHooksJacobianBackend(
-            layer_collection=lc, model=model2, function=function1
-        )
-        M_kfac1 = PMatKFAC(generator=generator1, examples=loader)
-        M_kfac2 = PMatKFAC(generator=generator2, examples=loader)
+        generator1 = TorchHooksJacobianBackend(model=model1, function=function1)
+        generator2 = TorchHooksJacobianBackend(model=model2, function=function1)
+        M_kfac1 = PMatKFAC(generator=generator1, examples=loader, layer_collection=lc)
+        M_kfac2 = PMatKFAC(generator=generator2, examples=loader, layer_collection=lc)
 
         prod = M_kfac1.mm(M_kfac2)
 

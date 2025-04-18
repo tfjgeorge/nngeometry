@@ -1,49 +1,44 @@
 import torch
+
 from nngeometry.layercollection import LayerCollection
+
 from ._backend import AbstractBackend
 
 
 class TorchFuncHessianBackend(AbstractBackend):
 
-    def __init__(self, model, function, layer_collection=None):
+    def __init__(self, model, function):
         self.model = model
         self.function = function
 
-        if layer_collection is None:
-            self.layer_collection = LayerCollection.from_model(model)
-        else:
-            self.layer_collection = layer_collection
-
-        # maps parameters to their position in flattened representation
-        self.l_to_m= self.layer_collection.get_layerid_module_map(model)
-
-        self.params_dict = dict(self.layer_collection.named_parameters(self.l_to_m))
-
-    def get_covariance_matrix(self, examples):
-        device = self._check_same_device()
-        dtype = self._check_same_dtype()
+    def get_covariance_matrix(self, examples, layer_collection):
+        layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
+        device = self._check_same_device(layerid_to_mod.values())
+        dtype = self._check_same_dtype(layerid_to_mod.values())
 
         loader = self._get_dataloader(examples)
-        n_parameters = self.layer_collection.numel()
+        n_parameters = layer_collection.numel()
         H = torch.zeros((n_parameters, n_parameters), device=device, dtype=dtype)
 
         def compute_loss(params, X, y):
             prediction = torch.func.functional_call(self.model, params, (X,))
             return self.function(prediction, y)
 
+        params_dict = dict(layer_collection.named_parameters(layerid_to_mod))
+
         for d in loader:
             inputs = d[0].to(device)
 
             H_mb = torch.func.hessian(compute_loss)(
-                self.params_dict, inputs, d[1].to(device)
+                params_dict, inputs, d[1].to(device)
             )
 
-            for layer_id_x, layer_x in self.layer_collection.layers.items():
-                start_x = self.layer_collection.p_pos[layer_id_x]
-                for layer_id_y, layer_y in self.layer_collection.layers.items():
+            for layer_id_x, layer_x in layer_collection.layers.items():
+                start_x = layer_collection.p_pos[layer_id_x]
+                for layer_id_y, layer_y in layer_collection.layers.items():
                     ws_x = layer_x.weight.numel()
                     ws_y = layer_y.weight.numel()
-                    start_y = self.layer_collection.p_pos[layer_id_y]
+                    start_y = layer_collection.p_pos[layer_id_y]
 
                     # weight_x, weight_y
                     H[

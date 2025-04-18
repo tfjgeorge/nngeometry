@@ -30,7 +30,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
     """
 
-    def __init__(self, model, function=None, centering=False, layer_collection=None):
+    def __init__(self, model, function=None, centering=False):
         self.model = model
         self.handles = []
         self.centering = centering
@@ -46,24 +46,21 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         self.function = function
 
-        if layer_collection is None:
-            self.layer_collection = LayerCollection.from_model(model)
-        else:
-            self.layer_collection = layer_collection
-        # maps parameters to their position in flattened representation
-        self.l_to_m = self.layer_collection.get_layerid_module_map(model)
-
-    def get_covariance_matrix(self, examples):
+    def get_covariance_matrix(self, examples, layer_collection):
+        layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
         # add hooks
         self.handles += self._add_hooks(
-            self._hook_savex, self._hook_compute_flat_grad, self.l_to_m
+            self._hook_savex,
+            self._hook_compute_flat_grad,
+            layerid_to_mod,
+            layer_collection,
         )
 
-        device = self._check_same_device()
-        dtype = self._check_same_dtype()
+        device = self._check_same_device(layerid_to_mod.values())
+        dtype = self._check_same_dtype(layerid_to_mod.values())
         loader = self._get_dataloader(examples)
         n_examples = len(loader.sampler)
-        n_parameters = self.layer_collection.numel()
+        n_parameters = layer_collection.numel()
         bs = loader.batch_size
         G = torch.zeros((n_parameters, n_parameters), device=device, dtype=dtype)
         self.grads = torch.zeros((1, bs, n_parameters), device=device, dtype=dtype)
@@ -81,7 +78,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         for d in loader:
             self.xs = dict()
             inputs = d[0]
-            grad_wrt = self._infer_differentiable_leafs(inputs)
+            grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
             n_output = output.size(-1)
@@ -113,25 +110,29 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         return G
 
-    def get_covariance_diag(self, examples):
+    def get_covariance_diag(self, examples, layer_collection):
         if self.centering:
             raise NotImplementedError
-        # add hooksf
+        layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
+        # add hooks
         self.handles += self._add_hooks(
-            self._hook_savex, self._hook_compute_diag, self.l_to_m
+            self._hook_savex,
+            self._hook_compute_diag,
+            layerid_to_mod,
+            layer_collection,
         )
 
-        device = self._check_same_device()
-        dtype = self._check_same_dtype()
+        device = self._check_same_device(layerid_to_mod.values())
+        dtype = self._check_same_dtype(layerid_to_mod.values())
         loader = self._get_dataloader(examples)
         n_examples = len(loader.sampler)
-        n_parameters = self.layer_collection.numel()
+        n_parameters = layer_collection.numel()
         self.diag_m = torch.zeros((n_parameters,), device=device, dtype=dtype)
         self.start = 0
         for d in loader:
             self.xs = dict()
             inputs = d[0]
-            grad_wrt = self._infer_differentiable_leafs(inputs)
+            grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
 
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
@@ -154,20 +155,25 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         return diag_m
 
-    def get_covariance_quasidiag(self, examples):
+    def get_covariance_quasidiag(self, examples, layer_collection):
         if self.centering:
             raise NotImplementedError
+
+        layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
         # add hooks
         self.handles += self._add_hooks(
-            self._hook_savex, self._hook_compute_quasidiag, self.l_to_m
+            self._hook_savex,
+            self._hook_compute_quasidiag,
+            layerid_to_mod,
+            layer_collection,
         )
+        device = self._check_same_device(layerid_to_mod.values())
+        dtype = self._check_same_dtype(layerid_to_mod.values())
 
         loader = self._get_dataloader(examples)
         n_examples = len(loader.sampler)
         self._blocks = dict()
-        for layer_id, layer in self.layer_collection.layers.items():
-            device = self._infer_device(layer_id)
-            dtype = self._infer_dtype(layer_id)
+        for layer_id, layer in layer_collection.layers.items():
             s = layer.numel()
             if layer.bias is None:
                 self._blocks[layer_id] = (
@@ -184,7 +190,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         for d in loader:
             self.xs = dict()
             inputs = d[0]
-            grad_wrt = self._infer_differentiable_leafs(inputs)
+            grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
             n_output = output.size(-1)
@@ -210,27 +216,32 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         return blocks
 
-    def get_covariance_layer_blocks(self, examples):
+    def get_covariance_layer_blocks(self, examples, layer_collection):
         if self.centering:
             raise NotImplementedError
+        layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
         # add hooks
         self.handles += self._add_hooks(
-            self._hook_savex, self._hook_compute_layer_blocks, self.l_to_m
+            self._hook_savex,
+            self._hook_compute_layer_blocks,
+            layerid_to_mod,
+            layer_collection,
         )
+
+        device = self._check_same_device(layerid_to_mod.values())
+        dtype = self._check_same_dtype(layerid_to_mod.values())
 
         loader = self._get_dataloader(examples)
         n_examples = len(loader.sampler)
         self._blocks = dict()
-        for layer_id, layer in self.layer_collection.layers.items():
-            device = self._infer_device(layer_id)
-            dtype = self._infer_dtype(layer_id)
+        for layer_id, layer in layer_collection.layers.items():
             s = layer.numel()
             self._blocks[layer_id] = torch.zeros((s, s), device=device, dtype=dtype)
 
         for d in loader:
             self.xs = dict()
             inputs = d[0]
-            grad_wrt = self._infer_differentiable_leafs(inputs)
+            grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
 
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
@@ -252,18 +263,23 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         return blocks
 
-    def get_kfac_blocks(self, examples):
+    def get_kfac_blocks(self, examples, layer_collection):
+        layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
         # add hooks
         self.handles += self._add_hooks(
-            self._hook_savex, self._hook_compute_kfac_blocks, self.l_to_m
+            self._hook_savex,
+            self._hook_compute_kfac_blocks,
+            layerid_to_mod,
+            layer_collection,
         )
+
+        device = self._check_same_device(layerid_to_mod.values())
+        dtype = self._check_same_dtype(layerid_to_mod.values())
 
         loader = self._get_dataloader(examples)
         n_examples = len(loader.sampler)
         self._blocks = dict()
-        for layer_id, layer in self.layer_collection.layers.items():
-            device = self._infer_device(layer_id)
-            dtype = self._infer_dtype(layer_id)
+        for layer_id, layer in layer_collection.layers.items():
             layer_class = layer.__class__.__name__
             if layer_class == "LinearLayer":
                 sG = layer.out_features
@@ -287,7 +303,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         for d in loader:
             self.xs = dict()
             inputs = d[0]
-            grad_wrt = self._infer_differentiable_leafs(inputs)
+            grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
 
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
@@ -300,15 +316,10 @@ class TorchHooksJacobianBackend(AbstractBackend):
                     retain_graph=retain_graph,
                     only_inputs=True,
                 )
-        for layer_id in self.layer_collection.layers.keys():
+        for layer_id in layer_collection.layers.keys():
             self._blocks[layer_id][0].div_(n_examples / n_output**0.5)
             self._blocks[layer_id][1].div_(n_output**0.5 * n_examples)
         blocks = self._blocks
-        # blocks = {layer_id: (self._blocks[layer_id][0] / n_examples *
-        #                      self.n_output**.5,
-        #                      self._blocks[layer_id][1] / n_examples /
-        #                      self.n_output**.5)
-        #           for layer_id in self.layer_collection.layers.keys()}
 
         # remove hooks
         del self._blocks
@@ -319,17 +330,21 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         return blocks
 
-    def get_jacobian(self, examples):
+    def get_jacobian(self, examples, layer_collection):
+        layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
         # add hooks
         self.handles += self._add_hooks(
-            self._hook_savex, self._hook_compute_flat_grad, self.l_to_m
+            self._hook_savex,
+            self._hook_compute_flat_grad,
+            layerid_to_mod,
+            layer_collection,
         )
 
-        device = self._check_same_device()
-        dtype = self._check_same_dtype()
+        device = self._check_same_device(layerid_to_mod.values())
+        dtype = self._check_same_dtype(layerid_to_mod.values())
         loader = self._get_dataloader(examples)
         n_examples = len(loader.sampler)
-        n_parameters = self.layer_collection.numel()
+        n_parameters = layer_collection.numel()
 
         def _f(n_output):
             self.grads = torch.zeros(
@@ -342,7 +357,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         for d in loader:
             self.xs = dict()
             inputs = d[0]
-            grad_wrt = self._infer_differentiable_leafs(inputs)
+            grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
             n_output = output.size(-1)
@@ -370,14 +385,18 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         return grads
 
-    def get_gram_matrix(self, examples):
+    def get_gram_matrix(self, examples, layer_collection):
+        layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
         # add hooks
         self.handles += self._add_hooks(
-            self._hook_savex_io, self._hook_kxy, self.l_to_m
+            self._hook_savex_io,
+            self._hook_kxy,
+            layerid_to_mod,
+            layer_collection,
         )
 
-        device = self._check_same_device()
-        dtype = self._check_same_dtype()
+        device = self._check_same_device(layerid_to_mod.values())
+        dtype = self._check_same_dtype(layerid_to_mod.values())
         loader = self._get_dataloader(examples)
         n_examples = len(loader.sampler)
 
@@ -396,7 +415,9 @@ class TorchHooksJacobianBackend(AbstractBackend):
             self.x_outer = dict()
             # used in hooks to switch between store/compute
             inputs_outer = d[0]
-            grad_wrt_outer = self._infer_differentiable_leafs(inputs_outer)
+            grad_wrt_outer = self._infer_differentiable_leafs(
+                inputs_outer, layerid_to_mod.values()
+            )
             bs_outer = inputs_outer.size(0)
             self.outerloop_switch = True
             output_outer = self.function(*d).view(bs_outer, -1).sum(dim=0)
@@ -419,7 +440,9 @@ class TorchHooksJacobianBackend(AbstractBackend):
                     if i_inner > i_outer:
                         break
                     inputs_inner = d[0]
-                    grad_wrt_inner = self._infer_differentiable_leafs(inputs_inner)
+                    grad_wrt_inner = self._infer_differentiable_leafs(
+                        inputs_inner, layerid_to_mod.values()
+                    )
                     bs_inner = inputs_inner.size(0)
                     output_inner = self.function(*d).view(bs_inner, n_output).sum(dim=0)
                     for self.i_output_inner in range(n_output):
@@ -483,20 +506,25 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         return G
 
-    def get_kfe_diag(self, kfe, examples):
+    def get_kfe_diag(self, kfe, examples, layer_collection):
+        layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
         # add hooks
         self.handles += self._add_hooks(
-            self._hook_savex, self._hook_compute_kfe_diag, self.l_to_m
+            self._hook_savex,
+            self._hook_compute_kfe_diag,
+            layerid_to_mod,
+            layer_collection,
         )
+
+        device = self._check_same_device(layerid_to_mod.values())
+        dtype = self._check_same_dtype(layerid_to_mod.values())
 
         loader = self._get_dataloader(examples)
         n_examples = len(loader.sampler)
         self._diags = dict()
         self._kfe = kfe
-        for layer_id, layer in self.layer_collection.layers.items():
+        for layer_id, layer in layer_collection.layers.items():
             layer_class = layer.__class__.__name__
-            device = self._infer_device(layer_id)
-            dtype = self._infer_dtype(layer_id)
             if layer_class == "LinearLayer":
                 sG = layer.out_features
                 sA = layer.in_features
@@ -516,7 +544,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         for d in loader:
             self.xs = dict()
             inputs = d[0]
-            grad_wrt = self._infer_differentiable_leafs(inputs)
+            grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
             n_output = output.size(-1)
@@ -530,7 +558,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 )
         diags = {
             l_id: self._diags[l_id] / n_examples
-            for l_id in self.layer_collection.layers.keys()
+            for l_id in layer_collection.layers.keys()
         }
 
         # remove hooks
@@ -542,17 +570,21 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         return diags
 
-    def implicit_mv(self, v, examples):
+    def implicit_mv(self, v, examples, layer_collection):
+        layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
         # add hooks
         self.handles += self._add_hooks(
-            self._hook_savex, self._hook_compute_Jv, self.l_to_m
+            self._hook_savex,
+            self._hook_compute_Jv,
+            layerid_to_mod,
+            layer_collection,
         )
 
         self._v = v.to_dict()
         parameters = []
         output = dict()
-        for layer_id, layer in self.layer_collection.layers.items():
-            mod = self.l_to_m[layer_id]
+        for layer_id, layer in layer_collection.layers.items():
+            mod = layer_collection.get_layerid_module_map(self.model)[layer_id]
             mod_class = mod.__class__.__name__
             if mod_class in ["BatchNorm1d", "BatchNorm2d"]:
                 raise NotImplementedError
@@ -562,8 +594,8 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 parameters.append(mod.bias)
                 output[mod.bias] = torch.zeros_like(mod.bias)
 
-        device = self._check_same_device()
-        dtype = self._check_same_dtype()
+        device = self._check_same_device(layerid_to_mod.values())
+        dtype = self._check_same_dtype(layerid_to_mod.values())
         loader = self._get_dataloader(examples)
         n_examples = len(loader.sampler)
 
@@ -572,7 +604,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         for d in loader:
             self.xs = dict()
             inputs = d[0]
-            grad_wrt = self._infer_differentiable_leafs(inputs)
+            grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
             bs = inputs.size(0)
 
             f_output = self.function(*d).view(bs, -1)
@@ -600,8 +632,8 @@ class TorchHooksJacobianBackend(AbstractBackend):
                     output[p].add_(grads[i_p])
 
         output_dict = dict()
-        for layer_id, layer in self.layer_collection.layers.items():
-            mod = self.l_to_m[layer_id]
+        for layer_id, layer in layer_collection.layers.items():
+            mod = layer_collection.get_layerid_module_map(self.model)[layer_id]
             if layer.has_bias():
                 output_dict[layer_id] = (
                     output[mod.weight] / n_examples,
@@ -618,23 +650,27 @@ class TorchHooksJacobianBackend(AbstractBackend):
         for h in self.handles:
             h.remove()
 
-        return PVector(layer_collection=self.layer_collection, dict_repr=output_dict)
+        return PVector(layer_collection=layer_collection, dict_repr=output_dict)
 
-    def implicit_vTMv(self, v, examples):
+    def implicit_vTMv(self, v, examples, layer_collection):
+        layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
         # add hooks
         self.handles += self._add_hooks(
-            self._hook_savex, self._hook_compute_Jv, self.l_to_m
+            self._hook_savex,
+            self._hook_compute_Jv,
+            layerid_to_mod,
+            layer_collection,
         )
 
         self._v = v.to_dict()
 
-        device = self._check_same_device()
-        dtype = self._check_same_dtype()
+        device = self._check_same_device(layerid_to_mod.values())
+        dtype = self._check_same_dtype(layerid_to_mod.values())
         loader = self._get_dataloader(examples)
         n_examples = len(loader.sampler)
 
-        for layer_id, layer in self.layer_collection.layers.items():
-            mod = self.l_to_m[layer_id]
+        for layer_id, layer in layer_collection.layers.items():
+            mod = layer_collection.get_layerid_module_map(self.model)[layer_id]
             mod_class = mod.__class__.__name__
             if mod_class in ["BatchNorm1d", "BatchNorm2d"]:
                 raise NotImplementedError
@@ -646,7 +682,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         for d in loader:
             self.xs = dict()
             inputs = d[0]
-            grad_wrt = self._infer_differentiable_leafs(inputs)
+            grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
             bs = inputs.size(0)
 
             f_output = self.function(*d).view(bs, -1).sum(dim=0)
@@ -674,10 +710,14 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         return norm
 
-    def implicit_trace(self, examples):
+    def implicit_trace(self, examples, layer_collection):
+        layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
         # add hooks
         self.handles += self._add_hooks(
-            self._hook_savex, self._hook_compute_trace, self.l_to_m
+            self._hook_savex,
+            self._hook_compute_trace,
+            layerid_to_mod,
+            layer_collection,
         )
 
         device = next(self.model.parameters()).device
@@ -688,7 +728,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         for d in loader:
             self.xs = dict()
             inputs = d[0]
-            grad_wrt = self._infer_differentiable_leafs(inputs)
+            grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
             n_output = output.size(-1)
@@ -709,16 +749,20 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         return trace
 
-    def implicit_Jv(self, v, examples):
+    def implicit_Jv(self, v, examples, layer_collection):
+        layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
         # add hooks
         self.handles += self._add_hooks(
-            self._hook_savex, self._hook_compute_Jv, self.l_to_m
+            self._hook_savex,
+            self._hook_compute_Jv,
+            layerid_to_mod,
+            layer_collection,
         )
 
         self._v = v.to_dict()
 
-        device = self._check_same_device()
-        dtype = self._check_same_dtype()
+        device = self._check_same_device(layerid_to_mod.values())
+        dtype = self._check_same_dtype(layerid_to_mod.values())
         loader = self._get_dataloader(examples)
         n_examples = len(loader.sampler)
 
@@ -732,7 +776,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         for d in loader:
             self.xs = dict()
             inputs = d[0]
-            grad_wrt = self._infer_differentiable_leafs(inputs)
+            grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
             n_output = output.size(-1)
@@ -760,18 +804,22 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         return FVector(vector_repr=Jv)
 
-    def _add_hooks(self, hook_x, hook_gy, layerid_to_mod):
+    def _add_hooks(self, hook_x, hook_gy, layerid_to_mod, layer_collection):
         handles = []
 
         def _hook_x(mod, i, o, layer_id):
-            hook_x(mod, i, layer_id=layer_id)
-            o.register_hook(lambda g_o: hook_gy(mod, g_o, layer_id=layer_id))
+            hook_x(mod, i)
+            o.register_hook(
+                lambda g_o: hook_gy(
+                    mod, g_o, layer_id=layer_id, layer_collection=layer_collection
+                )
+            )
 
         for l_id, mod in layerid_to_mod.items():
             handles.append(mod.register_forward_hook(partial(_hook_x, layer_id=l_id)))
         return handles
 
-    def _hook_savex(self, mod, i, layer_id):
+    def _hook_savex(self, mod, i):
         if mod in self.xs:
             raise NotImplementedError(
                 """Passing through the same layer twice, this is not
@@ -779,17 +827,17 @@ class TorchHooksJacobianBackend(AbstractBackend):
             )
         self.xs[mod] = i[0]
 
-    def _hook_savex_io(self, mod, i, layer_id):
+    def _hook_savex_io(self, mod, i):
         if self.outerloop_switch:
             self.x_outer[mod] = i[0]
         else:
             self.x_inner[mod] = i[0]
 
-    def _hook_compute_flat_grad(self, mod, gy, layer_id):
+    def _hook_compute_flat_grad(self, mod, gy, layer_id, layer_collection):
         x = self.xs[mod]
         bs = x.size(0)
-        layer = self.layer_collection[layer_id]
-        start_p = self.layer_collection.p_pos[layer_id]
+        layer = layer_collection[layer_id]
+        start_p = layer_collection.p_pos[layer_id]
         FactoryMap[layer.__class__].flat_grad(
             self.grads[
                 self.i_output,
@@ -802,30 +850,30 @@ class TorchHooksJacobianBackend(AbstractBackend):
             gy,
         )
 
-    def _hook_compute_diag(self, mod, gy, layer_id):
+    def _hook_compute_diag(self, mod, gy, layer_id, layer_collection):
         x = self.xs[mod]
-        layer = self.layer_collection[layer_id]
-        start_p = self.layer_collection.p_pos[layer_id]
+        layer = layer_collection[layer_id]
+        start_p = layer_collection.p_pos[layer_id]
         FactoryMap[layer.__class__].diag(
             self.diag_m[start_p : start_p + layer.numel()], mod, layer, x, gy
         )
 
-    def _hook_compute_quasidiag(self, mod, gy, layer_id):
+    def _hook_compute_quasidiag(self, mod, gy, layer_id, layer_collection):
         x = self.xs[mod]
-        layer = self.layer_collection[layer_id]
+        layer = layer_collection[layer_id]
         diag, cross = self._blocks[layer_id]
         FactoryMap[layer.__class__].quasidiag(diag, cross, mod, layer, x, gy)
 
-    def _hook_compute_layer_blocks(self, mod, gy, layer_id):
+    def _hook_compute_layer_blocks(self, mod, gy, layer_id, layer_collection):
         x = self.xs[mod]
-        layer = self.layer_collection[layer_id]
+        layer = layer_collection[layer_id]
         block = self._blocks[layer_id]
         FactoryMap[layer.__class__].layer_block(block, mod, layer, x, gy)
 
-    def _hook_compute_kfac_blocks(self, mod, gy, layer_id):
+    def _hook_compute_kfac_blocks(self, mod, gy, layer_id, layer_collection):
         mod_class = mod.__class__.__name__
         x = self.xs[mod]
-        layer = self.layer_collection[layer_id]
+        layer = layer_collection[layer_id]
         block = self._blocks[layer_id]
         if mod_class in ["Linear", "Conv2d", "Conv1d", "Embedding"]:
             FactoryMap[layer.__class__].kfac_gg(block[1], mod, layer, x, gy)
@@ -835,9 +883,9 @@ class TorchHooksJacobianBackend(AbstractBackend):
         else:
             raise NotImplementedError
 
-    def _hook_compute_kfe_diag(self, mod, gy, layer_id):
+    def _hook_compute_kfe_diag(self, mod, gy, layer_id, layer_collection):
         mod_class = mod.__class__.__name__
-        layer = self.layer_collection[layer_id]
+        layer = layer_collection[layer_id]
         x = self.xs[mod]
         evecs_a, evecs_g = self._kfe[layer_id]
         if mod_class in ["Linear", "Conv2d", "Conv1d", "Embedding"]:
@@ -847,11 +895,11 @@ class TorchHooksJacobianBackend(AbstractBackend):
         else:
             raise NotImplementedError
 
-    def _hook_kxy(self, mod, gy, layer_id):
+    def _hook_kxy(self, mod, gy, layer_id, layer_collection):
         if self.outerloop_switch:
             self.gy_outer[mod] = gy
         else:
-            layer = self.layer_collection[layer_id]
+            layer = layer_collection[layer_id]
             gy_inner = gy
             gy_outer = self.gy_outer[mod]
             x_outer = self.x_outer[mod]
@@ -873,11 +921,11 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 gy_outer,
             )
 
-    def _hook_compute_Jv(self, mod, gy, layer_id):
+    def _hook_compute_Jv(self, mod, gy, layer_id, layer_collection):
         if self.compute_switch:
             x = self.xs[mod]
             bs = x.size(0)
-            layer = self.layer_collection.layers[layer_id]
+            layer = layer_collection.layers[layer_id]
             v_weight = self._v[layer_id][0]
             v_bias = None
             if layer.has_bias():
@@ -892,9 +940,9 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 v_bias,
             )
 
-    def _hook_compute_trace(self, mod, gy, layer_id):
+    def _hook_compute_trace(self, mod, gy, layer_id, layer_collection):
         x = self.xs[mod]
-        layer = self.layer_collection.layers[layer_id]
+        layer = layer_collection.layers[layer_id]
         FactoryMap[layer.__class__].trace(self._trace, mod, layer, x, gy)
 
     def _exec_delayed_n_output(self, n_output):

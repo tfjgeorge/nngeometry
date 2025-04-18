@@ -12,12 +12,13 @@ class FMatAbstract(ABC):
 
 
 class FMatDense(FMatAbstract):
-    def __init__(self, generator, data=None, examples=None):
+    def __init__(self, layer_collection, generator, data=None, examples=None):
+        self.layer_collection = layer_collection
         self.generator = generator
         if data is not None:
             self.data = data
         else:
-            self.data = generator.get_gram_matrix(examples)
+            self.data = generator.get_gram_matrix(examples, layer_collection)
 
     def compute_eigendecomposition(self, impl="eigh"):
         s = self.data.size()
@@ -53,9 +54,7 @@ class FMatDense(FMatAbstract):
 
     def project_from_diag(self, v):
         # TODO: test
-        return PVector(
-            model=v.model, vector_repr=torch.mv(self.evecs, v.to_torch())
-        )
+        return PVector(model=v.model, vector_repr=torch.mv(self.evecs, v.to_torch()))
 
     def get_eigendecomposition(self):
         # TODO: test

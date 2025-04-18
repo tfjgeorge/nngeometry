@@ -39,13 +39,12 @@ def test_PMat_pickle():
     loader, lc, parameters, model, function = get_conv_task()
 
     generator = TorchHooksJacobianBackend(
-        layer_collection=lc,
         model=model,
         function=function,
     )
 
     for repr in [PMatDense, PMatDiag, PMatBlockDiag, PMatLowRank, PMatQuasiDiag]:
-        PMat = repr(generator=generator, examples=loader)
+        PMat = repr(generator=generator, examples=loader, layer_collection=lc)
 
         with open("/tmp/PMat.pkl", "wb") as f:
             pkl.dump(PMat, f)
