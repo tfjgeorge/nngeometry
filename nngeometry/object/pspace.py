@@ -479,7 +479,8 @@ class PMatBlockDiag(PMatAbstract):
 
         vs_dict = vs.to_dict()
         out_dict = dict()
-        for layer_id, layer in self.layer_collection.layers.items():
+        for layer_id in self.layer_collection.layers.keys() & vs_dict.keys():
+            layer = self.layer_collection.layers[layer_id]
             v = vs_dict[layer_id][0].view(-1)
             if layer.bias is not None:
                 v = torch.cat([v, vs_dict[layer_id][1].view(-1)])
