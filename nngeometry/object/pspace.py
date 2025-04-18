@@ -84,7 +84,7 @@ class PMatAbstract(ABC):
         vs_solve = []
         for i in range(J_dense.size(0)):
             v = PVector(
-                layer_collection=self.layer_collection,
+                layer_collection=b.layer_collection,
                 vector_repr=J_dense[i, :],
             )
             vs_solve.append(self.solvePVec(v, regul=regul, impl=impl).to_torch())
@@ -92,7 +92,7 @@ class PMatAbstract(ABC):
         return PFMapDense(
             generator=self.generator,
             data=torch.stack(vs_solve).reshape(*sJ),
-            layer_collection=self.layer_collection,
+            layer_collection=b.layer_collection,
         )
 
     def solve(self, b, regul, impl="default"):
@@ -413,7 +413,7 @@ class PMatDiag(PMatAbstract):
 
 
 class PMatBlockDiag(PMatAbstract):
-    def __init__(self, layer_collection, generator, data=None, examples=None):
+    def __init__(self, layer_collection, generator, data=None, examples=None, **kwargs):
         self._check_data_examples(data, examples)
 
         self.layer_collection = layer_collection
@@ -830,11 +830,22 @@ class PMatEKFAC(PMatAbstract):
 
     """
 
-    def __init__(self, layer_collection, generator, data=None, examples=None):
+    def __init__(
+        self,
+        layer_collection,
+        generator,
+        data=None,
+        examples=None,
+        eigendecomposition=None,
+    ):
         self._check_data_examples(data, examples)
 
         self.layer_collection = layer_collection
         self.generator = generator
+
+        if eigendecomposition is None:
+            eigendecomposition = lambda x: torch.linalg.eigh(x)
+
         if data is None:
             evecs = dict()
             diags = dict()
@@ -844,8 +855,10 @@ class PMatEKFAC(PMatAbstract):
             )
             for layer_id, layer in self.layer_collection.layers.items():
                 a, g = kfac_blocks[layer_id]
-                evals_a, evecs_a = torch.linalg.eigh(a)
-                evals_g, evecs_g = torch.linalg.eigh(g)
+
+                evals_a, evecs_a = eigendecomposition(a)
+                evals_g, evecs_g = eigendecomposition(g)
+
                 evecs[layer_id] = (evecs_a, evecs_g)
                 if layer.transposed:
                     diags[layer_id] = evals_a[:, None] * evals_g[None, :]
@@ -1374,6 +1387,7 @@ class PMatMixed(PMatAbstract):
         map_layers_to,
         data=None,
         examples=None,
+        **kwargs,
     ):
         self.generator = generator
 
@@ -1391,7 +1405,11 @@ class PMatMixed(PMatAbstract):
 
         self.sub_pmats = {
             PMat_class: PMat_class(
-                layer_collection=lc, generator=generator, data=data, examples=examples
+                layer_collection=lc,
+                generator=generator,
+                data=data,
+                examples=examples,
+                **kwargs,
             )
             for PMat_class, lc in self.layer_collection_each.items()
         }
@@ -1452,7 +1470,7 @@ class PMatEKFACBlockDiag(PMatMixed):
     """A mixed representation where EKFAC-table layers use EKFAC,
     and other layers use a block-diagonal matrix"""
 
-    def __init__(self, layer_collection, generator, data=None, examples=None):
+    def __init__(self, layer_collection, generator, data=None, examples=None, **kwargs):
         super().__init__(
             layer_collection,
             generator,
@@ -1465,6 +1483,7 @@ class PMatEKFACBlockDiag(PMatMixed):
                 Conv2dLayer: PMatEKFAC,
                 EmbeddingLayer: PMatEKFAC,
             },
+            **kwargs,
         )
 
 
