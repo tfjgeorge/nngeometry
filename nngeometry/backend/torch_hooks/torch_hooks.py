@@ -1,10 +1,12 @@
+from functools import partial
+
 import torch
 
 from nngeometry.layercollection import LayerCollection
 from nngeometry.object.vector import FVector, PVector
 
-from .grads import FactoryMap
 from .._backend import AbstractBackend
+from .grads import FactoryMap
 
 
 class TorchHooksJacobianBackend(AbstractBackend):
@@ -34,7 +36,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self.centering = centering
 
         # this contains functions that require knowledge of number of
-        # outputs, not known before for minibatch
+        # outputs, not known before first minibatch
         self.delayed_for_n_ouput = []
 
         if function is None:
@@ -49,12 +51,12 @@ class TorchHooksJacobianBackend(AbstractBackend):
         else:
             self.layer_collection = layer_collection
         # maps parameters to their position in flattened representation
-        self.l_to_m, self.m_to_l = self.layer_collection.get_layerid_module_maps(model)
+        self.l_to_m = self.layer_collection.get_layerid_module_map(model)
 
     def get_covariance_matrix(self, examples):
         # add hooks
         self.handles += self._add_hooks(
-            self._hook_savex, self._hook_compute_flat_grad, self.l_to_m.values()
+            self._hook_savex, self._hook_compute_flat_grad, self.l_to_m
         )
 
         device = self._check_same_device()
@@ -116,7 +118,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             raise NotImplementedError
         # add hooksf
         self.handles += self._add_hooks(
-            self._hook_savex, self._hook_compute_diag, self.l_to_m.values()
+            self._hook_savex, self._hook_compute_diag, self.l_to_m
         )
 
         device = self._check_same_device()
@@ -157,7 +159,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             raise NotImplementedError
         # add hooks
         self.handles += self._add_hooks(
-            self._hook_savex, self._hook_compute_quasidiag, self.l_to_m.values()
+            self._hook_savex, self._hook_compute_quasidiag, self.l_to_m
         )
 
         loader = self._get_dataloader(examples)
@@ -213,7 +215,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             raise NotImplementedError
         # add hooks
         self.handles += self._add_hooks(
-            self._hook_savex, self._hook_compute_layer_blocks, self.l_to_m.values()
+            self._hook_savex, self._hook_compute_layer_blocks, self.l_to_m
         )
 
         loader = self._get_dataloader(examples)
@@ -253,7 +255,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
     def get_kfac_blocks(self, examples):
         # add hooks
         self.handles += self._add_hooks(
-            self._hook_savex, self._hook_compute_kfac_blocks, self.l_to_m.values()
+            self._hook_savex, self._hook_compute_kfac_blocks, self.l_to_m
         )
 
         loader = self._get_dataloader(examples)
@@ -320,7 +322,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
     def get_jacobian(self, examples):
         # add hooks
         self.handles += self._add_hooks(
-            self._hook_savex, self._hook_compute_flat_grad, self.l_to_m.values()
+            self._hook_savex, self._hook_compute_flat_grad, self.l_to_m
         )
 
         device = self._check_same_device()
@@ -371,7 +373,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
     def get_gram_matrix(self, examples):
         # add hooks
         self.handles += self._add_hooks(
-            self._hook_savex_io, self._hook_kxy, self.l_to_m.values()
+            self._hook_savex_io, self._hook_kxy, self.l_to_m
         )
 
         device = self._check_same_device()
@@ -484,7 +486,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
     def get_kfe_diag(self, kfe, examples):
         # add hooks
         self.handles += self._add_hooks(
-            self._hook_savex, self._hook_compute_kfe_diag, self.l_to_m.values()
+            self._hook_savex, self._hook_compute_kfe_diag, self.l_to_m
         )
 
         loader = self._get_dataloader(examples)
@@ -543,7 +545,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
     def implicit_mv(self, v, examples):
         # add hooks
         self.handles += self._add_hooks(
-            self._hook_savex, self._hook_compute_Jv, self.l_to_m.values()
+            self._hook_savex, self._hook_compute_Jv, self.l_to_m
         )
 
         self._v = v.to_dict()
@@ -621,7 +623,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
     def implicit_vTMv(self, v, examples):
         # add hooks
         self.handles += self._add_hooks(
-            self._hook_savex, self._hook_compute_Jv, self.l_to_m.values()
+            self._hook_savex, self._hook_compute_Jv, self.l_to_m
         )
 
         self._v = v.to_dict()
@@ -675,7 +677,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
     def implicit_trace(self, examples):
         # add hooks
         self.handles += self._add_hooks(
-            self._hook_savex, self._hook_compute_trace, self.l_to_m.values()
+            self._hook_savex, self._hook_compute_trace, self.l_to_m
         )
 
         device = next(self.model.parameters()).device
@@ -710,7 +712,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
     def implicit_Jv(self, v, examples):
         # add hooks
         self.handles += self._add_hooks(
-            self._hook_savex, self._hook_compute_Jv, self.l_to_m.values()
+            self._hook_savex, self._hook_compute_Jv, self.l_to_m
         )
 
         self._v = v.to_dict()
@@ -758,18 +760,18 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         return FVector(vector_repr=Jv)
 
-    def _add_hooks(self, hook_x, hook_gy, mods):
+    def _add_hooks(self, hook_x, hook_gy, layerid_to_mod):
         handles = []
 
-        def _hook_x(mod, i, o):
-            hook_x(mod, i)
-            o.register_hook(lambda g_o: hook_gy(mod, g_o))
+        def _hook_x(mod, i, o, layer_id):
+            hook_x(mod, i, layer_id=layer_id)
+            o.register_hook(lambda g_o: hook_gy(mod, g_o, layer_id=layer_id))
 
-        for m in mods:
-            handles.append(m.register_forward_hook(_hook_x))
+        for l_id, mod in layerid_to_mod.items():
+            handles.append(mod.register_forward_hook(partial(_hook_x, layer_id=l_id)))
         return handles
 
-    def _hook_savex(self, mod, i):
+    def _hook_savex(self, mod, i, layer_id):
         if mod in self.xs:
             raise NotImplementedError(
                 """Passing through the same layer twice, this is not
@@ -777,16 +779,15 @@ class TorchHooksJacobianBackend(AbstractBackend):
             )
         self.xs[mod] = i[0]
 
-    def _hook_savex_io(self, mod, i):
+    def _hook_savex_io(self, mod, i, layer_id):
         if self.outerloop_switch:
             self.x_outer[mod] = i[0]
         else:
             self.x_inner[mod] = i[0]
 
-    def _hook_compute_flat_grad(self, mod, gy):
+    def _hook_compute_flat_grad(self, mod, gy, layer_id):
         x = self.xs[mod]
         bs = x.size(0)
-        layer_id = self.m_to_l[mod]
         layer = self.layer_collection[layer_id]
         start_p = self.layer_collection.p_pos[layer_id]
         FactoryMap[layer.__class__].flat_grad(
@@ -801,33 +802,29 @@ class TorchHooksJacobianBackend(AbstractBackend):
             gy,
         )
 
-    def _hook_compute_diag(self, mod, gy):
+    def _hook_compute_diag(self, mod, gy, layer_id):
         x = self.xs[mod]
-        layer_id = self.m_to_l[mod]
         layer = self.layer_collection[layer_id]
         start_p = self.layer_collection.p_pos[layer_id]
         FactoryMap[layer.__class__].diag(
             self.diag_m[start_p : start_p + layer.numel()], mod, layer, x, gy
         )
 
-    def _hook_compute_quasidiag(self, mod, gy):
+    def _hook_compute_quasidiag(self, mod, gy, layer_id):
         x = self.xs[mod]
-        layer_id = self.m_to_l[mod]
         layer = self.layer_collection[layer_id]
         diag, cross = self._blocks[layer_id]
         FactoryMap[layer.__class__].quasidiag(diag, cross, mod, layer, x, gy)
 
-    def _hook_compute_layer_blocks(self, mod, gy):
+    def _hook_compute_layer_blocks(self, mod, gy, layer_id):
         x = self.xs[mod]
-        layer_id = self.m_to_l[mod]
         layer = self.layer_collection[layer_id]
         block = self._blocks[layer_id]
         FactoryMap[layer.__class__].layer_block(block, mod, layer, x, gy)
 
-    def _hook_compute_kfac_blocks(self, mod, gy):
+    def _hook_compute_kfac_blocks(self, mod, gy, layer_id):
         mod_class = mod.__class__.__name__
         x = self.xs[mod]
-        layer_id = self.m_to_l[mod]
         layer = self.layer_collection[layer_id]
         block = self._blocks[layer_id]
         if mod_class in ["Linear", "Conv2d", "Conv1d", "Embedding"]:
@@ -838,9 +835,8 @@ class TorchHooksJacobianBackend(AbstractBackend):
         else:
             raise NotImplementedError
 
-    def _hook_compute_kfe_diag(self, mod, gy):
+    def _hook_compute_kfe_diag(self, mod, gy, layer_id):
         mod_class = mod.__class__.__name__
-        layer_id = self.m_to_l[mod]
         layer = self.layer_collection[layer_id]
         x = self.xs[mod]
         evecs_a, evecs_g = self._kfe[layer_id]
@@ -851,11 +847,10 @@ class TorchHooksJacobianBackend(AbstractBackend):
         else:
             raise NotImplementedError
 
-    def _hook_kxy(self, mod, gy):
+    def _hook_kxy(self, mod, gy, layer_id):
         if self.outerloop_switch:
             self.gy_outer[mod] = gy
         else:
-            layer_id = self.m_to_l[mod]
             layer = self.layer_collection[layer_id]
             gy_inner = gy
             gy_outer = self.gy_outer[mod]
@@ -878,11 +873,10 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 gy_outer,
             )
 
-    def _hook_compute_Jv(self, mod, gy):
+    def _hook_compute_Jv(self, mod, gy, layer_id):
         if self.compute_switch:
             x = self.xs[mod]
             bs = x.size(0)
-            layer_id = self.m_to_l[mod]
             layer = self.layer_collection.layers[layer_id]
             v_weight = self._v[layer_id][0]
             v_bias = None
@@ -898,9 +892,8 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 v_bias,
             )
 
-    def _hook_compute_trace(self, mod, gy):
+    def _hook_compute_trace(self, mod, gy, layer_id):
         x = self.xs[mod]
-        layer_id = self.m_to_l[mod]
         layer = self.layer_collection.layers[layer_id]
         FactoryMap[layer.__class__].trace(self._trace, mod, layer, x, gy)
 

@@ -8,9 +8,9 @@ from tasks import (
     get_conv_task,
     get_embedding_task,
     get_fullyconnect_task,
+    get_linear_3d_task,
     get_mnist,
     to_device_model,
-    get_linear_3d_task,
 )
 from torch.utils.data import DataLoader, Subset
 from utils import angle, check_ratio, check_tensors
@@ -259,7 +259,7 @@ def test_pspace_kfac_eigendecomposition():
     M_kfac.compute_eigendecomposition()
     evals, evecs = M_kfac.get_eigendecomposition()
     # Loop through all vectors in KFE
-    l_to_m, _ = lc.get_layerid_module_maps(model)
+    l_to_m = lc.get_layerid_module_map(model)
     for l_id, layer in lc.layers.items():
         for i_a in range(-3, 0):
             for i_g in range(-3, 0):

@@ -15,7 +15,7 @@ class TorchFuncHessianBackend(AbstractBackend):
             self.layer_collection = layer_collection
 
         # maps parameters to their position in flattened representation
-        self.l_to_m, self.m_to_l = self.layer_collection.get_layerid_module_maps(model)
+        self.l_to_m= self.layer_collection.get_layerid_module_map(model)
 
         self.params_dict = dict(self.layer_collection.named_parameters(self.l_to_m))
 

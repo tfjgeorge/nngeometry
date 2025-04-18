@@ -61,14 +61,12 @@ class LayerCollection:
 
         return lc
 
-    def get_layerid_module_maps(self, model):
+    def get_layerid_module_map(self, model):
         layerid_to_module = OrderedDict()
-        module_to_layerid = OrderedDict()
         named_modules = dict(model.named_modules())
         for layer in self.layers.keys():
             layerid_to_module[layer] = named_modules[layer]
-            module_to_layerid[named_modules[layer]] = layer
-        return layerid_to_module, module_to_layerid
+        return layerid_to_module
 
     def add_layer(self, name, layer):
         self.layers[name] = layer
