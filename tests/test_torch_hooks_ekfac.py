@@ -138,8 +138,7 @@ def test_pspace_ekfac_vs_direct():
                 layer_collection=lc,
             )
             J_back = M_ekfac.solve(jaco, regul=regul)
-
-            check_tensors(
+            torch.testing.assert_close(
                 stacked_v,
                 J_back.to_torch(),
             )
