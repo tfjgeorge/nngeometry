@@ -3,9 +3,8 @@ class DummyGenerator:
     This dummy generator is used for pickled objects
     """
 
-    def __init__(self, layer_collection, device):
-        self.layer_collection = layer_collection
+    def __init__(self, device):
         self.device = device
 
-    def get_device(self):
+    def get_device(self, layer_collection):
         return self.device

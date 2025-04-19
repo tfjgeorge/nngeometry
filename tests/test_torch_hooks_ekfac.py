@@ -37,13 +37,13 @@ def test_pspace_ekfac_vs_kfac():
     ]:
         loader, lc, parameters, model, function = get_task()
         model.train()
-        generator = TorchHooksJacobianBackend(
-            layer_collection=lc, model=model, function=function
-        )
+        generator = TorchHooksJacobianBackend(model=model, function=function)
 
-        M_kfac = PMatKFAC(generator=generator, examples=loader)
-        M_ekfac = PMatEKFAC(generator=generator, examples=loader)
-        M_blockdiag = PMatBlockDiag(generator=generator, examples=loader)
+        M_kfac = PMatKFAC(generator=generator, examples=loader, layer_collection=lc)
+        M_ekfac = PMatEKFAC(generator=generator, examples=loader, layer_collection=lc)
+        M_blockdiag = PMatBlockDiag(
+            generator=generator, examples=loader, layer_collection=lc
+        )
 
         # here KFAC and EKFAC should be the same
         for split in [True, False]:
@@ -73,11 +73,9 @@ def test_pspace_ekfac_vs_direct():
         loader, lc, parameters, model, function = get_task()
         model.train()
 
-        generator = TorchHooksJacobianBackend(
-            layer_collection=lc, model=model, function=function
-        )
+        generator = TorchHooksJacobianBackend(model=model, function=function)
 
-        M_ekfac = PMatEKFAC(generator=generator, examples=loader)
+        M_ekfac = PMatEKFAC(generator=generator, examples=loader, layer_collection=lc)
         v = random_pvector(lc, device=device, dtype=torch.double)
 
         # the second time we will have called update_diag
@@ -137,6 +135,7 @@ def test_pspace_ekfac_vs_direct():
             jaco = PFMapDense(
                 generator=generator,
                 data=stacked_mv + regul * stacked_v,
+                layer_collection=lc,
             )
             J_back = M_ekfac.solve(jaco, regul=regul)
 
