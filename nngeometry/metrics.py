@@ -110,6 +110,7 @@ def FIM(
     device="cpu",
     function=None,
     layer_collection=None,
+    **kwargs,
 ):
     """
     Helper that creates a matrix computing the Fisher Information
@@ -162,7 +163,10 @@ def FIM(
     )
 
     return representation(
-        generator=generator, examples=loader, layer_collection=layer_collection
+        generator=generator,
+        examples=loader,
+        layer_collection=layer_collection,
+        **kwargs,
     )
 
 

@@ -79,7 +79,7 @@ class PMatAbstract(ABC):
     def solvePFMap(self, b, regul, impl):
         J_dense = b.to_torch()
         sJ = J_dense.size()
-        J_dense = J_dense.reshape(sJ[0] * sJ[1], sJ[2])
+        J_dense = J_dense.view(sJ[0] * sJ[1], sJ[2])
 
         vs_solve = []
         for i in range(J_dense.size(0)):
@@ -89,9 +89,11 @@ class PMatAbstract(ABC):
             )
             vs_solve.append(self.solvePVec(v, regul=regul, impl=impl).to_torch())
 
+        print(sJ, sJ[0] * sJ[1], b.layer_collection.numel(),self.__class__,vs_solve[-1].size())
+
         return PFMapDense(
             generator=self.generator,
-            data=torch.stack(vs_solve).reshape(*sJ),
+            data=torch.stack(vs_solve).view(*sJ),
             layer_collection=b.layer_collection,
         )
 

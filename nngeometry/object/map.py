@@ -72,6 +72,13 @@ class PFMapDense(PFMap):
             generator=generator, data=dense_jacobian, layer_collection=layer_collection
         )
 
+    def to(self, **kwargs):
+        return PFMapDense(
+            layer_collection=self.layer_collection,
+            generator=self.generator,
+            data=self.data.to(**kwargs),
+        )
+
 
 class PFMapImplicit(PFMap):
     def __init__(self, layer_collection, generator, data=None, examples=None):
