@@ -42,7 +42,7 @@ class PFMapDense(PFMap):
     def __rmul__(self, x):
         return PFMapDense(generator=self.generator, data=x * self.data)
 
-    def iter_by_module(self):
+    def iter_by_layer(self):
         layer_collection = self.layer_collection
         for layer_id, layer in layer_collection.layers.items():
             start = layer_collection.p_pos[layer_id]

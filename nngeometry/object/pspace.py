@@ -456,10 +456,8 @@ class PMatBlockDiag(PMatAbstract):
     def mv(self, vs):
         vs_dict = vs.to_dict()
         out_dict = dict()
-        for layer_id in (
-            self.layer_collection.layers.keys() & vs_dict.keys()
-        ):  # common keys
-            layer = self.layer_collection.layers[layer_id]
+        lc_merged = self.layer_collection.merge(vs.layer_collection)
+        for layer_id, layer in lc_merged.layers.items():
             v = vs_dict[layer_id][0].view(-1)
             if layer.bias is not None:
                 v = torch.cat([v, vs_dict[layer_id][1].view(-1)])
@@ -471,7 +469,7 @@ class PMatBlockDiag(PMatAbstract):
                     mv[layer.weight.numel() :].view(*layer.bias.size),
                 )
             out_dict[layer_id] = mv_tuple
-        return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
+        return PVector(layer_collection=lc_merged, dict_repr=out_dict)
 
     def solvePVec(self, vs, regul=1e-8, impl="solve"):
         if impl not in ["solve", "default"]:
@@ -479,8 +477,8 @@ class PMatBlockDiag(PMatAbstract):
 
         vs_dict = vs.to_dict()
         out_dict = dict()
-        for layer_id in self.layer_collection.layers.keys() & vs_dict.keys():
-            layer = self.layer_collection.layers[layer_id]
+        lc_merged = self.layer_collection.merge(vs.layer_collection)
+        for layer_id, layer in lc_merged.layers.items():
             v = vs_dict[layer_id][0].view(-1)
             if layer.bias is not None:
                 v = torch.cat([v, vs_dict[layer_id][1].view(-1)])
@@ -498,7 +496,7 @@ class PMatBlockDiag(PMatAbstract):
                 )
 
             out_dict[layer_id] = inv_v_tuple
-        return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
+        return PVector(layer_collection=lc_merged, dict_repr=out_dict)
 
     def inverse(self, regul=1e-8):
         inv_data = dict()
@@ -522,7 +520,8 @@ class PMatBlockDiag(PMatAbstract):
         # TODO test
         vector_dict = vector.to_dict()
         norm2 = 0
-        for layer_id, layer in self.layer_collection.layers.items():
+        lc_merged = self.layer_collection.merge(vector.layer_collection)
+        for layer_id, layer in lc_merged.layers.items():
             v = vector_dict[layer_id][0].view(-1)
             if len(vector_dict[layer_id]) > 1:
                 v = torch.cat([v, vector_dict[layer_id][1].view(-1)])
@@ -932,10 +931,9 @@ class PMatEKFAC(PMatAbstract):
         vs_dict = vs.to_dict()
         out_dict = dict()
         evecs, diags = self.data
-        for layer_id in (
-            self.layer_collection.layers.keys() & vs_dict.keys()
-        ):  # common keys
-            layer = self.layer_collection.layers[layer_id]
+
+        lc_merged = self.layer_collection.merge(vs.layer_collection)
+        for layer_id, layer in lc_merged.layers.items():
             diag = diags[layer_id]
             evecs_a, evecs_g = evecs[layer_id]
             if layer.transposed:
@@ -953,16 +951,14 @@ class PMatEKFAC(PMatAbstract):
             else:
                 mv_tuple = (mv.view(*sw),)
             out_dict[layer_id] = mv_tuple
-        return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
+        return PVector(layer_collection=lc_merged, dict_repr=out_dict)
 
     def vTMv(self, vector):
         vector_dict = vector.to_dict()
         evecs, diags = self.data
         norm2 = 0
-        for layer_id in (
-            vector.layer_collection.layers.keys() & self.layer_collection.layers.keys()
-        ):
-            layer = self.layer_collection.layers[layer_id]
+        lc_merged = self.layer_collection.merge(vector.layer_collection)
+        for layer_id, layer in lc_merged.layers.items():
             evecs_a, evecs_g = evecs[layer_id]
             if layer.transposed:
                 evecs_a, evecs_g = evecs_g, evecs_a
@@ -1006,7 +1002,8 @@ class PMatEKFAC(PMatAbstract):
         vs_dict = vs.to_dict()
         out_dict = dict()
         evecs, diags = self.data
-        for l_id, l in self.layer_collection.layers.items():
+        lc_merged = self.layer_collection.merge(vs.layer_collection)
+        for l_id, l in lc_merged.layers.items():
             diag = diags[l_id]
             evecs_a, evecs_g = evecs[l_id]
             if l.transposed:
@@ -1027,7 +1024,7 @@ class PMatEKFAC(PMatAbstract):
             else:
                 inv_tuple = (inv.view(*sw),)
             out_dict[l_id] = inv_tuple
-        return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
+        return PVector(layer_collection=lc_merged, dict_repr=out_dict)
 
     def solvePFMap(self, J, regul=1e-8, impl="default"):
         if impl != "default":
@@ -1035,7 +1032,8 @@ class PMatEKFAC(PMatAbstract):
 
         out_dict = OrderedDict()
         evecs, diags = self.data
-        for l_id, layer, vals in J.iter_by_module():
+        lc_merged = self.layer_collection.merge(J.layer_collection)
+        for l_id, layer, vals in J.iter_by_layer():
 
             diag = diags[l_id]
             evecs_a, evecs_g = evecs[l_id]
@@ -1067,7 +1065,7 @@ class PMatEKFAC(PMatAbstract):
         return PFMapDense.from_dict(
             generator=self.generator,
             data_dict=out_dict,
-            layer_collection=self.layer_collection,
+            layer_collection=lc_merged,
         )
 
     def __rmul__(self, x):
