@@ -1,3 +1,5 @@
+from nngeometry.layercollection import LayerCollection
+
 from .backend import TorchFuncHessianBackend
 
 
@@ -9,7 +11,13 @@ def Hessian(
     layer_collection=None,
 ):
 
-    generator = TorchFuncHessianBackend(
-        layer_collection=layer_collection, model=model, function=function
+    generator = TorchFuncHessianBackend(model=model, function=function)
+
+    if layer_collection is None:
+        layer_collection = LayerCollection.from_model(model)
+
+    return representation(
+        generator=generator,
+        examples=loader,
+        layer_collection=layer_collection,
     )
-    return representation(generator=generator, examples=loader)

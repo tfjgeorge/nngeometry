@@ -6,29 +6,29 @@ differentiable_dtypes = [torch.float16, torch.float32, torch.float64]
 
 class AbstractBackend:
 
-    def _check_same_device(self):
+    def _check_same_device(self, mods):
         device = None
-        for layer_id in self.layer_collection.layers.keys():
+        for mod in mods:
             if device is None:
-                device = self._infer_device(layer_id)
-            elif device != self._infer_device(layer_id):
-                raise ValueError("All modules should reside on the same device")
+                device = self._infer_device(mod)
+            elif device != self._infer_device(mod):
+                raise ValueError("All modules should be on the same device")
         return device
 
-    def _check_same_dtype(self):
+    def _check_same_dtype(self, mods):
         dtype = None
-        for layer_id in self.layer_collection.layers.keys():
+        for mod in mods:
             if dtype is None:
-                dtype = self._infer_dtype(layer_id)
-            elif dtype != self._infer_dtype(layer_id):
+                dtype = self._infer_dtype(mod)
+            elif dtype != self._infer_dtype(mod):
                 raise ValueError("All modules should have the same type")
         return dtype
 
-    def get_device(self):
-        return self._check_same_device()
+    def get_device(self, layer_collection):
+        return self._check_same_device(layer_collection)
 
-    def get_dtype(self):
-        return self._check_same_dtype()
+    def get_dtype(self, layer_collection):
+        return self._check_same_dtype(layer_collection)
 
     def _get_dataloader(self, examples):
         if isinstance(examples, DataLoader):
@@ -36,20 +36,20 @@ class AbstractBackend:
         else:
             return DataLoader(TensorDataset(*examples), batch_size=len(examples[0]))
 
-    def _infer_dtype(self, layer_id):
-        return self.l_to_m[layer_id].weight.dtype
+    def _infer_dtype(self, mod):
+        return mod.weight.dtype
 
-    def _infer_device(self, layer_id):
-        return self.l_to_m[layer_id].weight.device
+    def _infer_device(self, mod):
+        return mod.weight.device
 
-    def _infer_differentiable_leafs(self, input):
+    def _infer_differentiable_leafs(self, input, mods):
         if input.dtype in differentiable_dtypes:
             input.requires_grad = True
             return [input]
         else:
             # find Embeddings
             embedding_parameters = []
-            for module in self.l_to_m.values():
+            for module in mods:
                 if isinstance(module, torch.nn.Embedding):
                     embedding_parameters.append(next(module.parameters()))
             return embedding_parameters

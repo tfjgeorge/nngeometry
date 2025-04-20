@@ -54,35 +54,17 @@ def test_add():
     r1 = random_pvector(layer_collection)
     r2 = random_pvector(layer_collection)
     sumr1r2 = r1 + r2
-    assert (
-        torch.norm(
-            sumr1r2.to_torch()
-            - (r1.to_torch() + r2.to_torch())
-        )
-        < 1e-5
-    )
+    assert torch.norm(sumr1r2.to_torch() - (r1.to_torch() + r2.to_torch())) < 1e-5
 
     r1 = random_pvector_dict(layer_collection)
     r2 = random_pvector_dict(layer_collection)
     sumr1r2 = r1 + r2
-    assert (
-        torch.norm(
-            sumr1r2.to_torch()
-            - (r1.to_torch() + r2.to_torch())
-        )
-        < 1e-5
-    )
+    assert torch.norm(sumr1r2.to_torch() - (r1.to_torch() + r2.to_torch())) < 1e-5
 
     r1 = random_pvector(layer_collection)
     r2 = random_pvector_dict(layer_collection)
     sumr1r2 = r1 + r2
-    assert (
-        torch.norm(
-            sumr1r2.to_torch()
-            - (r1.to_torch() + r2.to_torch())
-        )
-        < 1e-5
-    )
+    assert torch.norm(sumr1r2.to_torch() - (r1.to_torch() + r2.to_torch())) < 1e-5
 
 
 def test_sub():
@@ -91,35 +73,17 @@ def test_sub():
     r1 = random_pvector(layer_collection)
     r2 = random_pvector(layer_collection)
     sumr1r2 = r1 - r2
-    assert (
-        torch.norm(
-            sumr1r2.to_torch()
-            - (r1.to_torch() - r2.to_torch())
-        )
-        < 1e-5
-    )
+    assert torch.norm(sumr1r2.to_torch() - (r1.to_torch() - r2.to_torch())) < 1e-5
 
     r1 = random_pvector_dict(layer_collection)
     r2 = random_pvector_dict(layer_collection)
     sumr1r2 = r1 - r2
-    assert (
-        torch.norm(
-            sumr1r2.to_torch()
-            - (r1.to_torch() - r2.to_torch())
-        )
-        < 1e-5
-    )
+    assert torch.norm(sumr1r2.to_torch() - (r1.to_torch() - r2.to_torch())) < 1e-5
 
     r1 = random_pvector(layer_collection)
     r2 = random_pvector_dict(layer_collection)
     sumr1r2 = r1 - r2
-    assert (
-        torch.norm(
-            sumr1r2.to_torch()
-            - (r1.to_torch() - r2.to_torch())
-        )
-        < 1e-5
-    )
+    assert torch.norm(sumr1r2.to_torch() - (r1.to_torch() - r2.to_torch())) < 1e-5
 
 
 def test_pow():
@@ -127,21 +91,11 @@ def test_pow():
     layer_collection = LayerCollection.from_model(model)
     r1 = random_pvector(layer_collection)
     sqrt_r1 = r1**3
-    assert (
-        torch.norm(
-            sqrt_r1.to_torch() - r1.to_torch() ** 3
-        )
-        < 1e-5
-    )
+    assert torch.norm(sqrt_r1.to_torch() - r1.to_torch() ** 3) < 1e-5
 
     r1 = random_pvector_dict(layer_collection)
     sqrt_r1 = r1**3
-    assert (
-        torch.norm(
-            sqrt_r1.to_torch() - r1.to_torch() ** 3
-        )
-        < 1e-5
-    )
+    assert torch.norm(sqrt_r1.to_torch() - r1.to_torch() ** 3) < 1e-5
 
 
 def test_clone():
@@ -149,23 +103,17 @@ def test_clone():
     model = ConvNet()
     pvec = PVector.from_model(model)
     pvec_clone = pvec.clone()
-    l_to_m, _ = pvec.layer_collection.get_layerid_module_maps(model)
+    l_to_m = pvec.layer_collection.get_layerid_module_map(model)
 
     for layer_id, layer in pvec.layer_collection.layers.items():
         m = l_to_m[layer_id]
         assert m.weight is pvec.to_dict()[layer_id][0]
         assert m.weight is not pvec_clone.to_dict()[layer_id][0]
-        assert (
-            torch.norm(m.weight - pvec_clone.to_dict()[layer_id][0])
-            < eps
-        )
+        assert torch.norm(m.weight - pvec_clone.to_dict()[layer_id][0]) < eps
         if m.bias is not None:
             assert m.bias is pvec.to_dict()[layer_id][1]
             assert m.bias is not pvec_clone.to_dict()[layer_id][1]
-            assert (
-                torch.norm(m.bias - pvec_clone.to_dict()[layer_id][1])
-                < eps
-            )
+            assert torch.norm(m.bias - pvec_clone.to_dict()[layer_id][1]) < eps
 
 
 def test_detach():
@@ -238,27 +186,19 @@ def test_dot():
     r1 = random_pvector(layer_collection)
     r2 = random_pvector(layer_collection)
     dotr1r2 = r1.dot(r2)
-    check_ratio(
-        torch.dot(r1.to_torch(), r2.to_torch()), dotr1r2
-    )
+    check_ratio(torch.dot(r1.to_torch(), r2.to_torch()), dotr1r2)
 
     r1 = random_pvector_dict(layer_collection)
     r2 = random_pvector_dict(layer_collection)
     dotr1r2 = r1.dot(r2)
-    check_ratio(
-        torch.dot(r1.to_torch(), r2.to_torch()), dotr1r2
-    )
+    check_ratio(torch.dot(r1.to_torch(), r2.to_torch()), dotr1r2)
 
     r1 = random_pvector(layer_collection)
     r2 = random_pvector_dict(layer_collection)
     dotr1r2 = r1.dot(r2)
     dotr2r1 = r2.dot(r1)
-    check_ratio(
-        torch.dot(r1.to_torch(), r2.to_torch()), dotr1r2
-    )
-    check_ratio(
-        torch.dot(r1.to_torch(), r2.to_torch()), dotr2r1
-    )
+    check_ratio(torch.dot(r1.to_torch(), r2.to_torch()), dotr1r2)
+    check_ratio(torch.dot(r1.to_torch(), r2.to_torch()), dotr2r1)
 
 
 def test_size():

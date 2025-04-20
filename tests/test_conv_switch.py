@@ -7,14 +7,16 @@ from nngeometry.object.pspace import PMatDense
 
 def test_conv_impl_switch():
     loader, lc, parameters, model, function = get_conv_task()
-    generator = TorchHooksJacobianBackend(layer_collection=lc, model=model, function=function)
+    generator = TorchHooksJacobianBackend(model=model, function=function)
 
     with torch_hooks.use_unfold_impl_for_convs():
-        PMat_dense_unfold = PMatDense(generator=generator, examples=loader)
+        PMat_dense_unfold = PMatDense(
+            generator=generator, examples=loader, layer_collection=lc
+        )
 
     with torch_hooks.use_conv_impl_for_convs():
-        PMat_dense_conv = PMatDense(generator=generator, examples=loader)
+        PMat_dense_conv = PMatDense(
+            generator=generator, examples=loader, layer_collection=lc
+        )
 
-    check_tensors(
-        PMat_dense_unfold.to_torch(), PMat_dense_conv.to_torch()
-    )
+    check_tensors(PMat_dense_unfold.to_torch(), PMat_dense_conv.to_torch())
