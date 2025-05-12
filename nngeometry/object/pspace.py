@@ -1436,13 +1436,16 @@ class PMatMixed(PMatAbstract):
 
     def to_torch(self):
         s = self.layer_collection.numel()
-        M = torch.zeros((s, s), device=self.get_device())
+        M = None
         for layer_id, layer in self.layer_collection.layers.items():
             numel = layer.numel()
             start = self.layer_collection.p_pos[layer_id]
             block = self.sub_pmats[self.layer_map[layer_id]].get_block_torch(
                 layer_id, layer
             )
+            if M is None:
+                M = torch.zeros((s, s), device=self.get_device(), dtype=block.dtype)
+
             M[start : start + numel, start : start + numel].add_(block)
         return M
 
