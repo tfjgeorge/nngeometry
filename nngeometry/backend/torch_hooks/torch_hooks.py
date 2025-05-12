@@ -10,7 +10,7 @@ from .grads import FactoryMap
 
 
 class TorchHooksJacobianBackend(AbstractBackend):
-    """
+    r"""
     Computes jacobians
     :math:`\mathbf{J}_{ijk}=\\frac{\partial f\left(x_{j}\\right)_{i}}{\delta\mathbf{w}_{k}}`,
     FIM matrices :math:`\mathbf{F}_{k,k'}=\\frac{1}{n}\sum_{i,j}\mathbf{J}_{ijk}\mathbf{J}_{ijk'}`
@@ -78,7 +78,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         for d in loader:
             self.xs = dict()
             inputs = d[0]
-            grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
+            grad_wrt = self.model.parameters()#self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
             n_output = output.size(-1)
@@ -241,7 +241,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         for d in loader:
             self.xs = dict()
             inputs = d[0]
-            grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
+            grad_wrt = self.model.parameters()# self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
 
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
