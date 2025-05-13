@@ -89,25 +89,6 @@ class PMatAbstract(ABC):
             )
             v_solve = self.solvePVec(v, regul=regul, impl=impl)
             vs_solve.append(v_solve.to_torch())
-            print(v.size(), vs_solve[-1].size())
-
-        print(
-            sJ,
-            sJ[0] * sJ[1],
-            b.layer_collection.numel(),
-            self.__class__,
-            vs_solve[-1].size(),
-        )
-        print(
-            "\n -------------------- v",
-            v.layer_collection.layers,
-            v.layer_collection.numel(),
-        )
-        print(
-            "\n -------------------- repr",
-            self.layer_collection.layers,
-            self.layer_collection.numel(),
-        )
         return PFMapDense(
             generator=self.generator,
             data=torch.stack(vs_solve).view(*sJ),
@@ -1462,9 +1443,7 @@ class PMatMixed(PMatAbstract):
     def solvePVec(self, v, *args, **kwargs):
         out_dict = dict()
         for pmat in self.sub_pmats.values():
-            print("\n -------------- outdict", out_dict.keys())
             out_dict |= pmat.solvePVec(v, *args, **kwargs).to_dict()
-        print("\n -------------- outdict", out_dict.keys())
         return PVector(layer_collection=self.layer_collection, dict_repr=out_dict)
 
     def trace(self):

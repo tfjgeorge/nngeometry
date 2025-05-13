@@ -199,7 +199,7 @@ class LayerCollection:
 
     def get_common_layers(self, other):
         for layer_id, layer in self.layers.items():
-            if layer_id in other.layers.keys() and layer == other.layers[layer_id]:
+            if layer_id in other.layers and layer == other.layers[layer_id]:
                 yield layer_id, layer
 
     def merge(self, other):
