@@ -77,12 +77,13 @@ def test_jacobian_pushforward_dense_linear():
     for get_task in linear_tasks:
         loader, lc, parameters, model, function = get_task()
         generator = TorchHooksJacobianBackend(
-            layer_collection=lc,
             model=model,
             function=function,
         )
-        push_forward = PFMapDense(generator=generator, examples=loader)
-        dw = random_pvector(lc, device=device)
+        push_forward = PFMapDense(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+        dw = random_pvector(layer_collection=lc, device=device)
 
         doutput_lin = push_forward.jvp(dw)
 
@@ -97,12 +98,13 @@ def test_jacobian_pushforward_dense_nonlinear():
     for get_task in nonlinear_tasks:
         loader, lc, parameters, model, function = get_task()
         generator = TorchHooksJacobianBackend(
-            layer_collection=lc,
             model=model,
             function=function,
         )
-        push_forward = PFMapDense(generator=generator, examples=loader)
-        dw = random_pvector(lc, device=device)
+        push_forward = PFMapDense(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+        dw = random_pvector(layer_collection=lc, device=device)
         dw = 1e-5 / dw.norm() * dw
 
         doutput_lin = push_forward.jvp(dw)
@@ -124,13 +126,16 @@ def test_jacobian_pushforward_implicit():
     for get_task in linear_tasks:
         loader, lc, parameters, model, function = get_task()
         generator = TorchHooksJacobianBackend(
-            layer_collection=lc,
             model=model,
             function=function,
         )
-        dense_push_forward = PFMapDense(generator=generator, examples=loader)
-        implicit_push_forward = PFMapImplicit(generator=generator, examples=loader)
-        dw = random_pvector(lc, device=device)
+        dense_push_forward = PFMapDense(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+        implicit_push_forward = PFMapImplicit(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+        dw = random_pvector(layer_collection=lc, device=device)
 
         doutput_lin_dense = dense_push_forward.jvp(dw)
         doutput_lin_implicit = implicit_push_forward.jvp(dw)
@@ -145,13 +150,16 @@ def test_jacobian_pullback_dense():
     for get_task in linear_tasks:
         loader, lc, parameters, model, function = get_task()
         generator = TorchHooksJacobianBackend(
-            layer_collection=lc,
             model=model,
             function=function,
         )
-        pull_back = PFMapDense(generator=generator, examples=loader)
-        push_forward = PFMapDense(generator=generator, examples=loader)
-        dw = random_pvector(lc, device=device)
+        pull_back = PFMapDense(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+        push_forward = PFMapDense(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+        dw = random_pvector(layer_collection=lc, device=device)
 
         doutput_lin = push_forward.jvp(dw)
         dinput_lin = pull_back.vjp(doutput_lin)
@@ -166,13 +174,16 @@ def test_jacobian_fdense_vs_pullback():
         for centering in [True, False]:
             loader, lc, parameters, model, function = get_task()
             generator = TorchHooksJacobianBackend(
-                layer_collection=lc,
                 model=model,
                 function=function,
                 centering=centering,
             )
-            pull_back = PFMapDense(generator=generator, examples=loader)
-            FMat_dense = FMatDense(generator=generator, examples=loader)
+            pull_back = PFMapDense(
+                generator=generator, examples=loader, layer_collection=lc
+            )
+            FMat_dense = FMatDense(
+                generator=generator, examples=loader, layer_collection=lc
+            )
 
             n_output = FMat_dense.to_torch().size(0)
             df = random_fvector(len(loader.sampler), n_output, device=device)
@@ -206,12 +217,13 @@ def test_jacobian_eigendecomposition_fdense():
         for impl in ["eigh", "svd"]:
             loader, lc, parameters, model, function = get_task()
             generator = TorchHooksJacobianBackend(
-                layer_collection=lc,
                 model=model,
                 function=function,
                 centering=True,
             )
-            FMat_dense = FMatDense(generator=generator, examples=loader)
+            FMat_dense = FMatDense(
+                generator=generator, examples=loader, layer_collection=lc
+            )
             FMat_dense.compute_eigendecomposition(impl=impl)
             evals, evecs = FMat_dense.get_eigendecomposition()
 
@@ -231,12 +243,13 @@ def test_jacobian_eigendecomposition_pdense():
         for impl in ["eigh", "svd"]:
             loader, lc, parameters, model, function = get_task()
             generator = TorchHooksJacobianBackend(
-                layer_collection=lc,
                 model=model,
                 function=function,
                 centering=True,
             )
-            pmat_dense = PMatDense(generator=generator, examples=loader)
+            pmat_dense = PMatDense(
+                generator=generator, examples=loader, layer_collection=lc
+            )
             pmat_dense.compute_eigendecomposition(impl=impl)
             evals, evecs = pmat_dense.get_eigendecomposition()
 
@@ -253,12 +266,13 @@ def test_jacobian_eigendecomposition_plowrank():
         for impl in ["svd"]:
             loader, lc, parameters, model, function = get_task()
             generator = TorchHooksJacobianBackend(
-                layer_collection=lc,
                 model=model,
                 function=function,
                 centering=True,
             )
-            pmat_lowrank = PMatLowRank(generator=generator, examples=loader)
+            pmat_lowrank = PMatLowRank(
+                generator=generator, examples=loader, layer_collection=lc
+            )
             pmat_lowrank.compute_eigendecomposition(impl=impl)
             evals, evecs = pmat_lowrank.get_eigendecomposition()
 
@@ -282,15 +296,20 @@ def test_jacobian_pdense_vs_pushforward():
         for centering in [True, False]:
             loader, lc, parameters, model, function = get_task()
             generator = TorchHooksJacobianBackend(
-                layer_collection=lc,
                 model=model,
                 function=function,
                 centering=centering,
             )
-            push_forward = PFMapDense(generator=generator, examples=loader)
-            pull_back = PFMapDense(generator=generator, data=push_forward.data)
-            PMat_dense = PMatDense(generator=generator, examples=loader)
-            dw = random_pvector(lc, device=device)
+            push_forward = PFMapDense(
+                generator=generator, examples=loader, layer_collection=lc
+            )
+            pull_back = PFMapDense(
+                generator=generator, data=push_forward.data, layer_collection=lc
+            )
+            PMat_dense = PMatDense(
+                generator=generator, examples=loader, layer_collection=lc
+            )
+            dw = random_pvector(layer_collection=lc, device=device)
             n = len(loader.sampler)
 
             # Test to_torch
@@ -325,13 +344,14 @@ def test_jacobian_pdense():
         for centering in [True, False]:
             loader, lc, parameters, model, function = get_task()
             generator = TorchHooksJacobianBackend(
-                layer_collection=lc,
                 model=model,
                 function=function,
                 centering=centering,
             )
-            PMat_dense = PMatDense(generator=generator, examples=loader)
-            dw = random_pvector(lc, device=device)
+            PMat_dense = PMatDense(
+                generator=generator, examples=loader, layer_collection=lc
+            )
+            dw = random_pvector(layer_collection=lc, device=device)
 
             # Test get_diag
             check_tensors(torch.diag(PMat_dense.to_torch()), PMat_dense.get_diag())
@@ -372,6 +392,7 @@ def test_jacobian_pdense():
             jaco = PFMapDense(
                 generator=generator,
                 data=stacked_mv + regul * stacked_v,
+                layer_collection=lc,
             )
             J_back = PMat_dense.solve(jaco, regul=regul)
 
@@ -391,12 +412,13 @@ def test_jacobian_pdense():
             # Test add, sub, rmul
             loader, lc, parameters, model, function = get_task()
             generator = TorchHooksJacobianBackend(
-                layer_collection=lc,
                 model=model,
                 function=function,
                 centering=centering,
             )
-            PMat_dense2 = PMatDense(generator=generator, examples=loader)
+            PMat_dense2 = PMatDense(
+                generator=generator, examples=loader, layer_collection=lc
+            )
 
             check_tensors(
                 PMat_dense.to_torch() + PMat_dense2.to_torch(),
@@ -416,13 +438,14 @@ def test_jacobian_pdiag_vs_pdense():
     for get_task in nonlinear_tasks:
         loader, lc, parameters, model, function = get_task()
         generator = TorchHooksJacobianBackend(
-            layer_collection=lc,
             model=model,
             function=function,
         )
-        PMat_diag = PMatDiag(generator=generator, examples=loader)
-        PMat_dense = PMatDense(generator=generator, examples=loader)
-        dw = random_pvector(lc, device=device)
+        PMat_diag = PMatDiag(generator=generator, examples=loader, layer_collection=lc)
+        PMat_dense = PMatDense(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+        dw = random_pvector(layer_collection=lc, device=device)
 
         # Test to_torch
         matrix_diag = PMat_diag.to_torch()
@@ -477,11 +500,10 @@ def test_jacobian_pdiag_vs_pdense():
         # Test add, sub, rmul
         loader, lc, parameters, model, function = get_task()
         generator = TorchHooksJacobianBackend(
-            layer_collection=lc,
             model=model,
             function=function,
         )
-        PMat_diag2 = PMatDiag(generator=generator, examples=loader)
+        PMat_diag2 = PMatDiag(generator=generator, examples=loader, layer_collection=lc)
 
         check_tensors(
             PMat_diag.to_torch() + PMat_diag2.to_torch(),
@@ -498,12 +520,15 @@ def test_jacobian_pblockdiag_vs_pdense():
     for get_task in linear_tasks + nonlinear_tasks:
         loader, lc, parameters, model, function = get_task()
         generator = TorchHooksJacobianBackend(
-            layer_collection=lc,
             model=model,
             function=function,
         )
-        PMat_blockdiag = PMatBlockDiag(generator=generator, examples=loader)
-        PMat_dense = PMatDense(generator=generator, examples=loader)
+        PMat_blockdiag = PMatBlockDiag(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+        PMat_dense = PMatDense(
+            generator=generator, examples=loader, layer_collection=lc
+        )
 
         # Test to_torch
         matrix_blockdiag = PMat_blockdiag.to_torch()
@@ -542,12 +567,13 @@ def test_jacobian_pblockdiag():
     for get_task in nonlinear_tasks:
         loader, lc, parameters, model, function = get_task()
         generator = TorchHooksJacobianBackend(
-            layer_collection=lc,
             model=model,
             function=function,
         )
-        PMat_blockdiag = PMatBlockDiag(generator=generator, examples=loader)
-        dw = random_pvector(lc, device=device)
+        PMat_blockdiag = PMatBlockDiag(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+        dw = random_pvector(layer_collection=lc, device=device)
         dense_tensor = PMat_blockdiag.to_torch()
 
         # Test get_diag
@@ -593,6 +619,7 @@ def test_jacobian_pblockdiag():
         jaco = PFMapDense(
             generator=generator,
             data=stacked_mv + regul * stacked_v,
+            layer_collection=lc,
         )
         J_back = PMat_blockdiag.solve(jaco, regul=regul)
         check_tensors(
@@ -611,11 +638,12 @@ def test_jacobian_pblockdiag():
         # Test add, sub, rmul
         loader, lc, parameters, model, function = get_task()
         generator = TorchHooksJacobianBackend(
-            layer_collection=lc,
             model=model,
             function=function,
         )
-        PMat_blockdiag2 = PMatBlockDiag(generator=generator, examples=loader)
+        PMat_blockdiag2 = PMatBlockDiag(
+            generator=generator, examples=loader, layer_collection=lc
+        )
 
         check_tensors(
             PMat_blockdiag.to_torch() + PMat_blockdiag2.to_torch(),
@@ -635,13 +663,16 @@ def test_jacobian_pimplicit_vs_pdense():
     for get_task in linear_tasks + nonlinear_tasks:
         loader, lc, parameters, model, function = get_task()
         generator = TorchHooksJacobianBackend(
-            layer_collection=lc,
             model=model,
             function=function,
         )
-        PMat_implicit = PMatImplicit(generator=generator, examples=loader)
-        PMat_dense = PMatDense(generator=generator, examples=loader)
-        dw = random_pvector(lc, device=device)
+        PMat_implicit = PMatImplicit(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+        PMat_dense = PMatDense(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+        dw = random_pvector(layer_collection=lc, device=device)
 
         # Test trace
         check_ratio(PMat_dense.trace(), PMat_implicit.trace())
@@ -672,12 +703,15 @@ def test_jacobian_plowrank_vs_pdense():
     for get_task in nonlinear_tasks:
         loader, lc, parameters, model, function = get_task()
         generator = TorchHooksJacobianBackend(
-            layer_collection=lc,
             model=model,
             function=function,
         )
-        PMat_lowrank = PMatLowRank(generator=generator, examples=loader)
-        PMat_dense = PMatDense(generator=generator, examples=loader)
+        PMat_lowrank = PMatLowRank(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+        PMat_dense = PMatDense(
+            generator=generator, examples=loader, layer_collection=lc
+        )
 
         # Test to_torch
         matrix_lowrank = PMat_lowrank.to_torch()
@@ -689,12 +723,13 @@ def test_jacobian_plowrank():
     for get_task in nonlinear_tasks:
         loader, lc, parameters, model, function = get_task()
         generator = TorchHooksJacobianBackend(
-            layer_collection=lc,
             model=model,
             function=function,
         )
-        PMat_lowrank = PMatLowRank(generator=generator, examples=loader)
-        dw = random_pvector(lc, device=device)
+        PMat_lowrank = PMatLowRank(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+        dw = random_pvector(layer_collection=lc, device=device)
         dw = dw / dw.norm()
         dense_tensor = PMat_lowrank.to_torch()
 
@@ -745,12 +780,15 @@ def test_jacobian_pquasidiag_vs_pdense():
     for get_task in [get_conv_task, get_fullyconnect_task]:
         loader, lc, parameters, model, function = get_task()
         generator = TorchHooksJacobianBackend(
-            layer_collection=lc,
             model=model,
             function=function,
         )
-        PMat_qd = PMatQuasiDiag(generator=generator, examples=loader)
-        PMat_dense = PMatDense(generator=generator, examples=loader)
+        PMat_qd = PMatQuasiDiag(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+        PMat_dense = PMatDense(
+            generator=generator, examples=loader, layer_collection=lc
+        )
 
         # Test to_torch
         matrix_qd = PMat_qd.to_torch()
@@ -827,14 +865,15 @@ def test_jacobian_pquasidiag():
     for get_task in [get_conv_task, get_fullyconnect_task]:
         loader, lc, parameters, model, function = get_task()
         generator = TorchHooksJacobianBackend(
-            layer_collection=lc,
             model=model,
             function=function,
         )
-        PMat_qd = PMatQuasiDiag(generator=generator, examples=loader)
+        PMat_qd = PMatQuasiDiag(
+            generator=generator, examples=loader, layer_collection=lc
+        )
         dense_tensor = PMat_qd.to_torch()
 
-        v = random_pvector(lc, device=device)
+        v = random_pvector(layer_collection=lc, device=device)
         v_flat = v.to_torch()
 
         check_tensors(torch.diag(dense_tensor), PMat_qd.get_diag())
@@ -859,17 +898,20 @@ def test_bn_eval_mode():
         loader, lc, parameters, model, function = get_task()
 
         generator = TorchHooksJacobianBackend(
-            layer_collection=lc,
             model=model,
             function=function,
         )
 
         model.eval()
-        FMat_dense = FMatDense(generator=generator, examples=loader)
+        FMat_dense = FMatDense(
+            generator=generator, examples=loader, layer_collection=lc
+        )
 
         model.train()
         with pytest.raises(RuntimeError):
-            FMat_dense = FMatDense(generator=generator, examples=loader)
+            FMat_dense = FMatDense(
+                generator=generator, examples=loader, layer_collection=lc
+            )
 
 
 def test_example_passing():
@@ -877,7 +919,6 @@ def test_example_passing():
     for get_task in [get_fullyconnect_task]:
         loader, lc, parameters, model, function = get_task()
         generator = TorchHooksJacobianBackend(
-            layer_collection=lc,
             model=model,
             function=function,
         )
@@ -885,7 +926,7 @@ def test_example_passing():
         sum_mats = None
         tot_examples = 0
         for d in iter(loader):
-            this_mat = PMatDense(generator=generator, examples=d)
+            this_mat = PMatDense(generator=generator, examples=d, layer_collection=lc)
             n_examples = len(d[0])
 
             if sum_mats is None:
@@ -895,7 +936,9 @@ def test_example_passing():
 
             tot_examples += n_examples
 
-        PMat_dense = PMatDense(generator=generator, examples=loader)
+        PMat_dense = PMatDense(
+            generator=generator, examples=loader, layer_collection=lc
+        )
 
         check_tensors(
             PMat_dense.to_torch(),
