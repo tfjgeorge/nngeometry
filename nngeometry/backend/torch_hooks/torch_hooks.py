@@ -78,7 +78,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         for d in loader:
             self.xs = dict()
             inputs = d[0]
-            grad_wrt = self.model.parameters()#self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
+            grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
             n_output = output.size(-1)
@@ -241,7 +241,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         for d in loader:
             self.xs = dict()
             inputs = d[0]
-            grad_wrt = self.model.parameters()# self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
+            grad_wrt =  self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
 
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
@@ -358,6 +358,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             self.xs = dict()
             inputs = d[0]
             grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
+            print(len(list(grad_wrt)))
             bs = inputs.size(0)
             output = self.function(*d).view(bs, -1).sum(dim=0)
             n_output = output.size(-1)
