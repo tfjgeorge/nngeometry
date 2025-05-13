@@ -30,13 +30,15 @@ class LayerCollection:
     ]
 
     def __init__(self, layers=None):
+        self._numel = 0
+        self.p_pos = dict()
         if layers is None:
             self.layers = OrderedDict()
-            self._numel = 0
-            self.p_pos = dict()
         else:
             self.layers = layers
-            raise NotImplementedError
+            for layer_id, layer in layers.items():
+                self.p_pos[layer_id] = self._numel
+                self._numel += layer.numel()
 
     def from_model(model, ignore_unsupported_layers=False):
         """
@@ -61,14 +63,12 @@ class LayerCollection:
 
         return lc
 
-    def get_layerid_module_maps(self, model):
+    def get_layerid_module_map(self, model):
         layerid_to_module = OrderedDict()
-        module_to_layerid = OrderedDict()
         named_modules = dict(model.named_modules())
         for layer in self.layers.keys():
             layerid_to_module[layer] = named_modules[layer]
-            module_to_layerid[named_modules[layer]] = layer
-        return layerid_to_module, module_to_layerid
+        return layerid_to_module
 
     def add_layer(self, name, layer):
         self.layers[name] = layer
@@ -196,6 +196,16 @@ class LayerCollection:
             ):
                 return False
         return True
+
+    def get_common_layers(self, other):
+        for layer_id, layer in self.layers.items():
+            if layer_id in other.layers and layer == other.layers[layer_id]:
+                yield layer_id, layer
+
+    def merge(self, other):
+        return LayerCollection(
+            layers=OrderedDict([(lid, l) for lid, l in self.get_common_layers(other)])
+        )
 
 
 class AbstractLayer(ABC):

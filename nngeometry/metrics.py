@@ -94,11 +94,12 @@ def FIM_MonteCarlo(
         raise NotImplementedError
 
     generator = TorchHooksJacobianBackend(
-        layer_collection=layer_collection,
         model=model,
         function=fim_function,
     )
-    return representation(generator=generator, examples=loader)
+    return representation(
+        generator=generator, examples=loader, layer_collection=layer_collection
+    )
 
 
 def FIM(
@@ -109,6 +110,7 @@ def FIM(
     device="cpu",
     function=None,
     layer_collection=None,
+    **kwargs,
 ):
     """
     Helper that creates a matrix computing the Fisher Information
@@ -156,12 +158,16 @@ def FIM(
     function_fim = partial(SQRT_VAR[variant], function)
 
     generator = TorchHooksJacobianBackend(
-        layer_collection=layer_collection,
         model=model,
         function=function_fim,
     )
 
-    return representation(generator=generator, examples=loader)
+    return representation(
+        generator=generator,
+        examples=loader,
+        layer_collection=layer_collection,
+        **kwargs,
+    )
 
 
 class FIM_Types(StrEnum):

@@ -1,10 +1,17 @@
 from abc import ABC, abstractmethod
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 import warnings
 
 import torch
 
 from nngeometry.backend import DummyGenerator
+from nngeometry.layercollection import (
+    Conv1dLayer,
+    Conv2dLayer,
+    EmbeddingLayer,
+    LayerCollection,
+    LinearLayer,
+)
 from nngeometry.object.map import PFMap, PFMapDense
 
 from ..maths import kronecker
@@ -30,8 +37,10 @@ class PMatAbstract(ABC):
     """
 
     @abstractmethod
-    def __init__(self, generator, data=None, examples=None):
+    def __init__(self, layer_collection, generator, data=None, examples=None):
         raise NotImplementedError
+
+        self.layer_collection = layer_collection
 
     @abstractmethod
     def to_torch(self):
@@ -47,6 +56,10 @@ class PMatAbstract(ABC):
 
     @abstractmethod
     def mv(self, v):
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_device(self):
         raise NotImplementedError
 
     @abstractmethod
@@ -67,18 +80,20 @@ class PMatAbstract(ABC):
     def solvePFMap(self, b, regul, impl):
         J_dense = b.to_torch()
         sJ = J_dense.size()
-        J_dense = J_dense.reshape(sJ[0] * sJ[1], sJ[2])
+        J_dense = J_dense.view(sJ[0] * sJ[1], sJ[2])
 
         vs_solve = []
         for i in range(J_dense.size(0)):
             v = PVector(
-                layer_collection=b.generator.layer_collection,
+                layer_collection=b.layer_collection,
                 vector_repr=J_dense[i, :],
             )
-            vs_solve.append(self.solvePVec(v, regul=regul, impl=impl).to_torch())
-
+            v_solve = self.solvePVec(v, regul=regul, impl=impl)
+            vs_solve.append(v_solve.to_torch())
         return PFMapDense(
-            generator=self.generator, data=torch.stack(vs_solve).reshape(*sJ)
+            generator=self.generator,
+            data=torch.stack(vs_solve).view(*sJ),
+            layer_collection=b.layer_collection,
         )
 
     def solve(self, b, regul, impl="default"):
@@ -117,7 +132,7 @@ class PMatAbstract(ABC):
         1254
         """
         # TODO: test
-        s = self.generator.layer_collection.numel()
+        s = self.layer_collection.numel()
         if dim == 0 or dim == 1:
             return s
         elif dim is None:
@@ -135,27 +150,29 @@ class PMatAbstract(ABC):
 
     def __getstate__(self):
         return {
-            "layer_collection": self.generator.layer_collection,
+            "layer_collection": self.layer_collection,
             "data": self.data,
-            "device": self.generator.get_device(),
+            "device": self.get_device(),
         }
 
     def __setstate__(self, state_dict):
         self.data = state_dict["data"]
-        self.generator = DummyGenerator(
-            state_dict["layer_collection"], state_dict["device"]
-        )
+        self.layer_collection = state_dict["layer_collection"]
+        self.generator = DummyGenerator(state_dict["device"])
 
 
 class PMatDense(PMatAbstract):
-    def __init__(self, generator, data=None, examples=None):
+    def __init__(self, layer_collection, generator, data=None, examples=None):
         self._check_data_examples(data, examples)
 
+        self.layer_collection = layer_collection
         self.generator = generator
         if data is not None:
             self.data = data
         else:
-            self.data = generator.get_covariance_matrix(examples)
+            self.data = generator.get_covariance_matrix(
+                examples, layer_collection=layer_collection
+            )
 
     def compute_eigendecomposition(self, impl="eigh"):
         if impl == "eigh":
@@ -189,7 +206,11 @@ class PMatDense(PMatAbstract):
             J_torch = J.to_torch()
             sJ = J_torch.size()
             inv_v = self._solve_cached(J_torch.view(-1, sJ[-1]), regul=regul)
-            return PFMapDense(generator=self.generator, data=inv_v.reshape(*sJ))
+            return PFMapDense(
+                generator=self.generator,
+                data=inv_v.reshape(*sJ),
+                layer_collection=self.layer_collection,
+            )
         else:
             raise NotImplementedError
 
@@ -202,7 +223,7 @@ class PMatDense(PMatAbstract):
             AssertionError,
         ):  # ldl decomposition is not currently cached for regul value
             LD, pivots = torch.linalg.ldl_factor(
-                self.data + regul * torch.eye(self.size(0), device=self.data.device),
+                self.data + regul * torch.eye(self.size(0), device=self.get_device()),
             )
             self._ldl_regul = regul
             self._ldl_factors = (LD, pivots)
@@ -210,9 +231,16 @@ class PMatDense(PMatAbstract):
 
     def inverse(self, regul=1e-8):
         inv_tensor = torch.inverse(
-            self.data + regul * torch.eye(self.size(0), device=self.data.device)
+            self.data + regul * torch.eye(self.size(0), device=self.get_device())
         )
-        return PMatDense(generator=self.generator, data=inv_tensor)
+        return PMatDense(
+            generator=self.generator,
+            data=inv_tensor,
+            layer_collection=self.layer_collection,
+        )
+
+    def get_device(self):
+        return self.data.device
 
     def mv(self, v):
         v_flat = torch.mv(self.data, v.to_torch())
@@ -232,7 +260,7 @@ class PMatDense(PMatAbstract):
     def project_from_diag(self, v):
         # TODO: test
         return PVector(
-            layer_collection=self.generator.layer_collection,
+            layer_collection=self.layer_collection,
             vector_repr=torch.mv(self.evecs, v),
         )
 
@@ -251,14 +279,26 @@ class PMatDense(PMatAbstract):
 
     def __add__(self, other):
         sum_data = self.data + other.data
-        return PMatDense(generator=self.generator, data=sum_data)
+        return PMatDense(
+            generator=self.generator,
+            data=sum_data,
+            layer_collection=self.layer_collection,
+        )
 
     def __sub__(self, other):
         sub_data = self.data - other.data
-        return PMatDense(generator=self.generator, data=sub_data)
+        return PMatDense(
+            generator=self.generator,
+            data=sub_data,
+            layer_collection=self.layer_collection,
+        )
 
     def __rmul__(self, x):
-        return PMatDense(generator=self.generator, data=x * self.data)
+        return PMatDense(
+            generator=self.generator,
+            data=x * self.data,
+            layer_collection=self.layer_collection,
+        )
 
     def mm(self, other):
         """
@@ -271,22 +311,36 @@ class PMatDense(PMatAbstract):
         :return: The matrix-matrix product
         :rtype: :class:`nngeometry.object.PMatDense`
         """
-        return PMatDense(self.generator, data=torch.mm(self.data, other.data))
+        return PMatDense(
+            generator=self.generator,
+            data=torch.mm(self.data, other.data),
+            layer_collection=self.layer_collection,
+        )
 
 
 class PMatDiag(PMatAbstract):
-    def __init__(self, generator, data=None, examples=None):
+    def __init__(self, layer_collection, generator, data=None, examples=None):
         self._check_data_examples(data, examples)
 
+        self.layer_collection = layer_collection
         self.generator = generator
         if data is not None:
             self.data = data
         else:
-            self.data = generator.get_covariance_diag(examples)
+            self.data = generator.get_covariance_diag(
+                examples, layer_collection=layer_collection
+            )
 
     def inverse(self, regul=1e-8):
         inv_tensor = 1.0 / (self.data + regul)
-        return PMatDiag(generator=self.generator, data=inv_tensor)
+        return PMatDiag(
+            generator=self.generator,
+            data=inv_tensor,
+            layer_collection=self.layer_collection,
+        )
+
+    def get_device(self):
+        return self.data.device
 
     def mv(self, v):
         v_flat = v.to_torch() * self.data
@@ -320,14 +374,26 @@ class PMatDiag(PMatAbstract):
 
     def __add__(self, other):
         sum_diags = self.data + other.data
-        return PMatDiag(generator=self.generator, data=sum_diags)
+        return PMatDiag(
+            generator=self.generator,
+            data=sum_diags,
+            layer_collection=self.layer_collection,
+        )
 
     def __sub__(self, other):
         sub_diags = self.data - other.data
-        return PMatDiag(generator=self.generator, data=sub_diags)
+        return PMatDiag(
+            generator=self.generator,
+            data=sub_diags,
+            layer_collection=self.layer_collection,
+        )
 
     def __rmul__(self, x):
-        return PMatDiag(generator=self.generator, data=x * self.data)
+        return PMatDiag(
+            generator=self.generator,
+            data=x * self.data,
+            layer_collection=self.layer_collection,
+        )
 
     def mm(self, other):
         """
@@ -340,35 +406,50 @@ class PMatDiag(PMatAbstract):
         :return: The matrix-matrix product
         :rtype: :class:`nngeometry.object.PMatDiag`
         """
-        return PMatDiag(self.generator, data=self.data * other.data)
+        return PMatDiag(
+            generator=self.generator,
+            data=self.data * other.data,
+            layer_collection=self.layer_collection,
+        )
 
 
 class PMatBlockDiag(PMatAbstract):
-    def __init__(self, generator, data=None, examples=None):
+    def __init__(self, layer_collection, generator, data=None, examples=None, **kwargs):
         self._check_data_examples(data, examples)
 
+        self.layer_collection = layer_collection
         self.generator = generator
         if data is not None:
             self.data = data
         else:
-            self.data = generator.get_covariance_layer_blocks(examples)
+            self.data = generator.get_covariance_layer_blocks(
+                examples, layer_collection=layer_collection
+            )
 
     def trace(self):
         # TODO test
         return sum([torch.trace(b) for b in self.data.values()])
 
+    def get_device(self):
+        return next(iter(self.data.values())).device
+
+    def get_block_torch(self, layer_id, layer):
+        return self.data[layer_id]
+
     def to_torch(self):
-        s = self.generator.layer_collection.numel()
-        M = torch.zeros((s, s), device=self.generator.get_device())
-        for layer_id in self.generator.layer_collection.layers.keys():
-            b = self.data[layer_id]
-            start = self.generator.layer_collection.p_pos[layer_id]
-            M[start : start + b.size(0), start : start + b.size(0)].add_(b)
+        s = self.layer_collection.numel()
+        M = torch.zeros((s, s), device=self.get_device())
+        for layer_id, layer in self.layer_collection.layers.items():
+            start = self.layer_collection.p_pos[layer_id]
+            numel = layer.numel()
+            M[start : start + numel, start : start + numel].add_(
+                self.get_block_torch(layer_id, layer)
+            )
         return M
 
     def get_diag(self):
         diag = []
-        for layer_id in self.generator.layer_collection.layers.keys():
+        for layer_id in self.layer_collection.layers.keys():
             b = self.data[layer_id]
             diag.append(torch.diag(b))
         return torch.cat(diag)
@@ -376,7 +457,8 @@ class PMatBlockDiag(PMatAbstract):
     def mv(self, vs):
         vs_dict = vs.to_dict()
         out_dict = dict()
-        for layer_id, layer in self.generator.layer_collection.layers.items():
+        lc_merged = self.layer_collection.merge(vs.layer_collection)
+        for layer_id, layer in lc_merged.layers.items():
             v = vs_dict[layer_id][0].view(-1)
             if layer.bias is not None:
                 v = torch.cat([v, vs_dict[layer_id][1].view(-1)])
@@ -388,7 +470,7 @@ class PMatBlockDiag(PMatAbstract):
                     mv[layer.weight.numel() :].view(*layer.bias.size),
                 )
             out_dict[layer_id] = mv_tuple
-        return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
+        return PVector(layer_collection=lc_merged, dict_repr=out_dict)
 
     def solvePVec(self, vs, regul=1e-8, impl="solve"):
         if impl not in ["solve", "default"]:
@@ -396,14 +478,15 @@ class PMatBlockDiag(PMatAbstract):
 
         vs_dict = vs.to_dict()
         out_dict = dict()
-        for layer_id, layer in self.generator.layer_collection.layers.items():
+        lc_merged = self.layer_collection.merge(vs.layer_collection)
+        for layer_id, layer in lc_merged.layers.items():
             v = vs_dict[layer_id][0].view(-1)
             if layer.bias is not None:
                 v = torch.cat([v, vs_dict[layer_id][1].view(-1)])
             block = self.data[layer_id]
 
             inv_v = torch.linalg.solve(
-                block + regul * torch.eye(block.size(0), device=block.device),
+                block + regul * torch.eye(block.size(0), device=self.get_device()),
                 v.view(-1, 1),
             )
             inv_v_tuple = (inv_v[: layer.weight.numel()].view(*layer.weight.size),)
@@ -414,15 +497,21 @@ class PMatBlockDiag(PMatAbstract):
                 )
 
             out_dict[layer_id] = inv_v_tuple
-        return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
+        return PVector(layer_collection=lc_merged, dict_repr=out_dict)
 
     def inverse(self, regul=1e-8):
         inv_data = dict()
-        for layer_id, layer in self.generator.layer_collection.layers.items():
+        for layer_id, layer in self.layer_collection.layers.items():
             b = self.data[layer_id]
-            inv_b = torch.inverse(b + regul * torch.eye(b.size(0), device=b.device))
+            inv_b = torch.inverse(
+                b + regul * torch.eye(b.size(0), device=self.get_device())
+            )
             inv_data[layer_id] = inv_b
-        return PMatBlockDiag(generator=self.generator, data=inv_data)
+        return PMatBlockDiag(
+            generator=self.generator,
+            data=inv_data,
+            layer_collection=self.layer_collection,
+        )
 
     def frobenius_norm(self):
         # TODO test
@@ -432,7 +521,8 @@ class PMatBlockDiag(PMatAbstract):
         # TODO test
         vector_dict = vector.to_dict()
         norm2 = 0
-        for layer_id, layer in self.generator.layer_collection.layers.items():
+        lc_merged = self.layer_collection.merge(vector.layer_collection)
+        for layer_id, layer in lc_merged.layers.items():
             v = vector_dict[layer_id][0].view(-1)
             if len(vector_dict[layer_id]) > 1:
                 v = torch.cat([v, vector_dict[layer_id][1].view(-1)])
@@ -441,15 +531,27 @@ class PMatBlockDiag(PMatAbstract):
 
     def __add__(self, other):
         sum_data = {l_id: d + other.data[l_id] for l_id, d in self.data.items()}
-        return PMatBlockDiag(generator=self.generator, data=sum_data)
+        return PMatBlockDiag(
+            generator=self.generator,
+            data=sum_data,
+            layer_collection=self.layer_collection,
+        )
 
     def __sub__(self, other):
         sum_data = {l_id: d - other.data[l_id] for l_id, d in self.data.items()}
-        return PMatBlockDiag(generator=self.generator, data=sum_data)
+        return PMatBlockDiag(
+            generator=self.generator,
+            data=sum_data,
+            layer_collection=self.layer_collection,
+        )
 
     def __rmul__(self, x):
         sum_data = {l_id: x * d for l_id, d in self.data.items()}
-        return PMatBlockDiag(generator=self.generator, data=sum_data)
+        return PMatBlockDiag(
+            generator=self.generator,
+            data=sum_data,
+            layer_collection=self.layer_collection,
+        )
 
     def mm(self, other):
         """
@@ -466,16 +568,21 @@ class PMatBlockDiag(PMatAbstract):
         for layer_id, block in self.data.items():
             block_other = other.data[layer_id]
             prod[layer_id] = torch.mm(block, block_other)
-        return PMatBlockDiag(self.generator, data=prod)
+        return PMatBlockDiag(
+            generator=self.generator, data=prod, layer_collection=self.layer_collection
+        )
 
 
 class PMatKFAC(PMatAbstract):
-    def __init__(self, generator, data=None, examples=None):
+    def __init__(self, layer_collection, generator, data=None, examples=None):
         self._check_data_examples(data, examples)
 
+        self.layer_collection = layer_collection
         self.generator = generator
         if data is None:
-            self.data = generator.get_kfac_blocks(examples)
+            self.data = generator.get_kfac_blocks(
+                examples, layer_collection=layer_collection
+            )
         else:
             self.data = data
 
@@ -484,37 +591,47 @@ class PMatKFAC(PMatAbstract):
 
     def inverse(self, regul=1e-8, use_pi=True):
         inv_data = dict()
-        for layer_id, layer in self.generator.layer_collection.layers.items():
+        for layer_id, layer in self.layer_collection.layers.items():
             a, g = self.data[layer_id]
             if use_pi:
                 pi = (torch.trace(a) / torch.trace(g) * g.size(0) / a.size(0)) ** 0.5
             else:
                 pi = 1
             inv_a = torch.inverse(
-                a + pi * regul**0.5 * torch.eye(a.size(0), device=a.device)
+                a + pi * regul**0.5 * torch.eye(a.size(0), device=self.get_device())
             )
             inv_g = torch.inverse(
-                g + regul**0.5 / pi * torch.eye(g.size(0), device=g.device)
+                g + regul**0.5 / pi * torch.eye(g.size(0), device=self.get_device())
             )
             inv_data[layer_id] = (inv_a, inv_g)
-        return PMatKFAC(generator=self.generator, data=inv_data)
+        return PMatKFAC(
+            generator=self.generator,
+            data=inv_data,
+            layer_collection=self.layer_collection,
+        )
 
     def pow(self, pow, regul=1e-8, use_pi=True):
         pow_data = dict()
-        for layer_id, layer in self.generator.layer_collection.layers.items():
+        for layer_id, layer in self.layer_collection.layers.items():
             a, g = self.data[layer_id]
             if use_pi:
                 pi = (torch.trace(a) / torch.trace(g) * g.size(0) / a.size(0)) ** 0.5
             else:
                 pi = 1
             pow_a = torch.linalg.matrix_power(
-                a + pi * regul**0.5 * torch.eye(a.size(0), device=a.device), pow
+                a + pi * regul**0.5 * torch.eye(a.size(0), device=self.get_device()),
+                pow,
             )
             pow_g = torch.linalg.matrix_power(
-                g + regul**0.5 / pi * torch.eye(g.size(0), device=g.device), pow
+                g + regul**0.5 / pi * torch.eye(g.size(0), device=self.get_device()),
+                pow,
             )
             pow_data[layer_id] = (pow_a, pow_g)
-        return PMatKFAC(generator=self.generator, data=pow_data)
+        return PMatKFAC(
+            generator=self.generator,
+            data=pow_data,
+            layer_collection=self.layer_collection,
+        )
 
     def __pow__(self, pow):
         return self.pow(pow)
@@ -525,7 +642,7 @@ class PMatKFAC(PMatAbstract):
 
         vs_dict = vs.to_dict()
         out_dict = dict()
-        for layer_id, layer in self.generator.layer_collection.layers.items():
+        for layer_id, layer in self.layer_collection.layers.items():
             vw = vs_dict[layer_id][0]
             sw = vw.size()
             v = vw.view(sw[0], -1)
@@ -538,8 +655,8 @@ class PMatKFAC(PMatAbstract):
                 pi = (torch.trace(a) / torch.trace(g) * g.size(0) / a.size(0)) ** 0.5
             else:
                 pi = 1
-            a_reg = a + regul**0.5 * pi * torch.eye(a.size(0), device=g.device)
-            g_reg = g + regul**0.5 / pi * torch.eye(g.size(0), device=g.device)
+            a_reg = a + regul**0.5 * pi * torch.eye(a.size(0), device=self.get_device())
+            g_reg = g + regul**0.5 / pi * torch.eye(g.size(0), device=self.get_device())
 
             solve_g, _, _, _ = torch.linalg.lstsq(g_reg, v)
             solve_a, _, _, _ = torch.linalg.lstsq(a_reg, solve_g.t())
@@ -554,6 +671,32 @@ class PMatKFAC(PMatAbstract):
             out_dict[layer_id] = solve_tuple
         return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
 
+    def get_block_torch(self, layer_id, layer, split_weight_bias=True):
+        a, g = self.data[layer_id]
+        if split_weight_bias and layer.has_bias():
+            block = torch.cat(
+                [
+                    torch.cat(
+                        [
+                            kronecker(g, a[:-1, :-1], transpose=layer.transposed),
+                            kronecker(g, a[:-1, -1:], transpose=layer.transposed),
+                        ],
+                        dim=1,
+                    ),
+                    torch.cat(
+                        [
+                            kronecker(g, a[-1:, :-1], transpose=layer.transposed),
+                            kronecker(g, a[-1:, -1:], transpose=layer.transposed),
+                        ],
+                        dim=1,
+                    ),
+                ],
+                dim=0,
+            )
+        else:
+            block = kronecker(g, a, transpose=layer.transposed)
+        return block
+
     def to_torch(self, split_weight_bias=True):
         """
         - split_weight_bias (bool): if True then the parameters are ordered in
@@ -561,38 +704,21 @@ class PMatKFAC(PMatAbstract):
         involves more operations. Otherwise the coefficients corresponding
         to the bias are mixed between coefficients of the weight matrix
         """
-        s = self.generator.layer_collection.numel()
-        M = torch.zeros((s, s), device=self.generator.get_device())
-        for layer_id, layer in self.generator.layer_collection.layers.items():
+        s = self.layer_collection.numel()
+        M = torch.zeros((s, s), device=self.get_device())
+        for layer_id, layer in self.layer_collection.layers.items():
             a, g = self.data[layer_id]
-            start = self.generator.layer_collection.p_pos[layer_id]
+            start = self.layer_collection.p_pos[layer_id]
             sAG = a.size(0) * g.size(0)
-            if split_weight_bias and layer.has_bias():
-                reconstruct = torch.cat(
-                    [
-                        torch.cat(
-                            [
-                                kronecker(g, a[:-1, :-1], transpose=layer.transposed),
-                                kronecker(g, a[:-1, -1:], transpose=layer.transposed),
-                            ],
-                            dim=1,
-                        ),
-                        torch.cat(
-                            [
-                                kronecker(g, a[-1:, :-1], transpose=layer.transposed),
-                                kronecker(g, a[-1:, -1:], transpose=layer.transposed),
-                            ],
-                            dim=1,
-                        ),
-                    ],
-                    dim=0,
+            M[start : start + sAG, start : start + sAG].add_(
+                self.get_block_torch(
+                    layer_id, layer, split_weight_bias=split_weight_bias
                 )
-                M[start : start + sAG, start : start + sAG].add_(reconstruct)
-            else:
-                M[start : start + sAG, start : start + sAG].add_(
-                    kronecker(g, a, transpose=layer.transposed)
-                )
+            )
         return M
+
+    def get_device(self):
+        return next(iter(self.data.values()))[0].device
 
     def get_diag(self, split_weight_bias=True):
         """
@@ -602,7 +728,7 @@ class PMatKFAC(PMatAbstract):
         to the bias are mixed between coefficients of the weight matrix
         """
         diags = []
-        for layer_id, layer in self.generator.layer_collection.layers.items():
+        for layer_id, layer in self.layer_collection.layers.items():
             a, g = self.data[layer_id]
             if layer.transposed:
                 a, g = g, a
@@ -617,7 +743,10 @@ class PMatKFAC(PMatAbstract):
     def mv(self, vs):
         vs_dict = vs.to_dict()
         out_dict = dict()
-        for layer_id, layer in self.generator.layer_collection.layers.items():
+        for layer_id in (
+            self.layer_collection.layers.keys() & vs_dict.keys()
+        ):  # common keys
+            layer = self.layer_collection.layers[layer_id]
             vw = vs_dict[layer_id][0]
             sw = vw.size()
             v = vw.view(sw[0], -1)
@@ -637,7 +766,7 @@ class PMatKFAC(PMatAbstract):
     def vTMv(self, vector):
         vector_dict = vector.to_dict()
         norm2 = 0
-        for layer_id, layer in self.generator.layer_collection.layers.items():
+        for layer_id, layer in self.layer_collection.layers.items():
             v = vector_dict[layer_id][0].view(vector_dict[layer_id][0].size(0), -1)
             if layer.has_bias():
                 v = torch.cat([v, vector_dict[layer_id][1].unsqueeze(1)], dim=1)
@@ -662,7 +791,7 @@ class PMatKFAC(PMatAbstract):
         self.evals = dict()
         self.evecs = dict()
         if impl == "eigh":
-            for layer_id in self.generator.layer_collection.layers.keys():
+            for layer_id in self.layer_collection.layers.keys():
                 a, g = self.data[layer_id]
                 evals_a, evecs_a = torch.linalg.eigh(a)
                 evals_g, evecs_g = torch.linalg.eigh(g)
@@ -689,7 +818,9 @@ class PMatKFAC(PMatAbstract):
         for layer_id, (a, g) in self.data.items():
             (a_other, g_other) = other.data[layer_id]
             prod[layer_id] = (torch.mm(a, a_other), torch.mm(g, g_other))
-        return PMatKFAC(self.generator, data=prod)
+        return PMatKFAC(
+            generator=self.generator, data=prod, layer_collection=self.layer_collection
+        )
 
 
 class PMatEKFAC(PMatAbstract):
@@ -700,19 +831,35 @@ class PMatEKFAC(PMatAbstract):
 
     """
 
-    def __init__(self, generator, data=None, examples=None):
+    def __init__(
+        self,
+        layer_collection,
+        generator,
+        data=None,
+        examples=None,
+        eigendecomposition=None,
+    ):
         self._check_data_examples(data, examples)
 
+        self.layer_collection = layer_collection
         self.generator = generator
+
+        if eigendecomposition is None:
+            eigendecomposition = lambda x: torch.linalg.eigh(x)
+
         if data is None:
             evecs = dict()
             diags = dict()
 
-            kfac_blocks = generator.get_kfac_blocks(examples)
-            for layer_id, layer in self.generator.layer_collection.layers.items():
+            kfac_blocks = generator.get_kfac_blocks(
+                examples, layer_collection=layer_collection
+            )
+            for layer_id, layer in self.layer_collection.layers.items():
                 a, g = kfac_blocks[layer_id]
-                evals_a, evecs_a = torch.linalg.eigh(a)
-                evals_g, evecs_g = torch.linalg.eigh(g)
+
+                evals_a, evecs_a = eigendecomposition(a)
+                evals_g, evecs_g = eigendecomposition(g)
+
                 evecs[layer_id] = (evecs_a, evecs_g)
                 if layer.transposed:
                     diags[layer_id] = evals_a[:, None] * evals_g[None, :]
@@ -725,6 +872,9 @@ class PMatEKFAC(PMatAbstract):
             self.data = data
             self._kfac_coefficients = False
 
+    def get_device(self):
+        return next(iter(self.data[1].values())).device
+
     def to_torch(self, split_weight_bias=True):
         """
         - split_weight_bias (bool): if True then the parameters are ordered in
@@ -733,22 +883,32 @@ class PMatEKFAC(PMatAbstract):
         to the bias are mixed between coefficients of the weight matrix
         """
         _, diags = self.data
-        s = self.generator.layer_collection.numel()
+        s = self.layer_collection.numel()
+        dtype = next(iter(diags.values())).dtype
+
         M = torch.zeros(
-            (s, s), device=self.generator.get_device(), dtype=self.generator.get_dtype()
+            (s, s),
+            device=self.get_device(),
+            dtype=dtype,
         )
-        KFE_layers = self.get_KFE(split_weight_bias=split_weight_bias)
-        for layer_id, _ in self.generator.layer_collection.layers.items():
+        for layer_id, layer in self.layer_collection.layers.items():
             diag = diags[layer_id]
-            start = self.generator.layer_collection.p_pos[layer_id]
+            start = self.layer_collection.p_pos[layer_id]
             sAG = diag.numel()
-            KFE = KFE_layers[layer_id]
             M[start : start + sAG, start : start + sAG].add_(
-                torch.mm(KFE, torch.mm(torch.diag(diag.view(-1)), KFE.t()))
+                self.get_block_torch(
+                    layer_id, layer, split_weight_bias=split_weight_bias
+                )
             )
         return M
 
-    def get_KFE(self, split_weight_bias=True):
+    def get_block_torch(self, layer_id, layer, split_weight_bias=True):
+        KFE = self.get_KFE(layer_id, layer, split_weight_bias=split_weight_bias)
+        diag = self.data[1][layer_id]
+
+        return torch.mm(KFE, torch.mm(torch.diag(diag.view(-1)), KFE.t()))
+
+    def get_KFE(self, layer_id, layer, split_weight_bias=True):
         """
         Returns a dict index by layers, of dense eigenvectors constructed from
         Kronecker-factored eigenvectors
@@ -759,27 +919,29 @@ class PMatEKFAC(PMatAbstract):
         to the bias are mixed between coefficients of the weight matrix
         """
         evecs, _ = self.data
-        KFE = dict()
-        for layer_id, layer in self.generator.layer_collection.layers.items():
-            evecs_a, evecs_g = evecs[layer_id]
-            if split_weight_bias and layer.has_bias():
-                KFE[layer_id] = torch.cat(
-                    [
-                        kronecker(evecs_g, evecs_a[:-1, :], transpose=layer.transposed),
-                        kronecker(evecs_g, evecs_a[-1:, :], transpose=layer.transposed),
-                    ],
-                    dim=0,
-                )
-            else:
-                KFE[layer_id] = kronecker(evecs_g, evecs_a, transpose=layer.transposed)
-        return KFE
+        evecs_a, evecs_g = evecs[layer_id]
+        if split_weight_bias and layer.has_bias():
+            return torch.cat(
+                [
+                    kronecker(evecs_g, evecs_a[:-1, :], transpose=layer.transposed),
+                    kronecker(evecs_g, evecs_a[-1:, :], transpose=layer.transposed),
+                ],
+                dim=0,
+            )
+        else:
+            return kronecker(evecs_g, evecs_a, transpose=layer.transposed)
 
     def update_diag(self, examples):
         """
         Will update the diagonal in the KFE (aka the approximate eigenvalues)
         using current values of the model's parameters
         """
-        self.data = (self.data[0], self.generator.get_kfe_diag(self.data[0], examples))
+        self.data = (
+            self.data[0],
+            self.generator.get_kfe_diag(
+                self.data[0], examples, layer_collection=self.layer_collection
+            ),
+        )
         self._kfac_coefficients = False
 
     def mv(self, vs):
@@ -787,39 +949,42 @@ class PMatEKFAC(PMatAbstract):
         vs_dict = vs.to_dict()
         out_dict = dict()
         evecs, diags = self.data
-        for l_id, l in self.generator.layer_collection.layers.items():
-            diag = diags[l_id]
-            evecs_a, evecs_g = evecs[l_id]
-            if l.transposed:
+
+        lc_merged = self.layer_collection.merge(vs.layer_collection)
+        for layer_id, layer in lc_merged.layers.items():
+            diag = diags[layer_id]
+            evecs_a, evecs_g = evecs[layer_id]
+            if layer.transposed:
                 evecs_a, evecs_g = evecs_g, evecs_a
-            vw = vs_dict[l_id][0]
+            vw = vs_dict[layer_id][0]
             sw = vw.size()
             v = vw.view(sw[0], -1)
-            if l.has_bias():
-                v = torch.cat([v, vs_dict[l_id][1].unsqueeze(1)], dim=1)
+            if layer.has_bias():
+                v = torch.cat([v, vs_dict[layer_id][1].unsqueeze(1)], dim=1)
             v_kfe = torch.mm(torch.mm(evecs_g.t(), v), evecs_a)
             mv_kfe = v_kfe * diag.view(*v_kfe.size())
             mv = torch.mm(torch.mm(evecs_g, mv_kfe), evecs_a.t())
-            if l.has_bias():
+            if layer.has_bias():
                 mv_tuple = (mv[:, :-1].contiguous().view(*sw), mv[:, -1].contiguous())
             else:
                 mv_tuple = (mv.view(*sw),)
-            out_dict[l_id] = mv_tuple
-        return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
+            out_dict[layer_id] = mv_tuple
+        return PVector(layer_collection=lc_merged, dict_repr=out_dict)
 
     def vTMv(self, vector):
         self._check_diag_updated()
         vector_dict = vector.to_dict()
         evecs, diags = self.data
         norm2 = 0
-        for l_id, l in vector.layer_collection.layers.items():
-            evecs_a, evecs_g = evecs[l_id]
-            if l.transposed:
+        lc_merged = self.layer_collection.merge(vector.layer_collection)
+        for layer_id, layer in lc_merged.layers.items():
+            evecs_a, evecs_g = evecs[layer_id]
+            if layer.transposed:
                 evecs_a, evecs_g = evecs_g, evecs_a
-            diag = diags[l_id]
-            v = vector_dict[l_id][0].view(vector_dict[l_id][0].size(0), -1)
-            if len(vector_dict[l_id]) > 1:
-                v = torch.cat([v, vector_dict[l_id][1].unsqueeze(1)], dim=1)
+            diag = diags[layer_id]
+            v = vector_dict[layer_id][0].view(vector_dict[layer_id][0].size(0), -1)
+            if len(vector_dict[layer_id]) > 1:
+                v = torch.cat([v, vector_dict[layer_id][1].unsqueeze(1)], dim=1)
 
             v_kfe = torch.mm(torch.mm(evecs_g.t(), v), evecs_a)
             norm2 += torch.dot(v_kfe.view(-1) ** 2, diag.view(-1))
@@ -845,7 +1010,11 @@ class PMatEKFAC(PMatAbstract):
         self._check_diag_updated()
         evecs, diags = self.data
         inv_diags = {i: (d + regul) ** pow for i, d in diags.items()}
-        return PMatEKFAC(generator=self.generator, data=(evecs, inv_diags))
+        return PMatEKFAC(
+            generator=self.generator,
+            data=(evecs, inv_diags),
+            layer_collection=self.layer_collection,
+        )
 
     def __pow__(self, pow):
         self._check_diag_updated()
@@ -859,7 +1028,8 @@ class PMatEKFAC(PMatAbstract):
         vs_dict = vs.to_dict()
         out_dict = dict()
         evecs, diags = self.data
-        for l_id, l in self.generator.layer_collection.layers.items():
+        lc_merged = self.layer_collection.merge(vs.layer_collection)
+        for l_id, l in lc_merged.layers.items():
             diag = diags[l_id]
             evecs_a, evecs_g = evecs[l_id]
             if l.transposed:
@@ -880,7 +1050,7 @@ class PMatEKFAC(PMatAbstract):
             else:
                 inv_tuple = (inv.view(*sw),)
             out_dict[l_id] = inv_tuple
-        return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
+        return PVector(layer_collection=lc_merged, dict_repr=out_dict)
 
     def solvePFMap(self, J, regul=1e-8, impl="default"):
         self._check_diag_updated()
@@ -889,7 +1059,8 @@ class PMatEKFAC(PMatAbstract):
 
         out_dict = OrderedDict()
         evecs, diags = self.data
-        for l_id, layer, vals in J.iter_by_module():
+        lc_merged = self.layer_collection.merge(J.layer_collection)
+        for l_id, layer, vals in J.iter_by_layer():
 
             diag = diags[l_id]
             evecs_a, evecs_g = evecs[l_id]
@@ -918,12 +1089,20 @@ class PMatEKFAC(PMatAbstract):
                 inv_tuple = (inv.view(*sw),)
             out_dict[l_id] = inv_tuple
 
-        return PFMapDense.from_dict(generator=self.generator, data_dict=out_dict)
+        return PFMapDense.from_dict(
+            generator=self.generator,
+            data_dict=out_dict,
+            layer_collection=lc_merged,
+        )
 
     def __rmul__(self, x):
         evecs, diags = self.data
         diags = {l_id: x * d for l_id, d in diags.items()}
-        return PMatEKFAC(generator=self.generator, data=(evecs, diags))
+        return PMatEKFAC(
+            generator=self.generator,
+            data=(evecs, diags),
+            layer_collection=self.layer_collection,
+        )
 
     def _check_diag_updated(self):
         if self._kfac_coefficients:
@@ -948,21 +1127,28 @@ class PMatImplicit(PMatAbstract):
     to fit in memory.
     """
 
-    def __init__(self, generator, data=None, examples=None):
+    def __init__(self, layer_collection, generator, data=None, examples=None):
         self.generator = generator
 
+        self.layer_collection = layer_collection
         assert data is None
 
         self.examples = examples
 
     def mv(self, v):
-        return self.generator.implicit_mv(v, self.examples)
+        return self.generator.implicit_mv(
+            v, self.examples, layer_collection=self.layer_collection
+        )
 
     def vTMv(self, v):
-        return self.generator.implicit_vTMv(v, self.examples)
+        return self.generator.implicit_vTMv(
+            v, self.examples, layer_collection=self.layer_collection
+        )
 
     def trace(self):
-        return self.generator.implicit_trace(self.examples)
+        return self.generator.implicit_trace(
+            self.examples, layer_collection=self.layer_collection
+        )
 
     def frobenius_norm(self):
         raise NotImplementedError
@@ -976,16 +1162,22 @@ class PMatImplicit(PMatAbstract):
     def get_diag(self):
         raise NotImplementedError
 
+    def get_device(self):
+        return "none"
+
 
 class PMatLowRank(PMatAbstract):
-    def __init__(self, generator, data=None, examples=None):
+    def __init__(self, layer_collection, generator, data=None, examples=None):
         self._check_data_examples(data, examples)
 
+        self.layer_collection = layer_collection
         self.generator = generator
         if data is not None:
             self.data = data
         else:
-            self.data = generator.get_jacobian(examples)
+            self.data = generator.get_jacobian(
+                examples, layer_collection=layer_collection
+            )
             self.data /= self.data.size(1) ** 0.5
 
     def vTMv(self, v):
@@ -1045,7 +1237,14 @@ class PMatLowRank(PMatAbstract):
         return (self.data**2).sum(dim=(0, 1))
 
     def __rmul__(self, x):
-        return PMatLowRank(generator=self.generator, data=x**0.5 * self.data)
+        return PMatLowRank(
+            generator=self.generator,
+            data=x**0.5 * self.data,
+            layer_collection=self.layer_collection,
+        )
+
+    def get_device(self):
+        return self.data.device
 
 
 class PMatQuasiDiag(PMatAbstract):
@@ -1055,20 +1254,25 @@ class PMatQuasiDiag(PMatAbstract):
     Information and Inference: A Journal of the IMA, 2015
     """
 
-    def __init__(self, generator, data=None, examples=None):
+    def __init__(self, layer_collection, generator, data=None, examples=None):
         self._check_data_examples(data, examples)
 
+        self.layer_collection = layer_collection
         self.generator = generator
         if data is not None:
             self.data = data
         else:
-            self.data = generator.get_covariance_quasidiag(examples)
+            self.data = generator.get_covariance_quasidiag(
+                examples, layer_collection=layer_collection
+            )
+
+    def get_device(self):
+        return next(iter(self.data.values()))[0].device
 
     def to_torch(self):
-        s = self.generator.layer_collection.numel()
-        device = self.generator.get_device()
-        M = torch.zeros((s, s), device=device)
-        for layer_id in self.generator.layer_collection.layers.keys():
+        s = self.layer_collection.numel()
+        M = torch.zeros((s, s), device=self.get_device())
+        for layer_id in self.layer_collection.layers.keys():
             diag, cross = self.data[layer_id]
             block_s = diag.size(0)
             block = torch.diag(diag)
@@ -1079,7 +1283,7 @@ class PMatQuasiDiag(PMatAbstract):
                 block_bias = torch.cat(
                     (
                         cross.view(cross.size(0), -1).t().reshape(-1, 1),
-                        torch.zeros((out_s * in_s, out_s), device=device),
+                        torch.zeros((out_s * in_s, out_s), device=self.get_device()),
                     ),
                     dim=1,
                 )
@@ -1091,13 +1295,13 @@ class PMatQuasiDiag(PMatAbstract):
 
                 block[: in_s * out_s, in_s * out_s :].copy_(block_bias)
                 block[in_s * out_s :, : in_s * out_s].copy_(block_bias.t())
-            start = self.generator.layer_collection.p_pos[layer_id]
+            start = self.layer_collection.p_pos[layer_id]
             M[start : start + block_s, start : start + block_s].add_(block)
         return M
 
     def frobenius_norm(self):
         norm2 = 0
-        for layer_id in self.generator.layer_collection.layers.keys():
+        for layer_id in self.layer_collection.layers.keys():
             diag, cross = self.data[layer_id]
             norm2 += torch.dot(diag, diag)
             if cross is not None:
@@ -1107,24 +1311,18 @@ class PMatQuasiDiag(PMatAbstract):
 
     def get_diag(self):
         return torch.cat(
-            [
-                self.data[l_id][0]
-                for l_id in self.generator.layer_collection.layers.keys()
-            ]
+            [self.data[l_id][0] for l_id in self.layer_collection.layers.keys()]
         )
 
     def trace(self):
         return sum(
-            [
-                self.data[l_id][0].sum()
-                for l_id in self.generator.layer_collection.layers.keys()
-            ]
+            [self.data[l_id][0].sum() for l_id in self.layer_collection.layers.keys()]
         )
 
     def vTMv(self, vs):
         vs_dict = vs.to_dict()
         out = 0
-        for layer_id, layer in self.generator.layer_collection.layers.items():
+        for layer_id, layer in self.layer_collection.layers.items():
             diag, cross = self.data[layer_id]
             v_weight = vs_dict[layer_id][0]
             if layer.bias is not None:
@@ -1148,7 +1346,7 @@ class PMatQuasiDiag(PMatAbstract):
     def mv(self, vs):
         vs_dict = vs.to_dict()
         out_dict = dict()
-        for layer_id, layer in self.generator.layer_collection.layers.items():
+        for layer_id, layer in self.layer_collection.layers.items():
             diag, cross = self.data[layer_id]
 
             v_weight = vs_dict[layer_id][0]
@@ -1176,7 +1374,7 @@ class PMatQuasiDiag(PMatAbstract):
 
         vs_dict = vs.to_dict()
         out_dict = dict()
-        for layer_id, layer in self.generator.layer_collection.layers.items():
+        for layer_id, layer in self.layer_collection.layers.items():
             diag, cross = self.data[layer_id]
 
             v_weight = vs_dict[layer_id][0]
@@ -1201,6 +1399,118 @@ class PMatQuasiDiag(PMatAbstract):
 
             out_dict[layer_id] = (solve_w.view(*s_w), solve_b)
         return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
+
+
+class PMatMixed(PMatAbstract):
+    def __init__(
+        self,
+        layer_collection,
+        generator,
+        default_representation,
+        map_layers_to,
+        data=None,
+        examples=None,
+        **kwargs,
+    ):
+        self.generator = generator
+
+        self.layer_collection = layer_collection
+        self.layer_collection_each = defaultdict(LayerCollection)
+        self.layer_map = dict()
+
+        for layer_id, layer in layer_collection.layers.items():
+            layer_type = layer.__class__
+            representation = default_representation
+            if layer_type in map_layers_to:
+                representation = map_layers_to[layer_type]
+            self.layer_collection_each[representation].add_layer(layer_id, layer)
+            self.layer_map[layer_id] = representation
+
+        self.sub_pmats = {
+            PMat_class: PMat_class(
+                layer_collection=lc,
+                generator=generator,
+                data=data,
+                examples=examples,
+                **kwargs,
+            )
+            for PMat_class, lc in self.layer_collection_each.items()
+        }
+
+        # hardcoded :-(
+        if PMatEKFAC in self.sub_pmats.keys():
+            self.update_diag = self.sub_pmats[PMatEKFAC].update_diag
+
+    def frobenius_norm(self):
+        return (
+            sum([pmat.frobenius_norm() ** 2 for pmat in self.sub_pmats.values()]) ** 0.5
+        )
+
+    def get_device(self):
+        device = None
+        for pmat in self.sub_pmats.values():
+            if device is None:
+                device = pmat.get_device()
+            elif device != pmat.get_device():
+                raise NotImplementedError("All blocks should be on the same device")
+        return device
+
+    def get_diag(self):
+        raise NotImplementedError()
+
+    def mv(self, v):
+        out_dict = dict()
+        for pmat in self.sub_pmats.values():
+            out_dict |= pmat.mv(v).to_dict()
+        return PVector(layer_collection=self.layer_collection, dict_repr=out_dict)
+
+    def solvePVec(self, v, *args, **kwargs):
+        out_dict = dict()
+        for pmat in self.sub_pmats.values():
+            out_dict |= pmat.solvePVec(v, *args, **kwargs).to_dict()
+        return PVector(layer_collection=self.layer_collection, dict_repr=out_dict)
+
+    def trace(self):
+        return sum([pmat.trace() for pmat in self.sub_pmats.values()])
+
+    def vTMv(self, v):
+        return sum([pmat.vTMv(v) for pmat in self.sub_pmats.values()])
+
+    def to_torch(self):
+        s = self.layer_collection.numel()
+        M = None
+        for layer_id, layer in self.layer_collection.layers.items():
+            numel = layer.numel()
+            start = self.layer_collection.p_pos[layer_id]
+            block = self.sub_pmats[self.layer_map[layer_id]].get_block_torch(
+                layer_id, layer
+            )
+            if M is None:
+                M = torch.zeros((s, s), device=self.get_device(), dtype=block.dtype)
+
+            M[start : start + numel, start : start + numel].add_(block)
+        return M
+
+
+class PMatEKFACBlockDiag(PMatMixed):
+    """A mixed representation where EKFAC-table layers use EKFAC,
+    and other layers use a block-diagonal matrix"""
+
+    def __init__(self, layer_collection, generator, data=None, examples=None, **kwargs):
+        super().__init__(
+            layer_collection,
+            generator,
+            data=data,
+            examples=examples,
+            default_representation=PMatBlockDiag,
+            map_layers_to={
+                LinearLayer: PMatEKFAC,
+                Conv1dLayer: PMatEKFAC,
+                Conv2dLayer: PMatEKFAC,
+                EmbeddingLayer: PMatEKFAC,
+            },
+            **kwargs,
+        )
 
 
 def bdot(A, B):
