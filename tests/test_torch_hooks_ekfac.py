@@ -27,7 +27,6 @@ def test_pspace_ekfac_vs_kfac():
     Check that EKFAC matrix is closer to block diag one in the
     sense of the Frobenius norm
     """
-    eps = 1e-4
     for get_task in [
         get_linear_3d_task,
         get_embedding_task,
@@ -47,10 +46,10 @@ def test_pspace_ekfac_vs_kfac():
 
         # here KFAC and EKFAC should be the same
         for split in [True, False]:
-            diff = M_kfac.to_torch(split_weight_bias=split) - M_ekfac.to_torch(
-                split_weight_bias=split
+            torch.testing.assert_close(
+                M_kfac.to_torch(split_weight_bias=split),
+                M_ekfac.to_torch(split_weight_bias=split),
             )
-            assert torch.norm(diff) < eps
 
         # now we compute the exact diagonal:
         M_ekfac.update_diag(loader)
@@ -59,6 +58,7 @@ def test_pspace_ekfac_vs_kfac():
         )
 
 
+@pytest.mark.filterwarnings("ignore:It is required")
 def test_pspace_ekfac_vs_direct():
     """
     Check EKFAC basic operations against direct computation using
