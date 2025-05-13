@@ -103,6 +103,12 @@ for i in range(2):
         stacked_v,
         J_back.to_torch(),
     )
+    torch.testing.assert_close(
+        torch.linalg.solve(dense_torch + regul*torch.eye(dense_torch.size(0
+        )), jaco.to_torch().view(6, -1),left=False),
+        J_back.to_torch().view(6,-1),
+    )
+
 
     # 2nd time the diag is updated
     if i == 0:

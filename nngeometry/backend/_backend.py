@@ -52,4 +52,12 @@ class AbstractBackend:
             for module in mods:
                 if isinstance(module, torch.nn.Embedding):
                     embedding_parameters.append(next(module.parameters()))
-            return embedding_parameters
+            if len(embedding_parameters) > 0:
+                return embedding_parameters
+            
+        # Otherwise return all differentiable params
+        params = []
+        for module in mods:
+            params.append(next(module.parameters()))
+        return params
+
