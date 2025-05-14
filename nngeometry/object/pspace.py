@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from collections import OrderedDict, defaultdict
+import warnings
 
 import torch
 
@@ -866,8 +867,10 @@ class PMatEKFAC(PMatAbstract):
                     diags[layer_id] = evals_g[:, None] * evals_a[None, :]
                 del a, g, kfac_blocks[layer_id]
             self.data = (evecs, diags)
+            self._kfac_coefficients = True
         else:
             self.data = data
+            self._kfac_coefficients = False
 
     def get_device(self):
         return next(iter(self.data[1].values())).device
@@ -939,8 +942,10 @@ class PMatEKFAC(PMatAbstract):
                 self.data[0], examples, layer_collection=self.layer_collection
             ),
         )
+        self._kfac_coefficients = False
 
     def mv(self, vs):
+        self._check_diag_updated()
         vs_dict = vs.to_dict()
         out_dict = dict()
         evecs, diags = self.data
@@ -967,6 +972,7 @@ class PMatEKFAC(PMatAbstract):
         return PVector(layer_collection=lc_merged, dict_repr=out_dict)
 
     def vTMv(self, vector):
+        self._check_diag_updated()
         vector_dict = vector.to_dict()
         evecs, diags = self.data
         norm2 = 0
@@ -985,18 +991,23 @@ class PMatEKFAC(PMatAbstract):
         return norm2
 
     def trace(self):
+        self._check_diag_updated()
         return sum([d.sum() for d in self.data[1].values()])
 
     def frobenius_norm(self):
+        self._check_diag_updated()
         return sum([(d**2).sum() for d in self.data[1].values()]) ** 0.5
 
     def get_diag(self, v):
+        self._check_diag_updated()
         raise NotImplementedError
 
     def inverse(self, regul=1e-8):
+        self._check_diag_updated()
         return self.pow(-1, regul=regul)
 
     def pow(self, pow, regul=1e-8):
+        self._check_diag_updated()
         evecs, diags = self.data
         inv_diags = {i: (d + regul) ** pow for i, d in diags.items()}
         return PMatEKFAC(
@@ -1006,9 +1017,11 @@ class PMatEKFAC(PMatAbstract):
         )
 
     def __pow__(self, pow):
+        self._check_diag_updated()
         return self.pow(pow)
 
     def solvePVec(self, vs, regul=1e-8, impl="default"):
+        self._check_diag_updated()
         if impl != "default":
             raise NotImplementedError
 
@@ -1040,6 +1053,7 @@ class PMatEKFAC(PMatAbstract):
         return PVector(layer_collection=lc_merged, dict_repr=out_dict)
 
     def solvePFMap(self, J, regul=1e-8, impl="default"):
+        self._check_diag_updated()
         if impl != "default":
             raise NotImplementedError
 
@@ -1089,6 +1103,16 @@ class PMatEKFAC(PMatAbstract):
             data=(evecs, diags),
             layer_collection=self.layer_collection,
         )
+
+    def _check_diag_updated(self):
+        if self._kfac_coefficients:
+            warnings.warn(
+                UserWarning(
+                    """It is required that you call .update_diag to obtain
+                          the true EKFAC matrix, otherwise the representation is equivalent
+                          to using KFAC"""
+                )
+            )
 
 
 class PMatImplicit(PMatAbstract):
