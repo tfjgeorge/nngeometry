@@ -1,5 +1,6 @@
 import pytest
 import torch
+from nngeometry.object.map import PFMapDense
 from tasks import get_conv_gn_task, get_conv_task, get_fullyconnect_task
 from utils import check_tensors
 
@@ -82,3 +83,19 @@ def test_blockdiag():
         prod_tensor = prod.to_torch()
 
         check_tensors(torch.mm(M_blockdiag1_tensor, M_blockdiag2_tensor), prod_tensor)
+
+
+def test_pfmap():
+    for get_task in nonlinear_tasks:
+        loader, lc, parameters, model1, function1 = get_task()
+        _, _, _, model2, function2 = get_task()
+
+        generator1 = TorchHooksJacobianBackend(model=model1, function=function1)
+        generator2 = TorchHooksJacobianBackend(model=model2, function=function1)
+        pfmap1 = PFMapDense(generator=generator1, examples=loader, layer_collection=lc)
+        pfmap2 = PFMapDense(generator=generator2, examples=loader, layer_collection=lc)
+
+        torch.testing.assert_close(
+            pfmap1.to_torch() + pfmap2.to_torch(), (pfmap1 + pfmap2).to_torch()
+        )
+        torch.testing.assert_close(1.23 * pfmap1.to_torch(), (1.23 * pfmap1).to_torch())

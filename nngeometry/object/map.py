@@ -37,10 +37,18 @@ class PFMapDense(PFMap):
         return PVector(self.layer_collection, vector_repr=v_flat)
 
     def __add__(self, other):
-        return PFMapDense(generator=self.generator, data=self.data + other.data)
+        return PFMapDense(
+            layer_collection=self.layer_collection,
+            generator=self.generator,
+            data=self.data + other.data,
+        )
 
     def __rmul__(self, x):
-        return PFMapDense(generator=self.generator, data=x * self.data)
+        return PFMapDense(
+            layer_collection=self.layer_collection,
+            generator=self.generator,
+            data=x * self.data,
+        )
 
     def iter_by_layer(self):
         layer_collection = self.layer_collection
