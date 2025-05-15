@@ -10,9 +10,11 @@ from torchvision import datasets, transforms
 from nngeometry.layercollection import LayerCollection
 from nngeometry.layers import Affine1d, Cosine1d, WeightNorm1d, WeightNorm2d
 
-default_datapath = "tmp"
+default_datapath = "/tmp"
 if "SLURM_TMPDIR" in os.environ:
     default_datapath = os.path.join(os.environ["SLURM_TMPDIR"], "data")
+elif "TMPDIR" in os.environ:
+    default_datapath = os.path.join(os.environ["TMPDIR"], "data")
 
 if torch.cuda.is_available():
     device = "cuda"
