@@ -74,10 +74,10 @@ class PMatAbstract(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def solvePVec(self, b, regul, impl):
+    def solvePVec(self, b, regul, solve):
         raise NotImplementedError
 
-    def solvePFMap(self, b, regul, impl):
+    def solvePFMap(self, b, regul, solve):
         J_dense = b.to_torch()
         sJ = J_dense.size()
         J_dense = J_dense.view(sJ[0] * sJ[1], sJ[2])
@@ -88,7 +88,7 @@ class PMatAbstract(ABC):
                 layer_collection=b.layer_collection,
                 vector_repr=J_dense[i, :],
             )
-            v_solve = self.solvePVec(v, regul=regul, impl=impl)
+            v_solve = self.solvePVec(v, regul=regul, solve=solve)
             vs_solve.append(v_solve.to_torch())
         return PFMapDense(
             generator=self.generator,
@@ -96,7 +96,7 @@ class PMatAbstract(ABC):
             layer_collection=b.layer_collection,
         )
 
-    def solve(self, b, regul, impl="default"):
+    def solve(self, b, regul, solve="default"):
         """
         Solves Fx = b in x
 
@@ -106,9 +106,9 @@ class PMatAbstract(ABC):
         :type b: PVector or PFMap
         """
         if isinstance(b, PVector):
-            return self.solvePVec(b, regul=regul, impl=impl)
+            return self.solvePVec(b, regul=regul, solve=solve)
         elif isinstance(b, PFMap):
-            return self.solvePFMap(b, regul=regul, impl=impl)
+            return self.solvePFMap(b, regul=regul, solve=solve)
 
     @abstractmethod
     def get_diag(self):
@@ -182,27 +182,27 @@ class PMatDense(PMatAbstract):
         else:
             raise NotImplementedError
 
-    def solvePVec(self, v, regul=1e-8, impl="solve"):
+    def solvePVec(self, v, regul=1e-8, solve="solve"):
         """
         solves v = Ax in x
         """
         # TODO: test
-        if impl in ["default", "solve"]:
+        if solve in ["default", "solve"]:
             # TODO: reuse LU decomposition once it is computed
             inv_v = self._solve_cached(v.to_torch().view(1, -1), regul=regul)
             return PVector(v.layer_collection, vector_repr=inv_v[0, :])
-        elif impl == "eigendecomposition":
+        elif solve == "eigendecomposition":
             v_eigenbasis = self.project_to_diag(v)
             inv_v_eigenbasis = v_eigenbasis / (self.evals + regul)
             return self.project_from_diag(inv_v_eigenbasis)
         else:
             raise NotImplementedError
 
-    def solvePFMap(self, J, regul=1e-8, impl="solve"):
+    def solvePFMap(self, J, regul=1e-8, solve="solve"):
         """
         solves J = AX in X
         """
-        if impl in ["default", "solve"]:
+        if solve in ["default", "solve"]:
             J_torch = J.to_torch()
             sJ = J_torch.size()
             inv_v = self._solve_cached(J_torch.view(-1, sJ[-1]), regul=regul)
@@ -362,12 +362,12 @@ class PMatDiag(PMatAbstract):
     def get_diag(self):
         return self.data
 
-    def solvePVec(self, v, regul=1e-8, impl="default"):
+    def solvePVec(self, v, regul=1e-8, solve="default"):
         """
         solves v = Ax in x
         """
         # TODO: test
-        if impl != "default":
+        if solve != "default":
             raise NotImplementedError
         solution = v.to_torch() / (self.data + regul)
         return PVector(layer_collection=v.layer_collection, vector_repr=solution)
@@ -472,9 +472,13 @@ class PMatBlockDiag(PMatAbstract):
             out_dict[layer_id] = mv_tuple
         return PVector(layer_collection=lc_merged, dict_repr=out_dict)
 
-    def solvePVec(self, vs, regul=1e-8, impl="solve"):
-        if impl not in ["solve", "default"]:
+    def solvePVec(self, vs, regul=1e-8, solve="solve"):
+        if callable(solve):
+            solve_fn = solve
+        elif solve not in ["solve", "default"]:
             raise NotImplementedError
+        else:
+            solve_fn = torch.linalg.solve
 
         vs_dict = vs.to_dict()
         out_dict = dict()
@@ -485,8 +489,10 @@ class PMatBlockDiag(PMatAbstract):
                 v = torch.cat([v, vs_dict[layer_id][1].view(-1)])
             block = self.data[layer_id]
 
-            inv_v = torch.linalg.solve(
-                block + regul * torch.eye(block.size(0), device=self.get_device()),
+            inv_v = solve_fn(
+                block
+                + regul
+                * torch.eye(block.size(0), device=self.get_device(), dtype=block.dtype),
                 v.view(-1, 1),
             )
             inv_v_tuple = (inv_v[: layer.weight.numel()].view(*layer.weight.size),)
@@ -636,8 +642,8 @@ class PMatKFAC(PMatAbstract):
     def __pow__(self, pow):
         return self.pow(pow)
 
-    def solvePVec(self, vs, regul=1e-8, impl="default", use_pi=True):
-        if impl != "default":
+    def solvePVec(self, vs, regul=1e-8, solve="default", use_pi=True):
+        if solve != "default":
             raise NotImplementedError
 
         vs_dict = vs.to_dict()
@@ -1020,9 +1026,9 @@ class PMatEKFAC(PMatAbstract):
         self._check_diag_updated()
         return self.pow(pow)
 
-    def solvePVec(self, vs, regul=1e-8, impl="default"):
+    def solvePVec(self, vs, regul=1e-8, solve="default"):
         self._check_diag_updated()
-        if impl != "default":
+        if solve != "default":
             raise NotImplementedError
 
         vs_dict = vs.to_dict()
@@ -1052,15 +1058,17 @@ class PMatEKFAC(PMatAbstract):
             out_dict[l_id] = inv_tuple
         return PVector(layer_collection=lc_merged, dict_repr=out_dict)
 
-    def solvePFMap(self, J, regul=1e-8, impl="default"):
+    def solvePFMap(self, J, regul=1e-8, solve="default"):
         self._check_diag_updated()
-        if impl != "default":
+        if solve != "default":
             raise NotImplementedError
 
         out_dict = OrderedDict()
         evecs, diags = self.data
         lc_merged = self.layer_collection.merge(J.layer_collection)
         for l_id, layer, vals in J.iter_by_layer():
+            if l_id not in lc_merged.layers:
+                continue
 
             diag = diags[l_id]
             evecs_a, evecs_g = evecs[l_id]
@@ -1225,8 +1233,8 @@ class PMatLowRank(PMatAbstract):
         )
         return torch.norm(A)
 
-    def solvePVec(self, b, regul=1e-8, impl="svd"):
-        if impl not in ["svd", "default"]:
+    def solvePVec(self, b, regul=1e-8, solve="svd"):
+        if solve not in ["svd", "default"]:
             raise NotImplementedError
 
         u, s, v = torch.svd(self.data.view(-1, self.data.size(2)))
@@ -1368,8 +1376,8 @@ class PMatQuasiDiag(PMatAbstract):
             out_dict[layer_id] = (mv_weight, mv_bias)
         return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
 
-    def solvePVec(self, vs, regul=1e-8, impl="default"):
-        if impl != "default":
+    def solvePVec(self, vs, regul=1e-8, solve="default"):
+        if solve != "default":
             raise NotImplementedError
 
         vs_dict = vs.to_dict()
@@ -1466,9 +1474,35 @@ class PMatMixed(PMatAbstract):
 
     def solvePVec(self, v, *args, **kwargs):
         out_dict = dict()
-        for pmat in self.sub_pmats.values():
-            out_dict |= pmat.solvePVec(v, *args, **kwargs).to_dict()
+        for prepr, pmat in self.sub_pmats.items():
+            if (
+                "solve" in kwargs
+                and type(kwargs["solve"]) is dict
+                and prepr in kwargs["solve"]
+            ):
+                kwargs_dispatch = kwargs | {"solve": kwargs["solve"][prepr]}
+            else:
+                kwargs_dispatch = kwargs
+            out_dict |= pmat.solvePVec(v, *args, **kwargs_dispatch).to_dict()
         return PVector(layer_collection=self.layer_collection, dict_repr=out_dict)
+
+    def solvePFMap(self, b, *args, **kwargs):
+        out_dict = dict()
+        for prepr, pmat in self.sub_pmats.items():
+            if (
+                "solve" in kwargs
+                and type(kwargs["solve"]) is dict
+                and prepr in kwargs["solve"]
+            ):
+                kwargs_dispatch = kwargs | {"solve": kwargs["solve"][prepr]}
+            else:
+                kwargs_dispatch = kwargs
+            out_dict |= pmat.solvePFMap(b, *args, **kwargs_dispatch).to_dict()
+        return PFMapDense.from_dict(
+            layer_collection=self.layer_collection,
+            generator=self.generator,
+            data_dict=out_dict,
+        )
 
     def trace(self):
         return sum([pmat.trace() for pmat in self.sub_pmats.values()])
