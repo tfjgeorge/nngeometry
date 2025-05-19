@@ -198,7 +198,7 @@ class PMatDense(PMatAbstract):
         else:
             raise NotImplementedError
 
-    def solvePFMap(self, J, regul=1e-8, solve="solve"):
+    def solvePFMap(self, b, regul=1e-8, solve="solve"):
         """
         solves J = AX in X
         """
@@ -472,7 +472,7 @@ class PMatBlockDiag(PMatAbstract):
             out_dict[layer_id] = mv_tuple
         return PVector(layer_collection=lc_merged, dict_repr=out_dict)
 
-    def solvePVec(self, vs, regul=1e-8, solve="solve"):
+    def solve_block(self, d, layer_id, regul, solve):
         if callable(solve):
             solve_fn = solve
         elif solve not in ["solve", "default"]:
@@ -480,30 +480,44 @@ class PMatBlockDiag(PMatAbstract):
         else:
             solve_fn = torch.linalg.solve
 
-        vs_dict = vs.to_dict()
+        layer = self.layer_collection.layers[layer_id]
+        v = d[0].view(-1, layer.weight.numel())
+        if layer.has_bias():
+            v = torch.cat([v, d[1].view(-1, layer.bias.numel())], dim=1)
+        block = self.data[layer_id]
+
+        inv_v = solve_fn(
+            block
+            + regul
+            * torch.eye(block.size(0), device=self.get_device(), dtype=block.dtype),
+            v.t(),
+        )
+        inv_v_tuple = (inv_v[: layer.weight.numel()].view(*layer.weight.size),)
+        if layer.has_bias():
+            inv_v_tuple = (
+                inv_v_tuple[0],
+                inv_v[layer.weight.numel() :].view(*layer.bias.size),
+            )
+
+        return inv_v_tuple
+
+    def solvePVec(self, vs, regul=1e-8, solve="solve"):
         out_dict = dict()
         lc_merged = self.layer_collection.merge(vs.layer_collection)
-        for layer_id, layer in lc_merged.layers.items():
-            v = vs_dict[layer_id][0].view(-1)
-            if layer.bias is not None:
-                v = torch.cat([v, vs_dict[layer_id][1].view(-1)])
-            block = self.data[layer_id]
-
-            inv_v = solve_fn(
-                block
-                + regul
-                * torch.eye(block.size(0), device=self.get_device(), dtype=block.dtype),
-                v.view(-1, 1),
-            )
-            inv_v_tuple = (inv_v[: layer.weight.numel()].view(*layer.weight.size),)
-            if layer.bias is not None:
-                inv_v_tuple = (
-                    inv_v_tuple[0],
-                    inv_v[layer.weight.numel() :].view(*layer.bias.size),
-                )
-
-            out_dict[layer_id] = inv_v_tuple
+        for layer_id in lc_merged.layers.keys():
+            d = vs.to_torch_layer(layer_id)
+            out_dict[layer_id] = self.solve_block(d, layer_id, regul=regul, solve=solve)
         return PVector(layer_collection=lc_merged, dict_repr=out_dict)
+
+    def solvePMap(self, vs, regul=1e-8, solve="solve"):
+        out_dict = dict()
+        lc_merged = self.layer_collection.merge(vs.layer_collection)
+        for layer_id in lc_merged.layers.keys():
+            d = vs.to_torch_layer(layer_id)
+            out_dict[layer_id] = self.solve_block(d, layer_id, regul=regul, solve=solve)
+        return PFMapDense.from_dict(
+            layer_collection=lc_merged, generator=self.generator, data_dict=out_dict
+        )
 
     def inverse(self, regul=1e-8):
         inv_data = dict()
@@ -1058,7 +1072,7 @@ class PMatEKFAC(PMatAbstract):
             out_dict[l_id] = inv_tuple
         return PVector(layer_collection=lc_merged, dict_repr=out_dict)
 
-    def solvePFMap(self, J, regul=1e-8, solve="default"):
+    def solvePFMap(self, b, regul=1e-8, solve="default"):
         self._check_diag_updated()
         if solve != "default":
             raise NotImplementedError
@@ -1497,7 +1511,12 @@ class PMatMixed(PMatAbstract):
                 kwargs_dispatch = kwargs | {"solve": kwargs["solve"][prepr]}
             else:
                 kwargs_dispatch = kwargs
-            out_dict |= pmat.solvePFMap(b, *args, **kwargs_dispatch).to_dict()
+            out_dict |= {
+                k: v
+                for k, _, v in pmat.solvePFMap(
+                    b, *args, **kwargs_dispatch
+                ).iter_by_layer()
+            }
         return PFMapDense.from_dict(
             layer_collection=self.layer_collection,
             generator=self.generator,
