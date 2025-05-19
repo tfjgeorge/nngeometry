@@ -94,9 +94,8 @@ class PVector:
         Note. This is an inplace operation
         """
         dict_repr = self.to_dict()
-        layer_collection = LayerCollection.from_model(model)
-        l_to_m = layer_collection.get_layerid_module_map(model)
-        for layer_id, layer in layer_collection.layers.items():
+        l_to_m = self.layer_collection.get_layerid_module_map(model)
+        for layer_id, layer in self.layer_collection.layers.items():
             mod = l_to_m[layer_id]
             if layer.bias is not None:
                 mod.bias.data.copy_(dict_repr[layer_id][1])
@@ -109,9 +108,8 @@ class PVector:
         Note. This is an inplace operation
         """
         dict_repr = self.to_dict()
-        layer_collection = LayerCollection.from_model(model)
-        l_to_m = layer_collection.get_layerid_module_map(model)
-        for layer_id, layer in layer_collection.layers.items():
+        l_to_m = self.layer_collection.get_layerid_module_map(model)
+        for layer_id, layer in self.layer_collection.layers.items():
             mod = l_to_m[layer_id]
             if layer.bias is not None:
                 mod.bias.data.add_(dict_repr[layer_id][1])
