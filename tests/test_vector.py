@@ -179,6 +179,45 @@ def test_from_to_model():
     for p2, p3 in zip(model2.parameters(), model3.parameters()):
         check_tensors(p2, p3)
 
+def test_from_to_model_with_lc():
+    model1 = ConvNet()
+    model2 = ConvNet()
+
+    lc = LayerCollection()
+    lc_other = LayerCollection()
+    for layer_name, mod in model1.named_modules():
+        if len(list(mod.children())) == 0:
+            if layer_name != 'conv3':
+                lc.add_layer_from_model(model1, mod)
+            else:
+                lc_other.add_layer_from_model(model1, mod)
+
+    w1 = PVector.from_model(model1, layer_collection=lc).clone()
+    w2 = PVector.from_model(model2, layer_collection=lc).clone()
+
+    model3 = ConvNet()
+    w1.copy_to_model(model3)
+    # now model1 and model3 should be the same
+
+    for id1, p1 in model1.named_parameters():
+        p3 = model3.get_parameter(id1)
+        if id1.split('.')[0] == "conv3":
+            assert torch.norm(p1 - p3) > .1
+        else:
+            torch.testing.assert_close(p1, p3)
+
+    ###
+    diff_1_2 = w2 - w1
+    diff_1_2.add_to_model(model3)
+    # now model2 and model3 should be the same
+
+    for id2, p2 in model2.named_parameters():
+        p3 = model3.get_parameter(id2)
+        if id2.split('.')[0] == "conv3":
+            assert torch.norm(p2 - p3) > .1
+        else:
+            torch.testing.assert_close(p2, p3)
+
 
 def test_dot():
     model = ConvNet()
