@@ -23,7 +23,10 @@ class PFMapDense(PFMap):
 
     def to_torch(self):
         return self.data
-
+    
+    def size(self):
+        return self.data.size()
+    
     def jvp(self, v):
         v_flat = torch.mv(self.data.view(-1, self.data.size(-1)), v.to_torch())
         v_flat = v_flat.view(self.data.size(0), self.data.size(1))
@@ -53,19 +56,22 @@ class PFMapDense(PFMap):
     def iter_by_layer(self):
         layer_collection = self.layer_collection
         for layer_id, layer in layer_collection.layers.items():
-            start = layer_collection.p_pos[layer_id]
-            w = self.data[:, :, start : start + layer.weight.numel()].view(
-                self.data.size(0), self.data.size(1), *layer.weight.size
+            yield layer_id, layer, self.to_torch_layer(layer_id)
+    
+    def to_torch_layer(self, layer_id):
+        start = self.layer_collection.p_pos[layer_id]
+        layer = self.layer_collection.layers[layer_id]
+        w = self.data[:, :, start : start + layer.weight.numel()].view(
+            self.data.size(0), self.data.size(1), *layer.weight.size
+        )
+        start += layer.weight.numel()
+        if layer.has_bias():
+            b = self.data[:, :, start : start + layer.bias.numel()].view(
+                self.data.size(0), self.data.size(1), *layer.bias.size
             )
-            start += layer.weight.numel()
-            if layer.has_bias():
-                b = self.data[:, :, start : start + layer.bias.numel()].view(
-                    self.data.size(0), self.data.size(1), *layer.bias.size
-                )
-                start += layer.bias.numel()
-                yield layer_id, layer, (w, b)
-            else:
-                yield layer_id, layer, (w,)
+            return (w, b)
+        else:
+            return (w,)
 
     def from_dict(layer_collection, generator, data_dict):
         parts = []

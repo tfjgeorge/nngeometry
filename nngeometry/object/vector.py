@@ -215,6 +215,25 @@ class PVector:
             else:
                 dict_repr[layer_id] = (w,)
         return dict_repr
+    
+    def to_torch_layer(self, layer_id):
+        if self.dict_repr is not None:
+            return self.dict_repr[layer_id]
+        
+        start = self.layer_collection.p_pos[layer_id]
+        layer = self.layer_collection.layers[layer_id]
+        w = self.vector_repr[start : start + layer.weight.numel()].view(
+            *layer.weight.size
+        )
+        start += layer.weight.numel()
+        if layer.has_bias():
+            b = self.vector_repr[start : start + layer.bias.numel()].view(
+                *layer.bias.size
+            )
+            start += layer.bias.numel()
+            return (w, b)
+        else:
+            return (w,)
 
     def norm(self, p=2):
         """
