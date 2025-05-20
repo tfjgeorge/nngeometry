@@ -24,6 +24,9 @@ class PFMapDense(PFMap):
     def to_torch(self):
         return self.data
     
+    def size(self):
+        return self.data.size()
+    
     def jvp(self, v):
         v_flat = torch.mv(self.data.view(-1, self.data.size(-1)), v.to_torch())
         v_flat = v_flat.view(self.data.size(0), self.data.size(1))
@@ -52,8 +55,8 @@ class PFMapDense(PFMap):
 
     def iter_by_layer(self):
         layer_collection = self.layer_collection
-        for layer_id, _ in layer_collection.layers.items():
-            yield self.get_layer(layer_id)
+        for layer_id, layer in layer_collection.layers.items():
+            yield layer_id, layer, self.to_torch_layer(layer_id)
     
     def to_torch_layer(self, layer_id):
         start = self.layer_collection.p_pos[layer_id]
