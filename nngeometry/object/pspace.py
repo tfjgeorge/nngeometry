@@ -516,7 +516,7 @@ class PMatBlockDiag(PMatAbstract):
         lc_merged = self.layer_collection.merge(x.layer_collection)
         for layer_id in lc_merged.layers.keys():
             d = x.to_torch_layer(layer_id)
-            so, sb, _ = d[0].size()  # out x minibatch x rest
+            so, sb, *_ = d[0].size()  # out x minibatch x rest
             out_dict[layer_id] = tuple(
                 p.view(so, sb, -1)
                 for p in self.solve_block(d, layer_id, regul=regul, solve=solve)
