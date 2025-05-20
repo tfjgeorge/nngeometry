@@ -5,6 +5,7 @@ from .pspace import (
     PMatDense,
     PMatDiag,
     PMatEKFAC,
+    PMatEye,
     PMatImplicit,
     PMatKFAC,
     PMatLowRank,
@@ -26,4 +27,5 @@ __all__ = [
     "PMatKFAC",
     "PMatLowRank",
     "PMatQuasiDiag",
+    "PMatEye",
 ]
