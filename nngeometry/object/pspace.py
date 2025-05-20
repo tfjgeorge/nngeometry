@@ -1572,6 +1572,52 @@ class PMatEKFACBlockDiag(PMatMixed):
         )
 
 
+class PMatEye(PMatAbstract):
+    def __init__(self, layer_collection, scaling=torch.tensor(1.0), **kwargs):
+        self.layer_collection = layer_collection
+        self.scaling = scaling
+        self.generator = None
+
+    def solvePVec(self, v, regul=1e-8, solve="default"):
+        if solve != "default":
+            raise NotImplementedError
+        solution = v.to_torch() / (self.scaling + regul)
+        return PVector(layer_collection=v.layer_collection, vector_repr=solution)
+
+    def vTMv(self, v):
+        v_flat = v.to_torch()
+        return self.scaling * torch.dot(v_flat, v_flat)
+
+    def frobenius_norm(self):
+        return self.size(0) ** 0.5 * torch.abs(self.scaling)
+
+    def mv(self, v):
+        v_flat = v.to_torch() * self.scaling
+        return PVector(v.layer_collection, vector_repr=v_flat)
+
+    def trace(self):
+        return self.scaling * self.size(0)
+
+    def get_device(self):
+        return self.scaling.device
+
+    def get_diag(self):
+        return self.scaling * torch.ones(
+            self.size(0), dtype=self.scaling.dtype, device=self.scaling.device
+        )
+
+    def to_torch(self):
+        return self.scaling * torch.eye(
+            self.size(0), dtype=self.scaling.dtype, device=self.scaling.device
+        )
+
+    def __rmul__(self, x):
+        return PMatEye(
+            layer_collection=self.layer_collection,
+            scaling=x * self.scaling,
+        )
+
+
 def bdot(A, B):
     """
     batched dot product
