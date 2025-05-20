@@ -1184,7 +1184,7 @@ class PMatImplicit(PMatAbstract):
     def to_torch(self):
         raise NotImplementedError
 
-    def solvePVec(self, xargs):
+    def solvePVec(self, *args):
         raise NotImplementedError
 
     def get_diag(self):
