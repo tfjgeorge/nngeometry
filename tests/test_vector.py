@@ -2,30 +2,11 @@ import pytest
 import torch
 import torch.nn as nn
 import torch.nn.functional as tF
+from tasks import ConvNet
 from utils import check_ratio, check_tensors
 
 from nngeometry.layercollection import LayerCollection
 from nngeometry.object.vector import PVector, random_pvector, random_pvector_dict
-
-
-class ConvNet(nn.Module):
-    def __init__(self):
-        super(ConvNet, self).__init__()
-        self.conv1 = nn.Conv2d(1, 5, 3, 1)
-        self.conv2 = nn.Conv2d(5, 6, 4, 1, bias=False)
-        self.conv3 = nn.Conv2d(6, 7, 3, 1)
-        self.fc1 = nn.Linear(1 * 1 * 7, 10)
-
-    def forward(self, x):
-        x = tF.relu(self.conv1(x))
-        x = tF.max_pool2d(x, 2, 2)
-        x = tF.relu(self.conv2(x))
-        x = tF.max_pool2d(x, 2, 2)
-        x = tF.relu(self.conv3(x))
-        x = tF.max_pool2d(x, 2, 2)
-        x = x.view(-1, 1 * 1 * 7)
-        x = self.fc1(x)
-        return tF.log_softmax(x, dim=1)
 
 
 @pytest.fixture(autouse=True)
@@ -179,6 +160,7 @@ def test_from_to_model():
     for p2, p3 in zip(model2.parameters(), model3.parameters()):
         check_tensors(p2, p3)
 
+
 def test_from_to_model_with_lc():
     model1 = ConvNet()
     model2 = ConvNet()
@@ -187,7 +169,7 @@ def test_from_to_model_with_lc():
     lc_other = LayerCollection()
     for layer_name, mod in model1.named_modules():
         if len(list(mod.children())) == 0:
-            if layer_name != 'conv3':
+            if layer_name != "conv3":
                 lc.add_layer_from_model(model1, mod)
             else:
                 lc_other.add_layer_from_model(model1, mod)
@@ -201,8 +183,8 @@ def test_from_to_model_with_lc():
 
     for id1, p1 in model1.named_parameters():
         p3 = model3.get_parameter(id1)
-        if id1.split('.')[0] == "conv3":
-            assert torch.norm(p1 - p3) > .1
+        if id1.split(".")[0] == "conv3":
+            assert torch.norm(p1 - p3) > 0.1
         else:
             torch.testing.assert_close(p1, p3)
 
@@ -213,8 +195,8 @@ def test_from_to_model_with_lc():
 
     for id2, p2 in model2.named_parameters():
         p3 = model3.get_parameter(id2)
-        if id2.split('.')[0] == "conv3":
-            assert torch.norm(p2 - p3) > .1
+        if id2.split(".")[0] == "conv3":
+            assert torch.norm(p2 - p3) > 0.1
         else:
             torch.testing.assert_close(p2, p3)
 
