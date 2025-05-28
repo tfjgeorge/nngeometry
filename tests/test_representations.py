@@ -99,3 +99,6 @@ def test_pfmap():
             pfmap1.to_torch() + pfmap2.to_torch(), (pfmap1 + pfmap2).to_torch()
         )
         torch.testing.assert_close(1.23 * pfmap1.to_torch(), (1.23 * pfmap1).to_torch())
+        torch.testing.assert_close(
+            pfmap1.to_torch() - pfmap2.to_torch(), (pfmap1 - pfmap2).to_torch()
+        )
