@@ -9,9 +9,10 @@ def Hessian(
     representation,
     function=None,
     layer_collection=None,
+    verbose=False,
 ):
 
-    generator = TorchFuncHessianBackend(model=model, function=function)
+    generator = TorchFuncHessianBackend(model=model, function=function, verbose=verbose)
 
     if layer_collection is None:
         layer_collection = LayerCollection.from_model(model)
