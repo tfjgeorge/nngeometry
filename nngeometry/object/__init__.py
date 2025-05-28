@@ -5,9 +5,11 @@ from .pspace import (
     PMatDense,
     PMatDiag,
     PMatEKFAC,
+    PMatEKFACBlockDiag,
     PMatImplicit,
     PMatKFAC,
     PMatLowRank,
+    PMatMixed,
     PMatQuasiDiag,
 )
 from .vector import FVector, PVector
@@ -26,4 +28,6 @@ __all__ = [
     "PMatKFAC",
     "PMatLowRank",
     "PMatQuasiDiag",
+    "PMatMixed",
+    "PMatEKFACBlockDiag",
 ]
