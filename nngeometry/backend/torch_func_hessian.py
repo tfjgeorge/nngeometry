@@ -1,15 +1,14 @@
 import torch
 
-from nngeometry.layercollection import LayerCollection
-
 from ._backend import AbstractBackend
 
 
 class TorchFuncHessianBackend(AbstractBackend):
 
-    def __init__(self, model, function):
+    def __init__(self, model, function, verbose=False):
         self.model = model
         self.function = function
+        self.verbose = verbose
 
     def get_covariance_matrix(self, examples, layer_collection):
         layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
@@ -26,7 +25,7 @@ class TorchFuncHessianBackend(AbstractBackend):
 
         params_dict = dict(layer_collection.named_parameters(layerid_to_mod))
 
-        for d in loader:
+        for d in self._get_iter_loader(loader):
             inputs = d[0].to(device)
 
             H_mb = torch.func.hessian(compute_loss)(
