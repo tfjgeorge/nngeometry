@@ -40,8 +40,6 @@ class PMatAbstract(ABC):
     def __init__(self, layer_collection, generator, data=None, examples=None):
         raise NotImplementedError
 
-        self.layer_collection = layer_collection
-
     @abstractmethod
     def to_torch(self):
         raise NotImplementedError

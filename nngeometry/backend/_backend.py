@@ -1,5 +1,6 @@
 from torch.utils.data import DataLoader, TensorDataset
 import torch
+from tqdm import tqdm
 
 differentiable_dtypes = [torch.float16, torch.float32, torch.float64]
 
@@ -54,10 +55,15 @@ class AbstractBackend:
                     embedding_parameters.append(next(module.parameters()))
             if len(embedding_parameters) > 0:
                 return embedding_parameters
-            
+
         # Otherwise return all differentiable params
         params = []
         for module in mods:
             params.append(next(module.parameters()))
         return params
 
+    def _get_iter_loader(self, loader):
+        if self.verbose:
+            return tqdm(iter(loader))
+        else:
+            return iter(loader)

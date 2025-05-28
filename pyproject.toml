@@ -27,7 +27,8 @@ classifiers = [
 ]
 dependencies = [
   "torch",
-  "torchvision"
+  "torchvision",
+  "tqdm"
 ]
 
 [project.urls]

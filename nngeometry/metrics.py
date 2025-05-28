@@ -1,5 +1,5 @@
-from functools import partial
 from enum import StrEnum
+from functools import partial
 
 import torch
 
@@ -16,6 +16,8 @@ def FIM_MonteCarlo(
     device="cpu",
     function=None,
     layer_collection=None,
+    verbose=False,
+    **kwargs,
 ):
     """
     Helper that creates a matrix computing the Fisher Information
@@ -94,11 +96,13 @@ def FIM_MonteCarlo(
         raise NotImplementedError
 
     generator = TorchHooksJacobianBackend(
-        model=model,
-        function=fim_function,
+        model=model, function=fim_function, verbose=verbose
     )
     return representation(
-        generator=generator, examples=loader, layer_collection=layer_collection
+        generator=generator,
+        examples=loader,
+        layer_collection=layer_collection,
+        **kwargs,
     )
 
 
@@ -110,6 +114,7 @@ def FIM(
     device="cpu",
     function=None,
     layer_collection=None,
+    verbose=False,
     **kwargs,
 ):
     """
@@ -158,8 +163,7 @@ def FIM(
     function_fim = partial(SQRT_VAR[variant], function)
 
     generator = TorchHooksJacobianBackend(
-        model=model,
-        function=function_fim,
+        model=model, function=function_fim, verbose=verbose
     )
 
     return representation(
