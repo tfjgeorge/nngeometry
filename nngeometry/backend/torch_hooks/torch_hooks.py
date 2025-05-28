@@ -48,9 +48,10 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
     """
 
-    def __init__(self, model, function=None, centering=False):
+    def __init__(self, model, function=None, centering=False, verbose=False):
         self.model = model
         self.centering = centering
+        self.verbose = verbose
 
         # this contains functions that require knowledge of number of
         # outputs, not known before first minibatch
@@ -95,7 +96,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         self._buffer["start"] = 0
         self._buffer["i_output"] = 0
-        for d in loader:
+        for d in self._get_iter_loader(loader):
             self._buffer["xs"] = dict()
             inputs = d[0]
             grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
@@ -145,7 +146,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             (n_parameters,), device=device, dtype=dtype
         )
         self._buffer["start"] = 0
-        for d in loader:
+        for d in self._get_iter_loader(loader):
             self._buffer["xs"] = dict()
             inputs = d[0]
             grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
@@ -198,7 +199,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
                     torch.zeros(cross_s, device=device, dtype=dtype),
                 )
 
-        for d in loader:
+        for d in self._get_iter_loader(loader):
             self._buffer["xs"] = dict()
             inputs = d[0]
             grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
@@ -244,7 +245,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 (s, s), device=device, dtype=dtype
             )
 
-        for d in loader:
+        for d in self._get_iter_loader(loader):
             self._buffer["xs"] = dict()
             inputs = d[0]
             grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
@@ -303,7 +304,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 torch.zeros((sG, sG), device=device, dtype=dtype),
             )
 
-        for d in loader:
+        for d in self._get_iter_loader(loader):
             self._buffer["xs"] = dict()
             inputs = d[0]
             grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
@@ -350,7 +351,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self.delayed_for_n_ouput.append(_f)
 
         self._buffer["start"] = 0
-        for d in loader:
+        for d in self._get_iter_loader(loader):
             self._buffer["xs"] = dict()
             inputs = d[0]
             grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
@@ -400,7 +401,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         self._buffer["gy_outer"] = dict()
         self._buffer["e_outer"] = 0
-        for i_outer, d in enumerate(loader):
+        for i_outer, d in enumerate(self._get_iter_loader(loader)):
             self._buffer["x_outer"] = dict()
             # used in hooks to switch between store/compute
             inputs_outer = d[0]
@@ -531,7 +532,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 (sG * sA), device=device, dtype=dtype
             )
 
-        for d in loader:
+        for d in self._get_iter_loader(loader):
             self._buffer["xs"] = dict()
             inputs = d[0]
             grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
@@ -585,7 +586,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         self._buffer["i_output"] = 0
         self._buffer["start"] = 0
-        for d in loader:
+        for d in self._get_iter_loader(loader):
             self._buffer["xs"] = dict()
             inputs = d[0]
             grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
@@ -656,7 +657,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self._buffer["start"] = 0
         norm2 = 0
         self._buffer["compute_switch"] = True
-        for d in loader:
+        for d in self._get_iter_loader(loader):
             self._buffer["xs"] = dict()
             inputs = d[0]
             grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
@@ -695,7 +696,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         n_examples = len(loader.sampler)
 
         self._buffer["trace"] = torch.tensor(0.0, device=device)
-        for d in loader:
+        for d in self._get_iter_loader(loader):
             self._buffer["xs"] = dict()
             inputs = d[0]
             grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
@@ -740,7 +741,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         self._buffer["start"] = 0
         self._buffer["compute_switch"] = True
-        for d in loader:
+        for d in self._get_iter_loader(loader):
             self._buffer["xs"] = dict()
             inputs = d[0]
             grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
