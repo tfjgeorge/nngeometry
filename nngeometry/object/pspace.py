@@ -37,7 +37,7 @@ class PMatAbstract(ABC):
     """
 
     @abstractmethod
-    def __init__(self, layer_collection, generator, data=None, examples=None):
+    def __init__(self, layer_collection, generator, data=None, examples=None, **kwargs):
         raise NotImplementedError
 
     @abstractmethod
@@ -160,7 +160,7 @@ class PMatAbstract(ABC):
 
 
 class PMatDense(PMatAbstract):
-    def __init__(self, layer_collection, generator, data=None, examples=None):
+    def __init__(self, layer_collection, generator, data=None, examples=None, **kwargs):
         self._check_data_examples(data, examples)
 
         self.layer_collection = layer_collection
@@ -317,7 +317,7 @@ class PMatDense(PMatAbstract):
 
 
 class PMatDiag(PMatAbstract):
-    def __init__(self, layer_collection, generator, data=None, examples=None):
+    def __init__(self, layer_collection, generator, data=None, examples=None, **kwargs):
         self._check_data_examples(data, examples)
 
         self.layer_collection = layer_collection
@@ -598,7 +598,7 @@ class PMatBlockDiag(PMatAbstract):
 
 
 class PMatKFAC(PMatAbstract):
-    def __init__(self, layer_collection, generator, data=None, examples=None):
+    def __init__(self, layer_collection, generator, data=None, examples=None, **kwargs):
         self._check_data_examples(data, examples)
 
         self.layer_collection = layer_collection
@@ -862,6 +862,7 @@ class PMatEKFAC(PMatAbstract):
         data=None,
         examples=None,
         eigendecomposition=None,
+        **kwargs,
     ):
         self._check_data_examples(data, examples)
 
@@ -1153,7 +1154,7 @@ class PMatImplicit(PMatAbstract):
     to fit in memory.
     """
 
-    def __init__(self, layer_collection, generator, data=None, examples=None):
+    def __init__(self, layer_collection, generator, data=None, examples=None, **kwargs):
         self.generator = generator
 
         self.layer_collection = layer_collection
@@ -1193,7 +1194,7 @@ class PMatImplicit(PMatAbstract):
 
 
 class PMatLowRank(PMatAbstract):
-    def __init__(self, layer_collection, generator, data=None, examples=None):
+    def __init__(self, layer_collection, generator, data=None, examples=None, **kwargs):
         self._check_data_examples(data, examples)
 
         self.layer_collection = layer_collection
@@ -1280,7 +1281,7 @@ class PMatQuasiDiag(PMatAbstract):
     Information and Inference: A Journal of the IMA, 2015
     """
 
-    def __init__(self, layer_collection, generator, data=None, examples=None):
+    def __init__(self, layer_collection, generator, data=None, examples=None, **kwargs):
         self._check_data_examples(data, examples)
 
         self.layer_collection = layer_collection
