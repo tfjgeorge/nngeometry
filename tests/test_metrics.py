@@ -189,6 +189,39 @@ def test_FIM_vs_linearization_regression():
         assert mean_quotient > 1 - 5e-2 and mean_quotient < 1 + 5e-2
 
 
+def test_direct_vs_MC_regression():
+    for get_task in nonlinear_tasks:
+
+        loader, lc, parameters, model, function = get_task()
+
+        model.train()
+        # get one minibatch output
+        out = model(to_device(next(iter(loader))[0]))
+        sigma_2 = out.var()
+
+        F = FIM(
+            layer_collection=lc,
+            model=model,
+            loader=loader,
+            variant="regression",
+            representation=PMatDense,
+            function=lambda *d: model(to_device(d[0])),
+        )
+
+        F_MC = sigma_2**-1 * FIM_MonteCarlo(
+            layer_collection=lc,
+            model=model,
+            loader=loader,
+            variant="regression",
+            representation=PMatDense,
+            trials=22,
+            covariance=sigma_2,
+            function=lambda *d: model(to_device(d[0])),
+        )
+
+    assert ((F - F_MC).frobenius_norm() / F.frobenius_norm()) < 0.1
+
+
 def test_FIM_MC_vs_linearization_segmentation():
     step = 1e-2
     variant = "segmentation_logits"
