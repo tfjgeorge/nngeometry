@@ -424,6 +424,8 @@ class PMatBlockDiag(PMatAbstract):
                 examples, layer_collection=layer_collection
             )
 
+        self._cache = {"ldl": dict()}
+
     def trace(self):
         # TODO test
         return sum([torch.trace(b) for b in self.data.values()])
@@ -470,26 +472,41 @@ class PMatBlockDiag(PMatAbstract):
             out_dict[layer_id] = mv_tuple
         return PVector(layer_collection=lc_merged, dict_repr=out_dict)
 
-    def solve_block(self, d, layer_id, regul, solve):
-        if callable(solve):
-            solve_fn = solve
-        elif solve not in ["solve", "default"]:
-            raise NotImplementedError
-        else:
-            solve_fn = torch.linalg.solve
+    def _solve_cached(self, d, layer_id, regul):
+        if regul not in self._cache["ldl"]:
+            self._cache["ldl"][regul] = dict()
+        if layer_id in self._cache["ldl"][regul]:
+            LD, pivots = self._cache["ldl"][regul][layer_id]
+        else:  # ldl decomposition is not currently cached for regul value
+            LD, pivots = torch.linalg.ldl_factor(
+                self.data[layer_id]
+                + regul
+                * torch.eye(self.data[layer_id].size(0), device=self.get_device()),
+            )
+            self._cache["ldl"][regul][layer_id] = (LD, pivots)
+        return torch.linalg.ldl_solve(LD, pivots, d.t()).t()
 
+    def solve_block(self, d, layer_id, regul, solve):
         layer = self.layer_collection.layers[layer_id]
         v = d[0].view(-1, layer.weight.numel())
         if layer.has_bias():
             v = torch.cat([v, d[1].view(-1, layer.bias.numel())], dim=1)
-        block = self.data[layer_id]
 
-        inv_v = solve_fn(
-            block
-            + regul
-            * torch.eye(block.size(0), device=self.get_device(), dtype=block.dtype),
-            v.t(),
-        ).t()
+        if callable(solve):
+
+            block = self.data[layer_id]
+            inv_v = solve(
+                block
+                + regul
+                * torch.eye(block.size(0), device=self.get_device(), dtype=block.dtype),
+                v.t(),
+            ).t()
+
+        elif solve not in ["solve", "default"]:
+            raise NotImplementedError
+        else:
+            inv_v = self._solve_cached(v, layer_id=layer_id, regul=regul)
+
         inv_v_tuple = (inv_v[:, : layer.weight.numel()].view(-1, *layer.weight.size),)
         if layer.has_bias():
             inv_v_tuple = (
