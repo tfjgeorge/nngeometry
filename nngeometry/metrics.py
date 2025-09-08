@@ -2,6 +2,7 @@ from enum import StrEnum
 from functools import partial
 
 import torch
+from torch.distributions.multivariate_normal import MultivariateNormal
 
 from .backend import TorchHooksJacobianBackend
 from .layercollection import LayerCollection
@@ -91,6 +92,26 @@ def FIM_MonteCarlo(
             sampled_targets = torch.gather(log_softmax, 1, sampled_indices)
             sampled_targets = sampled_targets.view(s_mb, s_h * s_w, trials).sum(dim=1)
             return trials**-0.5 * sampled_targets
+
+    elif variant == "regression":
+
+        if "covariance" in kwargs:
+            sigma_2 = kwargs["covariance"]
+        else:
+            sigma_2 = 1
+
+        def fim_function(*d):
+            output = function(*d)
+            covariance = sigma_2 * torch.eye(
+                output.size(-1), dtype=output.dtype, device=output.device
+            )
+            mean = torch.zeros(
+                output.size(-1), dtype=output.dtype, device=output.device
+            )
+            normal = MultivariateNormal(loc=mean, covariance_matrix=covariance).sample(
+                sample_shape=(trials, output.size(0))
+            )
+            return trials**-0.5 * (normal * output).sum(dim=-1)
 
     else:
         raise NotImplementedError
