@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from collections import OrderedDict, defaultdict
+from copy import copy
 import warnings
 
 import torch
@@ -1533,6 +1534,30 @@ class PMatMixed(PMatAbstract):
 
     def vTMv(self, v):
         return sum([pmat.vTMv(v) for pmat in self.sub_pmats.values()])
+
+    def __rmul__(self, x):
+        sub_pmats = {k: x * pmat for k, pmat in self.sub_pmats.items()}
+        cp = copy(self)
+        cp.sub_pmats = sub_pmats
+        return cp
+
+    def __getstate__(self):
+        return {
+            "layer_collection": self.layer_collection,
+            "layer_collection_each": self.layer_collection_each,
+            "layer_map": self.layer_map,
+            "sub_pmats": self.sub_pmats,
+            "device": self.get_device(),
+        }
+
+    def __setstate__(self, state_dict):
+        self.layer_collection = state_dict["layer_collection"]
+        self.layer_collection_each = state_dict["layer_collection_each"]
+        self.layer_map = state_dict["layer_map"]
+        self.sub_pmats = state_dict["sub_pmats"]
+        self.generator = DummyGenerator(state_dict["device"])
+        if PMatEKFAC in self.sub_pmats.keys():
+            self.update_diag = self.sub_pmats[PMatEKFAC].update_diag
 
     def to_torch(self):
         s = self.layer_collection.numel()

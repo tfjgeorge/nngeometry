@@ -23,6 +23,9 @@ def test_pmatmixed_ekfac():
                 torch.norm(dense_torch), pmat_mixed.frobenius_norm()
             )
 
+            x = 2
+            torch.testing.assert_close((x * pmat_mixed).to_torch(), x * dense_torch)
+
             v = random_pvector(lc)
             mv_torch = torch.mv(dense_torch, v.to_torch())
             mv_nng = pmat_mixed.mv(v)
