@@ -236,7 +236,7 @@ class Conv2dLayer(AbstractLayer):
             self.bias = None
 
     def numel(self):
-        if self.bias is not None:
+        if self.has_bias():
             return self.weight.numel() + self.bias.numel()
         else:
             return self.weight.numel()
@@ -263,7 +263,7 @@ class ConvTranspose2dLayer(AbstractLayer):
             self.bias = None
 
     def numel(self):
-        if self.bias is not None:
+        if self.has_bias():
             return self.weight.numel() + self.bias.numel()
         else:
             return self.weight.numel()
@@ -288,7 +288,7 @@ class Conv1dLayer(AbstractLayer):
             self.bias = None
 
     def numel(self):
-        if self.bias is not None:
+        if self.has_bias():
             return self.weight.numel() + self.bias.numel()
         else:
             return self.weight.numel()
@@ -312,7 +312,7 @@ class LinearLayer(AbstractLayer):
             self.bias = None
 
     def numel(self):
-        if self.bias is not None:
+        if self.has_bias():
             return self.weight.numel() + self.bias.numel()
         else:
             return self.weight.numel()
@@ -377,7 +377,7 @@ class LayerNormLayer(AbstractLayer):
             self.bias = None
 
     def numel(self):
-        if self.bias is not None:
+        if self.has_bias():
             return self.weight.numel() + self.bias.numel()
         else:
             return self.weight.numel()
@@ -464,7 +464,7 @@ class Affine1dLayer(AbstractLayer):
             self.bias = None
 
     def numel(self):
-        if self.bias is not None:
+        if self.has_bias():
             return self.weight.numel() + self.bias.numel()
         else:
             return self.weight.numel()

@@ -17,7 +17,7 @@ def random_pvector_dict(layer_collection, device=None):
     """
     v_dict = dict()
     for layer_id, layer in layer_collection.layers.items():
-        if layer.bias is not None:
+        if layer.has_bias():
             v_dict[layer_id] = (
                 torch.normal(0, 1, layer.weight.size, device=device),
                 torch.normal(0, 1, layer.bias.size, device=device),
@@ -81,7 +81,7 @@ class PVector:
         l_to_m = layer_collection.get_layerid_module_map(model)
         for layer_id, layer in layer_collection.layers.items():
             mod = l_to_m[layer_id]
-            if layer.bias is not None:
+            if layer.has_bias():
                 dict_repr[layer_id] = (mod.weight, mod.bias)
             else:
                 dict_repr[layer_id] = (mod.weight,)
@@ -97,7 +97,7 @@ class PVector:
         l_to_m = self.layer_collection.get_layerid_module_map(model)
         for layer_id, layer in self.layer_collection.layers.items():
             mod = l_to_m[layer_id]
-            if layer.bias is not None:
+            if layer.has_bias():
                 mod.bias.data.copy_(dict_repr[layer_id][1])
             mod.weight.data.copy_(dict_repr[layer_id][0])
 
@@ -111,7 +111,7 @@ class PVector:
         l_to_m = self.layer_collection.get_layerid_module_map(model)
         for layer_id, layer in self.layer_collection.layers.items():
             mod = l_to_m[layer_id]
-            if layer.bias is not None:
+            if layer.has_bias():
                 mod.bias.data.add_(dict_repr[layer_id][1])
             mod.weight.data.add_(dict_repr[layer_id][0])
 
@@ -127,7 +127,7 @@ class PVector:
         l_to_m = layer_collection.get_layerid_module_map(model)
         for layer_id, layer in layer_collection.layers.items():
             mod = l_to_m[layer_id]
-            if layer.bias is not None:
+            if layer.has_bias():
                 dict_repr[layer_id] = (mod.weight.grad, mod.bias.grad)
             else:
                 dict_repr[layer_id] = (mod.weight.grad,)
@@ -243,7 +243,7 @@ class PVector:
             sum_p = 0
             for l_id, l in self.layer_collection.layers.items():
                 sum_p += (self.dict_repr[l_id][0] ** p).sum()
-                if l.bias is not None:
+                if l.has_bias():
                     sum_p += (self.dict_repr[l_id][1] ** p).sum()
             return sum_p ** (1 / p)
         else:
@@ -292,7 +292,7 @@ class PVector:
         if self.dict_repr is not None and other.dict_repr is not None:
             v_dict = dict()
             for l_id, l in self.layer_collection.layers.items():
-                if l.bias is not None:
+                if l.has_bias():
                     v_dict[l_id] = (
                         self.dict_repr[l_id][0] - other.dict_repr[l_id][0],
                         self.dict_repr[l_id][1] - other.dict_repr[l_id][1],
@@ -314,7 +314,7 @@ class PVector:
         if self.dict_repr is not None:
             v_dict = dict()
             for l_id, l in self.layer_collection.layers.items():
-                if l.bias is not None:
+                if l.has_bias():
                     v_dict[l_id] = (
                         self.dict_repr[l_id][0] ** exp,
                         self.dict_repr[l_id][1] ** exp,
@@ -336,7 +336,7 @@ class PVector:
         else:
             dot_ = 0
             for l_id, l in self.layer_collection.layers.items():
-                if l.bias is not None:
+                if l.has_bias():
                     dot_ += torch.dot(self.dict_repr[l_id][1], other.dict_repr[l_id][1])
                 dot_ += torch.dot(
                     self.dict_repr[l_id][0].view(-1), other.dict_repr[l_id][0].view(-1)

@@ -49,7 +49,7 @@ class TorchFuncHessianBackend(AbstractBackend):
                         .detach()
                     )
 
-                    if layer_x.bias is not None:
+                    if layer_x.has_bias():
                         bs_x = layer_x.bias.numel()
 
                         # bias_x, weight_y
@@ -62,7 +62,7 @@ class TorchFuncHessianBackend(AbstractBackend):
                             .detach()
                         )
 
-                        if layer_y.bias is not None:
+                        if layer_y.has_bias():
                             bs_y = layer_y.bias.numel()
 
                             # bias_x, bias_y
@@ -75,7 +75,7 @@ class TorchFuncHessianBackend(AbstractBackend):
                                 .detach()
                             )
 
-                    if layer_y.bias is not None:
+                    if layer_y.has_bias():
                         bs_y = layer_y.bias.numel()
 
                         # weight_x, bias_y

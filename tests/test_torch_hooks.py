@@ -806,7 +806,7 @@ def test_jacobian_pquasidiag_vs_pdense():
                 matrix_qd[start : start + sw, start : start + sw],
             )
 
-            if layer.bias is not None:
+            if layer.has_bias():
                 sb = layer.bias.numel()
                 check_tensors(
                     torch.diag(
