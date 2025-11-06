@@ -100,6 +100,10 @@ class PFMapDense(PFMap):
             data=self.data.to(**kwargs),
         )
 
+    def __getitem__(self, pos):
+        i, j = pos
+        return PVector(self.layer_collection, vector_repr=self.data[i, j])
+
 
 class PFMapImplicit(PFMap):
     def __init__(self, layer_collection, generator, data=None, examples=None):
