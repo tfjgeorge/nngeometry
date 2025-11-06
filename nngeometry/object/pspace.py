@@ -459,11 +459,11 @@ class PMatBlockDiag(PMatAbstract):
         lc_merged = self.layer_collection.merge(vs.layer_collection)
         for layer_id, layer in lc_merged.layers.items():
             v = vs_dict[layer_id][0].view(-1)
-            if layer.bias is not None:
+            if layer.has_bias():
                 v = torch.cat([v, vs_dict[layer_id][1].view(-1)])
             mv = torch.mv(self.data[layer_id], v)
             mv_tuple = (mv[: layer.weight.numel()].view(*layer.weight.size),)
-            if layer.bias is not None:
+            if layer.has_bias():
                 mv_tuple = (
                     mv_tuple[0],
                     mv[layer.weight.numel() :].view(*layer.bias.size),
@@ -1353,11 +1353,11 @@ class PMatQuasiDiag(PMatAbstract):
         for layer_id, layer in self.layer_collection.layers.items():
             diag, cross = self.data[layer_id]
             v_weight = vs_dict[layer_id][0]
-            if layer.bias is not None:
+            if layer.has_bias():
                 v_bias = vs_dict[layer_id][1]
             mv_bias = None
             mv_weight = diag[: layer.weight.numel()] * v_weight.view(-1)
-            if layer.bias is not None:
+            if layer.has_bias():
                 mv_bias = diag[layer.weight.numel() :] * v_bias.view(-1)
                 mv_bias += (cross * v_weight).view(v_bias.size(0), -1).sum(dim=1)
                 if len(cross.size()) == 2:
@@ -1378,12 +1378,12 @@ class PMatQuasiDiag(PMatAbstract):
             diag, cross = self.data[layer_id]
 
             v_weight = vs_dict[layer_id][0]
-            if layer.bias is not None:
+            if layer.has_bias():
                 v_bias = vs_dict[layer_id][1]
 
             mv_bias = None
             mv_weight = diag[: layer.weight.numel()].view(*v_weight.size()) * v_weight
-            if layer.bias is not None:
+            if layer.has_bias():
                 mv_bias = diag[layer.weight.numel() :] * v_bias.view(-1)
                 mv_bias += (cross * v_weight).view(v_bias.size(0), -1).sum(dim=1)
                 if len(cross.size()) == 2:

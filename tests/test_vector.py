@@ -91,7 +91,7 @@ def test_clone():
         assert m.weight is pvec.to_dict()[layer_id][0]
         assert m.weight is not pvec_clone.to_dict()[layer_id][0]
         assert torch.norm(m.weight - pvec_clone.to_dict()[layer_id][0]) < eps
-        if m.bias is not None:
+        if layer.has_bias():
             assert m.bias is pvec.to_dict()[layer_id][1]
             assert m.bias is not pvec_clone.to_dict()[layer_id][1]
             assert torch.norm(m.bias - pvec_clone.to_dict()[layer_id][1]) < eps
@@ -112,7 +112,7 @@ def test_detach():
         assert torch.norm(pvec_dict[layer_id][0].grad) > eps
         assert pvec_clone_dict[layer_id][0].grad is None
         pvec_dict[layer_id][0].grad.zero_()
-        if layer.bias is not None:
+        if layer.has_bias():
             assert torch.norm(pvec_dict[layer_id][1].grad) > eps
             assert pvec_clone_dict[layer_id][1].grad is None
             pvec_dict[layer_id][1].grad.zero_()
@@ -123,7 +123,7 @@ def test_detach():
     loss.backward()
     for layer_id, layer in pvec.layer_collection.layers.items():
         assert torch.norm(pvec_dict[layer_id][0].grad) < eps
-        if layer.bias is not None:
+        if layer.has_bias():
             assert torch.norm(pvec_dict[layer_id][1].grad) < eps
 
 

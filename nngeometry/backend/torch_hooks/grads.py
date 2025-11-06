@@ -57,7 +57,7 @@ class JacobianFactory:
         buffer_flat = torch.zeros(bs, layer.numel(), device=buffer.device)
         cls.flat_grad(buffer_flat, mod, layer, x, gy)
         v = v.view(-1)
-        if v_bias is not None:
+        if layer.has_bias():
             v_bias = v_bias.view(-1)
             v = torch.cat((v, v_bias))
         buffer.add_(torch.mv(buffer_flat, v))
@@ -72,7 +72,7 @@ class LinearJacobianFactory(JacobianFactory):
             gy = gy[:, None, :]
             x = x[:, None, :]
         buffer[:, :w_numel].add_(torch.bmm(gy.transpose(1, 2), x).view(bs, -1))
-        if layer.bias is not None:
+        if layer.has_bias():
             buffer[:, w_numel:].add_(gy.sum(dim=1))
 
     @classmethod
@@ -82,7 +82,7 @@ class LinearJacobianFactory(JacobianFactory):
 
         w_numel = layer.weight.numel()
         buffer[:w_numel].add_(torch.mm(gy.t() ** 2, x**2).view(-1))
-        if layer.bias is not None:
+        if layer.has_bias():
             buffer[w_numel:].add_((gy**2).sum(dim=0))
 
     @classmethod
@@ -92,7 +92,7 @@ class LinearJacobianFactory(JacobianFactory):
                 buffer, mod, layer, x_i, gy_i, x_o, gy_o
             )
         buffer.add_(torch.mm(x_i, x_o.t()) * torch.mm(gy_i, gy_o.t()))
-        if layer.bias is not None:
+        if layer.has_bias():
             buffer.add_(torch.mm(gy_i, gy_o.t()))
 
     @classmethod
@@ -105,7 +105,7 @@ class LinearJacobianFactory(JacobianFactory):
             .sum(dim=1)
         )
 
-        if layer.bias is not None:
+        if layer.has_bias():
             if gy.ndim == 2:
                 buffer.add_(torch.mv(gy, v_bias))
             elif gy.ndim == 3:
@@ -121,14 +121,14 @@ class LinearJacobianFactory(JacobianFactory):
             return super(LinearJacobianFactory, cls).trace(buffer, mod, layer, x, gy)
 
         buffer.add_(torch.mm(gy.t() ** 2, x**2).sum())
-        if layer.bias is not None:
+        if layer.has_bias():
             buffer.add_((gy**2).sum())
 
     @classmethod
     def kfac_xx(cls, buffer, mod, layer, x, gy):
         if x.ndim == 3:
             x = x.reshape(-1, x.size(-1))
-        if layer.bias is not None:
+        if layer.has_bias():
             x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
         buffer.add_(torch.mm(x.t(), x))
 
@@ -146,13 +146,13 @@ class LinearJacobianFactory(JacobianFactory):
         x_s = x.size()
         gy_s = gy.size()
         if gy.ndim == 2:
-            if layer.bias is not None:
+            if layer.has_bias():
                 x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
             gy_kfe = torch.mm(gy, evecs_g)
             x_kfe = torch.mm(x, evecs_a)
             buffer.add_(torch.mm(gy_kfe.t() ** 2, x_kfe**2).view(-1))
         elif gy.ndim == 3:
-            if layer.bias is not None:
+            if layer.has_bias():
                 x = torch.cat([x, torch.ones_like(x[:, :, :1])], dim=2)
             gy_kfe = torch.mm(gy.view(-1, gy_s[2]), evecs_g)
             x_kfe = torch.mm(x.view(-1, evecs_a.size(0)), evecs_a)
@@ -166,7 +166,7 @@ class LinearJacobianFactory(JacobianFactory):
     def quasidiag(cls, buffer_diag, buffer_cross, mod, layer, x, gy):
         w_numel = layer.weight.numel()
         buffer_diag[:w_numel].add_(torch.mm(gy.t() ** 2, x**2).view(-1))
-        if layer.bias is not None:
+        if layer.has_bias():
             buffer_diag[w_numel:].add_((gy**2).sum(dim=0))
             buffer_cross.add_(torch.mm(gy.t() ** 2, x))
 
@@ -178,7 +178,7 @@ class Conv2dJacobianFactory(JacobianFactory):
         w_numel = layer.weight.numel()
         indiv_gw = conv2d_backward(mod, x, gy)
         buffer[:, :w_numel].add_(indiv_gw.view(bs, -1))
-        if layer.bias is not None:
+        if layer.has_bias():
             buffer[:, w_numel:].add_(gy.sum(dim=(2, 3)))
 
     @classmethod
@@ -188,7 +188,7 @@ class Conv2dJacobianFactory(JacobianFactory):
             x, v, stride=mod.stride, padding=mod.padding, dilation=mod.dilation
         )
         buffer.add_((gy * gy2).view(bs, -1).sum(dim=1))
-        if layer.bias is not None:
+        if layer.has_bias():
             buffer.add_(torch.mv(gy.sum(dim=(2, 3)), v_bias))
 
     @classmethod
@@ -204,7 +204,7 @@ class Conv2dJacobianFactory(JacobianFactory):
         )
         # A_tilda is bs * #locations x #parameters
         A_tilda = A_tilda.permute(0, 2, 1).contiguous().view(-1, A_tilda.size(1))
-        if layer.bias is not None:
+        if layer.has_bias():
             A_tilda = torch.cat([A_tilda, torch.ones_like(A_tilda[:, :1])], dim=1)
         # Omega_hat in KFC
         buffer.add_(torch.mm(A_tilda.t(), A_tilda))
@@ -237,7 +237,7 @@ class Conv2dJacobianFactory(JacobianFactory):
             .contiguous()
             .view(-1, x_unfold_s[1])
         )
-        if mod.bias is not None:
+        if layer.has_bias():
             x_unfold = torch.cat([x_unfold, torch.ones_like(x_unfold[:, :1])], dim=1)
         x_kfe = torch.mm(x_unfold, evecs_a)
 
@@ -256,7 +256,7 @@ class Conv2dJacobianFactory(JacobianFactory):
         w_numel = layer.weight.numel()
         indiv_gw = conv2d_backward(mod, x, gy)
         buffer_diag[:w_numel].add_((indiv_gw**2).sum(dim=0).view(-1))
-        if layer.bias is not None:
+        if layer.has_bias():
             gb_per_example = gy.sum(dim=(2, 3))
             buffer_diag[w_numel:].add_((gb_per_example**2).sum(dim=0))
             y = gy * gb_per_example.unsqueeze(2).unsqueeze(3)
@@ -278,7 +278,7 @@ class ConvTranspose2dJacobianFactory(JacobianFactory):
         w_numel = layer.weight.numel()
         indiv_gw = convtranspose2d_backward(mod, x, gy)
         buffer[:, :w_numel].add_(indiv_gw.view(bs, -1))
-        if layer.bias is not None:
+        if layer.has_bias():
             buffer[:, w_numel:].add_(gy.sum(dim=(2, 3)))
 
 
@@ -300,7 +300,7 @@ class BatchNorm1dJacobianFactory(JacobianFactory):
             x, mod.running_mean, mod.running_var, None, None, mod.training, momentum=0.0
         )
         buffer[:, :w_numel].add_(gy * x_normalized)
-        if layer.bias is not None:
+        if layer.has_bias():
             buffer[:, w_numel:].add_(gy)
 
 
@@ -313,7 +313,7 @@ class BatchNorm2dJacobianFactory(JacobianFactory):
             x, mod.running_mean, mod.running_var, None, None, mod.training, momentum=0.0
         )
         buffer[:, :w_numel].add_((gy * x_normalized).sum(dim=(2, 3)))
-        if layer.bias is not None:
+        if layer.has_bias():
             buffer[:, w_numel:].add_(gy.sum(dim=(2, 3)))
 
 
@@ -330,7 +330,7 @@ class LayerNormJacobianFactory(JacobianFactory):
         x_normalized = x_normalized.view(bs, -1, *mod.normalized_shape)
 
         buffer[:, :w_numel].add_((gy * x_normalized).sum(dim=1).view(bs, -1))
-        if layer.bias is not None:
+        if layer.has_bias():
             buffer[:, w_numel:].add_(gy.sum(dim=1).view(bs, -1))
 
 
@@ -417,7 +417,7 @@ class Affine1dJacobianFactory(JacobianFactory):
     def flat_grad(cls, buffer, mod, layer, x, gy):
         w_numel = layer.weight.numel()
         buffer[:, :w_numel].add_(gy * x)
-        if layer.bias is not None:
+        if layer.has_bias():
             buffer[:, w_numel:].add_(gy)
 
 
@@ -428,7 +428,7 @@ class Conv1dJacobianFactory(JacobianFactory):
         w_numel = layer.weight.numel()
         indiv_gw = conv1d_backward(mod, x, gy)
         buffer[:, :w_numel].add_(indiv_gw.view(bs, -1))
-        if layer.bias is not None:
+        if layer.has_bias():
             buffer[:, w_numel:].add_(gy.sum(dim=2))
 
     @classmethod
@@ -438,7 +438,7 @@ class Conv1dJacobianFactory(JacobianFactory):
             x, v, stride=mod.stride, padding=mod.padding, dilation=mod.dilation
         )
         buffer.add_((gy * gy2).view(bs, -1).sum(dim=1))
-        if layer.bias is not None:
+        if layer.has_bias():
             buffer.add_(torch.mv(gy.sum(dim=2), v_bias))
 
     @classmethod
@@ -454,7 +454,7 @@ class Conv1dJacobianFactory(JacobianFactory):
         )
         # A_tilda is bs * #locations x #parameters
         A_tilda = A_tilda.permute(0, 2, 1).contiguous().view(-1, A_tilda.size(1))
-        if layer.bias is not None:
+        if layer.has_bias():
             A_tilda = torch.cat([A_tilda, torch.ones_like(A_tilda[:, :1])], dim=1)
         # Omega_hat in KFC
         buffer.add_(torch.mm(A_tilda.t(), A_tilda))
@@ -487,7 +487,7 @@ class Conv1dJacobianFactory(JacobianFactory):
             .contiguous()
             .view(-1, x_unfold_s[1])
         )
-        if mod.bias is not None:
+        if layer.has_bias():
             x_unfold = torch.cat([x_unfold, torch.ones_like(x_unfold[:, :1])], dim=1)
         x_kfe = torch.mm(x_unfold, evecs_a)
 
