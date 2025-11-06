@@ -81,7 +81,7 @@ class PVector:
         l_to_m = layer_collection.get_layerid_module_map(model)
         for layer_id, layer in layer_collection.layers.items():
             mod = l_to_m[layer_id]
-            if layer.bias is not None:
+            if layer.has_bias():
                 dict_repr[layer_id] = (mod.weight, mod.bias)
             else:
                 dict_repr[layer_id] = (mod.weight,)
