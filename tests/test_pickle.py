@@ -1,5 +1,7 @@
 import pickle as pkl
 
+import pytest
+
 from tasks import get_conv_gn_task, get_conv_task
 from utils import check_tensors
 
@@ -10,6 +12,8 @@ from nngeometry.object.pspace import (
     PMatDiag,
     PMatLowRank,
     PMatQuasiDiag,
+    PMatEKFACBlockDiag,
+    PMatEKFAC,
 )
 from nngeometry.object.vector import PVector
 
@@ -43,7 +47,14 @@ def test_PMat_pickle():
         function=function,
     )
 
-    for repr in [PMatDense, PMatDiag, PMatBlockDiag, PMatLowRank, PMatQuasiDiag]:
+    for repr in [
+        PMatDense,
+        PMatDiag,
+        PMatBlockDiag,
+        PMatLowRank,
+        PMatQuasiDiag,
+        PMatEKFACBlockDiag,
+    ]:
         PMat = repr(generator=generator, examples=loader, layer_collection=lc)
 
         with open("/tmp/PMat.pkl", "wb") as f:
@@ -51,6 +62,12 @@ def test_PMat_pickle():
 
         with open("/tmp/PMat.pkl", "rb") as f:
             PMat_pkl = pkl.load(f)
+
+        if hasattr(PMat, "update_diag"):
+            # do something about dummy generator ?
+            with pytest.raises(AttributeError):
+                PMat_pkl.update_diag(loader)
+                # PMat.update_diag(loader)
 
         check_tensors(PMat.to_torch(), PMat_pkl.to_torch())
 

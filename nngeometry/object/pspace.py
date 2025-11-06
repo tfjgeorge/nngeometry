@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from collections import OrderedDict, defaultdict
+from copy import copy
 import warnings
 
 import torch
@@ -1430,7 +1431,21 @@ class PMatQuasiDiag(PMatAbstract):
 
 class PMatMixed(PMatAbstract):
     def __init__(
-        self,
+        self, layer_collection, generator, layer_collection_each, layer_map, sub_pmats
+    ):
+        self.generator = generator
+        self.layer_collection = layer_collection
+        self.layer_collection_each = layer_collection_each
+        self.layer_map = layer_map
+        self.sub_pmats = sub_pmats
+
+        # hardcoded :-(
+        if PMatEKFAC in self.sub_pmats.keys():
+            self.update_diag = self.sub_pmats[PMatEKFAC].update_diag
+
+    @classmethod
+    def from_mapping(
+        cls,
         layer_collection,
         generator,
         default_representation,
@@ -1439,21 +1454,18 @@ class PMatMixed(PMatAbstract):
         examples=None,
         **kwargs,
     ):
-        self.generator = generator
-
-        self.layer_collection = layer_collection
-        self.layer_collection_each = defaultdict(LayerCollection)
-        self.layer_map = dict()
+        layer_collection_each = defaultdict(LayerCollection)
+        layer_map = dict()
 
         for layer_id, layer in layer_collection.layers.items():
             layer_type = layer.__class__
             representation = default_representation
             if layer_type in map_layers_to:
                 representation = map_layers_to[layer_type]
-            self.layer_collection_each[representation].add_layer(layer_id, layer)
-            self.layer_map[layer_id] = representation
+            layer_collection_each[representation].add_layer(layer_id, layer)
+            layer_map[layer_id] = representation
 
-        self.sub_pmats = {
+        sub_pmats = {
             PMat_class: PMat_class(
                 layer_collection=lc,
                 generator=generator,
@@ -1461,12 +1473,12 @@ class PMatMixed(PMatAbstract):
                 examples=examples,
                 **kwargs,
             )
-            for PMat_class, lc in self.layer_collection_each.items()
+            for PMat_class, lc in layer_collection_each.items()
         }
 
-        # hardcoded :-(
-        if PMatEKFAC in self.sub_pmats.keys():
-            self.update_diag = self.sub_pmats[PMatEKFAC].update_diag
+        return cls(
+            layer_collection, generator, layer_collection_each, layer_map, sub_pmats
+        )
 
     def frobenius_norm(self):
         return (
@@ -1534,6 +1546,33 @@ class PMatMixed(PMatAbstract):
     def vTMv(self, v):
         return sum([pmat.vTMv(v) for pmat in self.sub_pmats.values()])
 
+    def __rmul__(self, x):
+        return PMatMixed(
+            self.layer_collection,
+            self.generator,
+            self.layer_collection_each,
+            self.layer_map,
+            {k: x * pmat for k, pmat in self.sub_pmats.items()},
+        )
+
+    def __getstate__(self):
+        return {
+            "layer_collection": self.layer_collection,
+            "layer_collection_each": self.layer_collection_each,
+            "layer_map": self.layer_map,
+            "sub_pmats": self.sub_pmats,
+            "device": self.get_device(),
+        }
+
+    def __setstate__(self, state_dict):
+        self.layer_collection = state_dict["layer_collection"]
+        self.layer_collection_each = state_dict["layer_collection_each"]
+        self.layer_map = state_dict["layer_map"]
+        self.sub_pmats = state_dict["sub_pmats"]
+        self.generator = DummyGenerator(state_dict["device"])
+        if PMatEKFAC in self.sub_pmats.keys():
+            self.update_diag = self.sub_pmats[PMatEKFAC].update_diag
+
     def to_torch(self):
         s = self.layer_collection.numel()
         M = None
@@ -1555,7 +1594,7 @@ class PMatEKFACBlockDiag(PMatMixed):
     and other layers use a block-diagonal matrix"""
 
     def __init__(self, layer_collection, generator, data=None, examples=None, **kwargs):
-        super().__init__(
+        pmm = PMatMixed.from_mapping(
             layer_collection,
             generator,
             data=data,
@@ -1568,6 +1607,13 @@ class PMatEKFACBlockDiag(PMatMixed):
                 EmbeddingLayer: PMatEKFAC,
             },
             **kwargs,
+        )
+        super().__init__(
+            layer_collection,
+            generator,
+            pmm.layer_collection_each,
+            pmm.layer_map,
+            pmm.sub_pmats,
         )
 
 
