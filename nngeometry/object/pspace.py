@@ -1209,7 +1209,7 @@ class PMatLowRank(PMatAbstract):
             self.data /= self.data.size(1) ** 0.5
 
     def vTMv(self, v):
-        data_mat = self.data.view(-1, self.data.size(2))
+        data_mat = self.data.view(-1, self.data.size(-1))
         Av = torch.mv(data_mat, v.to_torch())
         return torch.dot(Av, Av)
 
@@ -1219,17 +1219,17 @@ class PMatLowRank(PMatAbstract):
         # of your matrix but instead compute the potentially
         # much larger dense matrix
         return torch.mm(
-            self.data.view(-1, self.data.size(2)).t(),
-            self.data.view(-1, self.data.size(2)),
+            self.data.view(-1, self.data.size(-1)).t(),
+            self.data.view(-1, self.data.size(-1)),
         )
 
     def mv(self, v):
-        data_mat = self.data.view(-1, self.data.size(2))
+        data_mat = self.data.view(-1, self.data.size(-1))
         v_flat = torch.mv(data_mat.t(), torch.mv(data_mat, v.to_torch()))
         return PVector(v.layer_collection, vector_repr=v_flat)
 
     def compute_eigendecomposition(self, impl="svd"):
-        data_mat = self.data.view(-1, self.data.size(2))
+        data_mat = self.data.view(-1, self.data.size(-1))
         if impl == "svd":
             _, sqrt_evals, self.evecs = torch.svd(data_mat, some=True)
             self.evals = sqrt_evals**2
@@ -1241,15 +1241,15 @@ class PMatLowRank(PMatAbstract):
 
     def trace(self):
         A = torch.mm(
-            self.data.view(-1, self.data.size(2)),
-            self.data.view(-1, self.data.size(2)).t(),
+            self.data.view(-1, self.data.size(-1)),
+            self.data.view(-1, self.data.size(-1)).t(),
         )
         return torch.trace(A)
 
     def frobenius_norm(self):
         A = torch.mm(
-            self.data.view(-1, self.data.size(2)),
-            self.data.view(-1, self.data.size(2)).t(),
+            self.data.view(-1, self.data.size(-1)),
+            self.data.view(-1, self.data.size(-1)).t(),
         )
         return torch.norm(A)
 
@@ -1257,7 +1257,7 @@ class PMatLowRank(PMatAbstract):
         if solve not in ["svd", "default"]:
             raise NotImplementedError
 
-        u, s, v = torch.svd(self.data.view(-1, self.data.size(2)))
+        u, s, v = torch.svd(self.data.view(-1, self.data.size(-1)))
         d = torch.mv(v, torch.mv(v.t(), x.to_torch()) / (s**2 + regul))
         return PVector(x.layer_collection, vector_repr=d)
 
