@@ -1,6 +1,6 @@
 # NNGeometry
 
-![Build Status](https://github.com/tfjgeorge/nngeometry/actions/workflows/test.yml/badge.svg) [![codecov](https://codecov.io/gh/tfjgeorge/nngeometry/branch/master/graph/badge.svg)](https://codecov.io/gh/tfjgeorge/nngeometry) [![DOI](https://zenodo.org/badge/208082966.svg)](https://zenodo.org/badge/latestdoi/208082966) [![PyPI version](https://badge.fury.io/py/nngeometry.svg)](https://badge.fury.io/py/nngeometry)
+![Build Status](https://github.com/tfjgeorge/nngeometry/actions/workflows/test.yml/badge.svg) [![codecov](https://codecov.io/gh/tfjgeorge/nngeometry/branch/main/graph/badge.svg)](https://codecov.io/gh/tfjgeorge/nngeometry) [![DOI](https://zenodo.org/badge/208082966.svg)](https://zenodo.org/badge/latestdoi/208082966) [![PyPI version](https://badge.fury.io/py/nngeometry.svg)](https://badge.fury.io/py/nngeometry)
 
 NNGeometry allows you to:
  - compute Gauss-Newton or **Fisher Information Matrices** (`FIM` and `FIM_MonteCarlo`), as well as any matrix that is written as the covariance of gradients w.r.t. parameters, using efficient approximations such as low-rank matrices, KFAC, EKFAC, diagonal and so on. Some of these representations also work for hessians (`Hessian`).

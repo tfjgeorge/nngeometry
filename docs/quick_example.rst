@@ -38,4 +38,4 @@ Computing the FIM requires the following arguments:
 More examples
 =============
 
-More notebook examples can be found at https://github.com/tfjgeorge/nngeometry/tree/master/examples
+More notebook examples can be found at https://github.com/tfjgeorge/nngeometry-examples
