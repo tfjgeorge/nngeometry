@@ -27,6 +27,7 @@ class LayerCollection:
         "Conv1d",
         "LayerNorm",
         "Embedding",
+        "RMSNorm",
     ]
 
     def __init__(self, layers=None):
@@ -148,6 +149,8 @@ class LayerCollection:
             return LayerNormLayer(
                 normalized_shape=mod.normalized_shape, bias=(mod.bias is not None)
             )
+        elif mod_class == "RMSNorm":
+            return RMSNormLayer(normalized_shape=mod.normalized_shape)
         elif mod_class == "Embedding":
             return EmbeddingLayer(
                 embedding_dim=mod.embedding_dim, num_embeddings=mod.num_embeddings
@@ -384,6 +387,18 @@ class LayerNormLayer(AbstractLayer):
 
     def __eq__(self, other):
         return self.weight == other.weight and self.bias == other.bias
+
+
+class RMSNormLayer(AbstractLayer):
+    def __init__(self, normalized_shape):
+        self.weight = Parameter(*normalized_shape)
+        self.bias = None
+
+    def numel(self):
+        return self.weight.numel()
+
+    def __eq__(self, other):
+        return self.weight == other.weight
 
 
 class GroupNormLayer(AbstractLayer):

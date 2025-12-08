@@ -547,11 +547,15 @@ def get_conv1d_task(normalization="none"):
 
 
 class LayerNormNet(nn.Module):
-    def __init__(self, out_size):
+    def __init__(self, out_size, bias, rms_norm):
         super(LayerNormNet, self).__init__()
 
         self.linear1 = nn.Linear(18 * 18, out_size)
-        self.layer_norm1 = nn.LayerNorm((out_size,))
+        if rms_norm:
+            assert bias is False
+            self.layer_norm1 = nn.RMSNorm((out_size,))
+        else:
+            self.layer_norm1 = nn.LayerNorm((out_size,), bias=bias)
 
         self.net = nn.Sequential(self.linear1, self.layer_norm1)
 
@@ -561,10 +565,10 @@ class LayerNormNet(nn.Module):
         return self.net(x)
 
 
-def get_layernorm_task():
+def get_layernorm_task(bias=True, rms_norm=False):
     train_set = get_mnist(subset=70)
     train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
-    net = LayerNormNet(out_size=3)
+    net = LayerNormNet(out_size=3, bias=bias, rms_norm=rms_norm)
     to_device_model(net)
     net.eval()
 
@@ -576,10 +580,14 @@ def get_layernorm_task():
 
 
 class LayerNormConvNet(nn.Module):
-    def __init__(self):
+    def __init__(self, bias, rms_norm):
         super(LayerNormConvNet, self).__init__()
         self.layer = nn.Conv2d(1, 3, (3, 2), 2)
-        self.layer_norm = nn.LayerNorm((3, 8, 9))
+        if rms_norm:
+            assert bias is False
+            self.layer_norm = nn.RMSNorm((3, 8, 9))
+        else:
+            self.layer_norm = nn.LayerNorm((3, 8, 9), bias=bias)
 
     def forward(self, x):
         x = x[:, :, 5:-5, 5:-5]
@@ -588,10 +596,10 @@ class LayerNormConvNet(nn.Module):
         return x.sum(dim=(2, 3))
 
 
-def get_layernorm_conv_task():
+def get_layernorm_conv_task(bias=True, rms_norm=False):
     train_set = get_mnist(subset=70)
     train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
-    net = LayerNormConvNet()
+    net = LayerNormConvNet(bias=bias, rms_norm=rms_norm)
     to_device_model(net)
     net.eval()
 
@@ -627,21 +635,25 @@ def get_linear_3d_task():
 
 
 class LayerNorm3D(nn.Module):
-    def __init__(self):
+    def __init__(self, bias, rms_norm):
         super(LayerNorm3D, self).__init__()
-        self.layer = nn.LayerNorm(4)
+        if rms_norm:
+            assert bias is False
+            self.layer = nn.RMSNorm(4)
+        else:
+            self.layer = nn.LayerNorm(4, bias=bias)
 
     def forward(self, x):
         x = self.layer(x)
         return x.sum(dim=1)
 
 
-def get_layernorm_3d_task():
+def get_layernorm_3d_task(bias=True, rms_norm=False):
     train_set = TensorDataset(
         torch.rand(size=(12, 5, 4)), torch.randint(high=3, size=(12,))
     )
     train_loader = DataLoader(dataset=train_set, batch_size=7, shuffle=False)
-    model = LayerNorm3D()
+    model = LayerNorm3D(bias=bias, rms_norm=rms_norm)
 
     def output_fn(input, target):
         return model(to_device(input))

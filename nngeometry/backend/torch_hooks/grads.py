@@ -13,6 +13,7 @@ from nngeometry.layercollection import (
     GroupNormLayer,
     LayerNormLayer,
     LinearLayer,
+    RMSNormLayer,
     WeightNorm1dLayer,
     WeightNorm2dLayer,
 )
@@ -334,6 +335,19 @@ class LayerNormJacobianFactory(JacobianFactory):
             buffer[:, w_numel:].add_(gy.sum(dim=1).view(bs, -1))
 
 
+class RMSNormJacobianFactory(JacobianFactory):
+    @classmethod
+    def flat_grad(cls, buffer, mod, layer, x, gy):
+        w_numel = layer.weight.numel()
+        bs = x.size(0)
+        x_normalized = F.rms_norm(x, normalized_shape=mod.normalized_shape, eps=mod.eps)
+
+        gy = gy.view(bs, -1, *mod.normalized_shape)
+        x_normalized = x_normalized.view(bs, -1, *mod.normalized_shape)
+
+        buffer[:, :w_numel].add_((gy * x_normalized).sum(dim=1).view(bs, -1))
+
+
 class GroupNormJacobianFactory(JacobianFactory):
     @classmethod
     def flat_grad(cls, buffer, mod, layer, x, gy):
@@ -576,6 +590,6 @@ FactoryMap = {
     Cosine1dLayer: Cosine1dJacobianFactory,
     Affine1dLayer: Affine1dJacobianFactory,
     LayerNormLayer: LayerNormJacobianFactory,
-    LayerNormLayer: LayerNormJacobianFactory,
+    RMSNormLayer: RMSNormJacobianFactory,
     EmbeddingLayer: EmbeddingJacobianFactory,
 }

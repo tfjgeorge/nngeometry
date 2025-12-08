@@ -1,3 +1,5 @@
+from functools import partial
+
 import pytest
 import torch
 from tasks import (
@@ -42,6 +44,7 @@ from nngeometry.object.vector import PVector, random_fvector, random_pvector
 
 linear_tasks = [
     get_layernorm_3d_task,
+    partial(get_layernorm_3d_task, rms_norm=True, bias=False),
     get_embedding_task,
     get_linear_fc_task,
     get_linear_conv_task,
@@ -53,7 +56,11 @@ linear_tasks = [
 nonlinear_tasks = [
     get_linear_3d_task,
     get_layernorm_conv_task,
+    partial(get_layernorm_conv_task, bias=False),
+    partial(get_layernorm_conv_task, rms_norm=True, bias=False),
     get_layernorm_task,
+    partial(get_layernorm_task, bias=False),
+    partial(get_layernorm_task, rms_norm=True, bias=False),
     get_conv1d_task,
     get_small_conv_transpose_task,
     get_conv_task,
