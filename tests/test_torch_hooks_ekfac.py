@@ -162,6 +162,20 @@ def test_pspace_ekfac_vs_direct():
                 .t(),
             )
 
+            # Test solve lstsq with vector
+            v_back = M_ekfac.solve(mv_ekfac + regul * v, regul=regul)
+            torch.testing.assert_close(
+                torch.linalg.lstsq(
+                    M_ekfac_torch,
+                    mv_direct,
+                    rcond=regul,
+                    driver="gelsd",
+                )[0],
+                M_ekfac.solve(
+                    mv_ekfac, regul=regul * max_eval, solve="lstsq"
+                ).to_torch(),
+            )
+
             # Test rmul
             M_mul = 1.23 * M_ekfac
             check_tensors(1.23 * M_ekfac_torch, M_mul.to_torch())
