@@ -1024,6 +1024,21 @@ class PMatEKFAC(PMatAbstract):
         self._check_diag_updated()
         return sum([(d**2).sum() for d in self.data[1].values()]) ** 0.5
 
+    def norm(self, ord="spectral"):
+        """
+        Norm of the matrix
+
+        :param ord: Type of norm, possible choices are 'spectral' for
+            the spectral norm, or 'fro' for the frobenius norm
+        """
+        self._check_diag_updated()
+        if ord == "spectral":
+            return max([evals.max() for evals in self.data[1].values()])
+        elif ord == "fro":
+            return self.frobenius_norm()
+        else:
+            raise NotImplementedError
+
     def get_diag(self, v):
         self._check_diag_updated()
         raise NotImplementedError
@@ -1048,7 +1063,7 @@ class PMatEKFAC(PMatAbstract):
 
     def solvePVec(self, x, regul=1e-8, solve="default"):
         self._check_diag_updated()
-        if solve != "default":
+        if solve not in ["default", "lstsq"]:
             raise NotImplementedError
 
         vs_dict = x.to_dict()
@@ -1066,7 +1081,13 @@ class PMatEKFAC(PMatAbstract):
             if l.has_bias():
                 v = torch.cat([v, vs_dict[l_id][1].unsqueeze(1)], dim=1)
             v_kfe = torch.mm(torch.mm(evecs_g.t(), v), evecs_a)
-            inv_kfe = v_kfe / (diag.view(*v_kfe.size()) + regul)
+
+            diag_view = diag.view(*v_kfe.size())
+            if solve == "default":
+                inv_kfe = v_kfe / (diag_view + regul)
+            elif solve == "lstsq":
+                inv_kfe = torch.where(diag_view <= regul, 0, v_kfe / diag_view)
+
             inv = torch.mm(torch.mm(evecs_g, inv_kfe), evecs_a.t())
             if l.has_bias():
                 inv_tuple = (
@@ -1080,7 +1101,7 @@ class PMatEKFAC(PMatAbstract):
 
     def solvePFMap(self, x, regul=1e-8, solve="default"):
         self._check_diag_updated()
-        if solve != "default":
+        if solve not in ["default", "lstsq"]:
             raise NotImplementedError
 
         out_dict = OrderedDict()
@@ -1104,7 +1125,12 @@ class PMatEKFAC(PMatAbstract):
             v_kfe = torch.einsum("ijkl,ka,lb->ijab", v, evecs_g, evecs_a)
 
             sv_kfe = v_kfe.size()
-            inv_kfe = v_kfe / (diag.reshape(1, sv_kfe[2], sv_kfe[3]) + regul)
+
+            diag_view = diag.reshape(1, sv_kfe[2], sv_kfe[3])
+            if solve == "default":
+                inv_kfe = v_kfe / (diag_view + regul)
+            elif solve == "lstsq":
+                inv_kfe = torch.where(diag_view <= regul, 0, v_kfe / diag_view)
 
             inv = torch.einsum("ijkl,ak,bl->ijab", inv_kfe, evecs_g, evecs_a)
 

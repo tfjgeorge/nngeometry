@@ -81,36 +81,38 @@ def test_pspace_ekfac_vs_direct():
         # the second time we will have called update_diag
         for i in range(2):
 
+            M_ekfac_torch = M_ekfac.to_torch()
+
             vTMv_direct = torch.dot(
-                torch.mv(M_ekfac.to_torch(), v.to_torch()),
+                torch.mv(M_ekfac_torch, v.to_torch()),
                 v.to_torch(),
             )
             vTMv_ekfac = M_ekfac.vTMv(v)
             check_ratio(vTMv_direct, vTMv_ekfac)
 
             trace_ekfac = M_ekfac.trace()
-            trace_direct = torch.trace(M_ekfac.to_torch())
+            trace_direct = torch.trace(M_ekfac_torch)
             check_ratio(trace_direct, trace_ekfac)
 
-            frob_ekfac = M_ekfac.frobenius_norm()
-            frob_direct = torch.norm(M_ekfac.to_torch())
+            frob_ekfac = M_ekfac.norm(ord="fro")
+            frob_direct = torch.linalg.matrix_norm(M_ekfac_torch)
             check_ratio(frob_direct, frob_ekfac)
 
-            mv_direct = torch.mv(M_ekfac.to_torch(), v.to_torch())
+            mv_direct = torch.mv(M_ekfac_torch, v.to_torch())
             mv_ekfac = M_ekfac.mv(v)
             check_tensors(mv_direct, mv_ekfac.to_torch())
 
             # Test pow
             check_tensors(
                 (M_ekfac**2).to_torch(),
-                torch.mm(M_ekfac.to_torch(), M_ekfac.to_torch()),
+                torch.mm(M_ekfac_torch, M_ekfac_torch),
             )
             check_tensors(
                 torch.mm(
                     (M_ekfac ** (1 / 3)).to_torch(),
                     (M_ekfac ** (2 / 3)).to_torch(),
                 ),
-                M_ekfac.to_torch(),
+                M_ekfac_torch,
             )
 
             # Test inverse
@@ -143,8 +145,25 @@ def test_pspace_ekfac_vs_direct():
                 J_back.to_torch(),
             )
 
+            # Test solve lstsq with jacobian, against torch.linalg.lstsq
+            # on the dense matrix
+            max_eval = M_ekfac.norm(ord="spectral")
+
+            torch.testing.assert_close(
+                torch.linalg.lstsq(
+                    M_ekfac_torch,
+                    jaco.to_torch().view(-1, M_ekfac.size(0)).t(),
+                    rcond=regul,
+                    driver="gelsd",
+                )[0],
+                M_ekfac.solve(jaco, regul=regul * max_eval, solve="lstsq")
+                .to_torch()
+                .view(-1, M_ekfac.size(0))
+                .t(),
+            )
+
             # Test rmul
             M_mul = 1.23 * M_ekfac
-            check_tensors(1.23 * M_ekfac.to_torch(), M_mul.to_torch())
+            check_tensors(1.23 * M_ekfac_torch, M_mul.to_torch())
 
             M_ekfac.update_diag(loader)
