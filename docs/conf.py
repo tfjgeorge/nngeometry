@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- Project information -----------------------------------------------------
 
 project = 'NNGeometry'
-copyright = '2020, Thomas George'
+copyright = '2026, Thomas George'
 author = 'Thomas George'
 
 
