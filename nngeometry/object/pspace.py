@@ -99,15 +99,19 @@ class PMatAbstract(ABC):
         """
         Solves Fx = b in x
 
-        :param regul: Tikhonov regularization
+        :param regul: regularization, depending of the type of solve (e.g. Tikhonov damping,
+            or high-pass filter)
         :type regul: float
         :param b: b
         :type b: PVector or PFMap
+        :param solve: solve implementation, this is dependent on the PMat representation
         """
         if isinstance(x, PVector):
             return self.solvePVec(x, regul=regul, solve=solve)
         elif isinstance(x, PFMap):
             return self.solvePFMap(x, regul=regul, solve=solve)
+        else:
+            raise NotImplementedError("`x` should be an instance of PVector or PFMap")
 
     @abstractmethod
     def get_diag(self):
