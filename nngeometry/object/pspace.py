@@ -1585,6 +1585,15 @@ class PMatMixed(PMatAbstract):
             {k: x * pmat for k, pmat in self.sub_pmats.items()},
         )
 
+    def inverse(self, regul=1e-8):
+        return PMatMixed(
+            self.layer_collection,
+            self.generator,
+            self.layer_collection_each,
+            self.layer_map,
+            {k: pmat.inverse(regul) for k, pmat in self.sub_pmats.items()},
+        )
+
     def __getstate__(self):
         return {
             "layer_collection": self.layer_collection,
