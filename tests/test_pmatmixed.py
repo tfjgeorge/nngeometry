@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import torch
 from tasks import get_conv_bn_task
 
@@ -106,3 +108,11 @@ def test_pmat_mixed_no_ekfac():
             model=model, loader=loader, representation=PMatMixedNoUpdateDiag
         )
         assert not hasattr(pmat_custom, "update_diag")
+
+        pmat_ekfac_bd = FIM(
+            model=model, loader=loader, representation=PMatEKFACBlockDiag
+        )
+        assert hasattr(pmat_ekfac_bd, "update_diag")
+        cp = deepcopy(pmat_ekfac_bd)
+        # can't update_diag because of dummy generator
+        assert not hasattr(cp, "update_diag")

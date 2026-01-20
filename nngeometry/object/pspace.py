@@ -1,8 +1,6 @@
 import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict, defaultdict
-from copy import copy
-from functools import partial
 
 import torch
 
@@ -1646,8 +1644,7 @@ class PMatMixed(PMatAbstract):
         self.layer_map = state_dict["layer_map"]
         self.sub_pmats = state_dict["sub_pmats"]
         self.generator = DummyGenerator(state_dict["device"])
-        if PMatEKFAC in self.sub_pmats.keys():
-            self.update_diag = self.sub_pmats[PMatEKFAC].update_diag
+        # can't update_diag because of dummy generator
 
     def to_torch(self):
         s = self.layer_collection.numel()
