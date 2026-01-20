@@ -57,6 +57,38 @@ class PMatAbstract(ABC):
     def mv(self, v):
         raise NotImplementedError
 
+    def mmap(self, pfmap):
+        """
+        Performs multiplication between PMat and PFMap
+
+        :param pfmap: the PFMap to multiply
+        :type pfmap: :class:`.object.map.PFMap`
+        """
+        J_dense = pfmap.to_torch()
+        sJ = J_dense.size()
+        J_dense = J_dense.view(sJ[0] * sJ[1], sJ[2])
+
+        mvs = []
+        for i in range(J_dense.size(0)):
+            v = PVector(
+                layer_collection=pfmap.layer_collection,
+                vector_repr=J_dense[i, :],
+            )
+            mvs.append(self.mv(v).to_torch())
+        return PFMapDense(
+            generator=self.generator,
+            data=torch.stack(mvs).view(*sJ),
+            layer_collection=pfmap.layer_collection,
+        )
+
+    def __matmul__(self, x):
+        if isinstance(x, PVector):
+            return self.mv(x)
+        elif isinstance(x, PFMap):
+            return self.mmap(x)
+        else:
+            raise NotImplementedError("`x` should be an instance of PVector or PFMap")
+
     @abstractmethod
     def get_device(self):
         raise NotImplementedError

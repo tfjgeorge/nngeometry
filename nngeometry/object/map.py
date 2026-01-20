@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 
 import torch
 
-from .vector import FVector, PVector
+from .vector import FVector, PVector, random_pvector
 
 
 class PFMap(ABC):
@@ -13,19 +13,24 @@ class PFMap(ABC):
 
 
 class PFMapDense(PFMap):
-    def __init__(self, layer_collection, generator, data=None, examples=None):
+    def __init__(self, layer_collection, generator=None, data=None, examples=None):
         self.generator = generator
         self.layer_collection = layer_collection
         if data is not None:
             self.data = data
+        elif generator is None:
+            raise Exception("One of generator or data should be not None")
         else:
             self.data = generator.get_jacobian(examples, layer_collection)
 
     def to_torch(self):
         return self.data
 
-    def size(self):
-        return self.data.size()
+    def size(self, dim=None):
+        if dim is None:
+            return self.data.size()
+        else:
+            return self.data.size(dim)
 
     def jvp(self, v):
         v_flat = torch.mv(self.data.view(-1, self.data.size(-1)), v.to_torch())
@@ -110,3 +115,29 @@ class PFMapImplicit(PFMap):
 
     def jvp(self, v):
         return self.generator.implicit_Jv(v, self.examples, self.layer_collection)
+
+
+def random_pfmap(layer_collection, output_size, device=None, dtype=torch.float64):
+    """
+    Returns a random :class:`nngeometry.object.PFMapDense` object using
+    the structure defined by the `layer_collection` parameter, with
+    each components drawn from a normal distribution with mean 0 and standard
+    deviation 1.
+
+    :param layer_collection: The :class:`nngeometry.layercollection.LayerCollection`
+    describing the structure of the random pvector
+    :param output_size: a tuple (output_dim, n_examples)
+    """
+
+    vs = []
+    for i in range(output_size[0] * output_size[1]):
+        v = random_pvector(
+            layer_collection=layer_collection, device=device, dtype=dtype
+        )
+        vs.append(v.to_torch())
+    return PFMapDense(
+        data=torch.stack(vs).view(
+            output_size[0], output_size[1], layer_collection.numel()
+        ),
+        layer_collection=layer_collection,
+    )
