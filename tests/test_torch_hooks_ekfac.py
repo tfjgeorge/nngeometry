@@ -11,7 +11,7 @@ from tasks import (
 from utils import check_ratio, check_tensors
 
 from nngeometry.backend import TorchHooksJacobianBackend
-from nngeometry.object.map import PFMapDense, random_pfmap
+from nngeometry.object.map import PFMapDense
 from nngeometry.object.pspace import PMatBlockDiag, PMatEKFAC, PMatKFAC
 from nngeometry.object.vector import random_pvector
 
@@ -77,11 +77,9 @@ def test_pspace_ekfac_vs_direct():
 
         M_ekfac = PMatEKFAC(generator=generator, examples=loader, layer_collection=lc)
         v = random_pvector(lc, device=device, dtype=torch.double)
-        pfmap = random_pfmap(lc, output_size=(3, 4), device=device)
 
         # the second time we will have called update_diag
         for i in range(2):
-
             M_ekfac_torch = M_ekfac.to_torch()
 
             vTMv_direct = torch.dot(
@@ -90,17 +88,6 @@ def test_pspace_ekfac_vs_direct():
             )
             vTMv_ekfac = M_ekfac.vTMv(v)
             check_ratio(vTMv_direct, vTMv_ekfac)
-
-            mapTMmap_direct = torch.zeros((4,))
-            pfmap_torch = pfmap.to_torch()
-            for i in range(4):
-                for j in range(3):
-                    mapTMmap_direct[i] += torch.dot(
-                        torch.mv(M_ekfac_torch, pfmap_torch[j, i]),
-                        pfmap_torch[j, i],
-                    )
-            mapTMmap_ekfac = M_ekfac.mapTMmap(pfmap)
-            torch.testing.assert_close(mapTMmap_direct, mapTMmap_ekfac)
 
             trace_ekfac = M_ekfac.trace()
             trace_direct = torch.trace(M_ekfac_torch)

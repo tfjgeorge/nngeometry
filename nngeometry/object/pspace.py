@@ -1,7 +1,6 @@
+import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict, defaultdict
-from copy import copy
-import warnings
 
 import torch
 
@@ -103,6 +102,33 @@ class PMatAbstract(ABC):
         :type v: :class:`.object.vector.PVector`
         """
         raise NotImplementedError
+
+    def mapTMmap(self, pfmap, reduce="sum"):
+        """
+        desc todo
+
+        :param pfmap: the PFMap to multiply
+        :type pfmap: :class:`.object.map.PFMap`
+        """
+        assert reduce in ["sum", "diag", "none"]
+        J_dense = pfmap.to_torch()
+        sJ = J_dense.size()
+        J_dense = J_dense.view(sJ[0] * sJ[1], sJ[2])
+
+        norm2 = []
+        for i in range(J_dense.size(0)):
+            v = PVector(
+                layer_collection=pfmap.layer_collection,
+                vector_repr=J_dense[i, :],
+            )
+            norm2.append(self.vTMv(v))
+        norm2 = torch.stack(norm2).view(*sJ[:-1])
+        if reduce == "sum":
+            return norm2.sum(dim=0)
+        elif reduce == "diag":
+            return norm2
+        elif reduce == "none":
+            raise NotImplementedError
 
     @abstractmethod
     def solvePVec(self, x, regul, solve):
@@ -1034,11 +1060,12 @@ class PMatEKFAC(PMatAbstract):
             norm2 += torch.dot(v_kfe.view(-1) ** 2, diag.view(-1))
         return norm2
 
-    def mapTMmap(self, pfmap):
+    def mapTMmap(self, pfmap, reduce="sum"):
+        assert reduce in ["none", "diag", "sum"]
         self._check_diag_updated()
 
         evecs, diags = self.data
-        norm2 = None
+        norm2 = 0
         lc_merged = self.layer_collection.merge(pfmap.layer_collection)
         for layer_id, layer, vals in pfmap.iter_by_layer():
             if layer_id not in lc_merged.layers:
@@ -1046,15 +1073,18 @@ class PMatEKFAC(PMatAbstract):
             v_kfe = self._proj_to_kfe_batched(vals, evecs[layer_id], layer)
             diag = diags[layer_id]
             sv = v_kfe.size()
-            norm2_this = (
-                torch.mv(v_kfe.view(sv[0] * sv[1], -1) ** 2, diag.view(-1))
-                .view(sv[0], sv[1])
-                .sum(dim=0)
-            )
-            if norm2 is None:
-                norm2 = norm2_this
-            else:
-                norm2 += norm2_this
+            if reduce == "sum":
+                norm2 += (
+                    torch.mv(v_kfe.view(sv[0] * sv[1], -1) ** 2, diag.view(-1))
+                    .view(sv[0], sv[1])
+                    .sum(dim=0)
+                )
+            elif reduce == "diag":
+                norm2 += torch.mv(
+                    v_kfe.view(sv[0] * sv[1], -1) ** 2, diag.view(-1)
+                ).view(sv[0], sv[1])
+            elif reduce == "none":
+                raise NotImplementedError("TODO")
         return norm2
 
     def trace(self):
@@ -1632,6 +1662,11 @@ class PMatMixed(PMatAbstract):
 
     def vTMv(self, v):
         return sum([pmat.vTMv(v) for pmat in self.sub_pmats.values()])
+
+    def mapTMmap(self, pfmap, reduce="sum"):
+        return sum(
+            [pmat.mapTMmap(pfmap, reduce=reduce) for pmat in self.sub_pmats.values()]
+        )
 
     def __rmul__(self, x):
         return PMatMixed(
