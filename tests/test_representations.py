@@ -5,8 +5,9 @@ from tasks import get_conv_gn_task, get_conv_task, get_fullyconnect_task
 from utils import check_tensors
 
 from nngeometry.backend import TorchHooksJacobianBackend
-from nngeometry.object.pspace import PMatBlockDiag, PMatDense, PMatDiag
 from nngeometry.object.map import random_pfmap
+from nngeometry.object.pspace import PMatBlockDiag, PMatDense, PMatDiag
+from nngeometry.object.vector import random_pvector
 
 nonlinear_tasks = [get_conv_gn_task, get_fullyconnect_task, get_conv_task]
 
@@ -62,11 +63,18 @@ def test_dense():
 
         check_tensors(torch.mm(M_dense1_tensor, M_dense2_tensor), prod_tensor)
 
-        ## mult with pfmap
+        ## matmul with pfmap
         pfmap = random_pfmap(layer_collection=lc, output_size=(3, 4))
         torch.testing.assert_close(
             torch.mm(pfmap.to_torch().view(3 * 4, -1), M_dense1_tensor).view(3, 4, -1),
             (M_dense1 @ pfmap).to_torch(),
+        )
+
+        ## matmul with pvector
+        v = random_pvector(layer_collection=lc)
+        torch.testing.assert_close(
+            torch.mv(M_dense1_tensor, v.to_torch()),
+            (M_dense1 @ v).to_torch(),
         )
 
 
