@@ -5,7 +5,9 @@ from tasks import get_conv_gn_task, get_conv_task, get_fullyconnect_task
 from utils import check_tensors
 
 from nngeometry.backend import TorchHooksJacobianBackend
+from nngeometry.object.map import random_pfmap
 from nngeometry.object.pspace import PMatBlockDiag, PMatDense, PMatDiag
+from nngeometry.object.vector import random_pvector
 
 nonlinear_tasks = [get_conv_gn_task, get_fullyconnect_task, get_conv_task]
 
@@ -51,6 +53,7 @@ def test_dense():
         M_dense1 = PMatDense(generator=generator1, examples=loader, layer_collection=lc)
         M_dense2 = PMatDense(generator=generator2, examples=loader, layer_collection=lc)
 
+        # mm between 2 PMapDense
         prod = M_dense1.mm(M_dense2)
 
         M_dense1_tensor = M_dense1.to_torch()
@@ -59,6 +62,20 @@ def test_dense():
         prod_tensor = prod.to_torch()
 
         check_tensors(torch.mm(M_dense1_tensor, M_dense2_tensor), prod_tensor)
+
+        ## matmul with pfmap
+        pfmap = random_pfmap(layer_collection=lc, output_size=(3, 4))
+        torch.testing.assert_close(
+            torch.mm(pfmap.to_torch().view(3 * 4, -1), M_dense1_tensor).view(3, 4, -1),
+            (M_dense1 @ pfmap).to_torch(),
+        )
+
+        ## matmul with pvector
+        v = random_pvector(layer_collection=lc)
+        torch.testing.assert_close(
+            torch.mv(M_dense1_tensor, v.to_torch()),
+            (M_dense1 @ v).to_torch(),
+        )
 
 
 def test_blockdiag():
@@ -91,9 +108,10 @@ def test_pfmap():
         _, _, _, model2, function2 = get_task()
 
         generator1 = TorchHooksJacobianBackend(model=model1, function=function1)
-        generator2 = TorchHooksJacobianBackend(model=model2, function=function1)
         pfmap1 = PFMapDense(generator=generator1, examples=loader, layer_collection=lc)
-        pfmap2 = PFMapDense(generator=generator2, examples=loader, layer_collection=lc)
+        pfmap2 = random_pfmap(
+            layer_collection=lc, output_size=(pfmap1.size(0), pfmap1.size(1))
+        )
 
         torch.testing.assert_close(
             pfmap1.to_torch() + pfmap2.to_torch(), (pfmap1 + pfmap2).to_torch()
