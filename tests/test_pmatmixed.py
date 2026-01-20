@@ -1,8 +1,8 @@
 import torch
-from nngeometry.object.map import PFMapDense
 from tasks import get_conv_bn_task
 
 from nngeometry.metrics import FIM
+from nngeometry.object.map import PFMapDense
 from nngeometry.object.pspace import PMatEKFACBlockDiag
 from nngeometry.object.vector import random_pvector
 
@@ -38,6 +38,12 @@ def test_pmatmixed_ekfac():
             regul = 1e-7
             v_back = pmat_mixed.solve(mv_nng + regul * v, regul=regul)
             torch.testing.assert_close(v.to_torch(), v_back.to_torch())
+
+            # Test inverse
+            pmat_mixed_inv = pmat_mixed.inverse(regul=regul)
+            v_back = pmat_mixed_inv.mv(mv_nng + regul * v)
+            torch.testing.assert_close(v.to_torch(), v_back.to_torch())
+
 
             # Test solve with jacobian
             c = 1.678
