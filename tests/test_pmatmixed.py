@@ -1,9 +1,15 @@
 import torch
 from tasks import get_conv_bn_task
 
+from nngeometry.layercollection import LinearLayer
 from nngeometry.metrics import FIM
 from nngeometry.object.map import PFMapDense
-from nngeometry.object.pspace import PMatEKFACBlockDiag
+from nngeometry.object.pspace import (
+    PMatBlockDiag,
+    PMatDense,
+    PMatEKFACBlockDiag,
+    PMatMixed,
+)
 from nngeometry.object.vector import random_pvector
 
 
@@ -44,7 +50,6 @@ def test_pmatmixed_ekfac():
             v_back = pmat_mixed_inv.mv(mv_nng + regul * v)
             torch.testing.assert_close(v.to_torch(), v_back.to_torch())
 
-
             # Test solve with jacobian
             c = 1.678
             stacked_mv = torch.stack([c**i * mv_torch for i in range(6)]).reshape(
@@ -67,3 +72,37 @@ def test_pmatmixed_ekfac():
             # 2nd time the diag is updated
             if i == 0:
                 pmat_mixed.update_diag(loader)
+
+
+class PMatMixedNoUpdateDiag(PMatMixed):
+    """A mixed representation where EKFAC-table layers use EKFAC,
+    and other layers use a block-diagonal matrix"""
+
+    def __init__(self, layer_collection, generator, data=None, examples=None, **kwargs):
+        pmm = PMatMixed.from_mapping(
+            layer_collection,
+            generator,
+            data=data,
+            examples=examples,
+            default_representation=PMatDense,
+            map_layers_to={
+                LinearLayer: PMatBlockDiag,
+            },
+            **kwargs,
+        )
+        super().__init__(
+            layer_collection,
+            generator,
+            pmm.layer_collection_each,
+            pmm.layer_map,
+            pmm.sub_pmats,
+        )
+
+
+def test_pmat_mixed_no_ekfac():
+    for get_task in [get_conv_bn_task]:
+        loader, lc, parameters, model, function = get_task()
+        pmat_custom = FIM(
+            model=model, loader=loader, representation=PMatMixedNoUpdateDiag
+        )
+        assert not hasattr(pmat_custom, "update_diag")

@@ -1,7 +1,8 @@
+import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict, defaultdict
 from copy import copy
-import warnings
+from functools import partial
 
 import torch
 
@@ -1501,9 +1502,13 @@ class PMatMixed(PMatAbstract):
         self.layer_map = layer_map
         self.sub_pmats = sub_pmats
 
-        # hardcoded :-(
-        if PMatEKFAC in self.sub_pmats.keys():
-            self.update_diag = self.sub_pmats[PMatEKFAC].update_diag
+        def update_diag(examples):
+            for pmat in sub_pmats.values():
+                if hasattr(pmat, "update_diag"):
+                    pmat.update_diag(examples)
+
+        if any(hasattr(pmat, "update_diag") for pmat in self.sub_pmats.values()):
+            self.update_diag = update_diag
 
     @classmethod
     def from_mapping(
