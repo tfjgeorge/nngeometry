@@ -80,7 +80,6 @@ def test_pspace_ekfac_vs_direct():
 
         # the second time we will have called update_diag
         for i in range(2):
-
             M_ekfac_torch = M_ekfac.to_torch()
 
             vTMv_direct = torch.dot(
