@@ -77,8 +77,7 @@ def test_pmatmixed_ekfac():
 
 
 class PMatMixedNoUpdateDiag(PMatMixed):
-    """A mixed representation where EKFAC-table layers use EKFAC,
-    and other layers use a block-diagonal matrix"""
+    """A mixed representation only used for test below"""
 
     def __init__(self, layer_collection, generator, data=None, examples=None, **kwargs):
         pmm = PMatMixed.from_mapping(
