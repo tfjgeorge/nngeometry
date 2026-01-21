@@ -1,15 +1,23 @@
+from copy import deepcopy
+
 import torch
 from tasks import get_conv_bn_task, device
 
+from nngeometry.layercollection import LinearLayer
 from nngeometry.metrics import FIM
 from nngeometry.object.map import PFMapDense, random_pfmap
-from nngeometry.object.pspace import PMatEKFACBlockDiag
+from nngeometry.object.pspace import (
+    PMatBlockDiag,
+    PMatDense,
+    PMatEKFACBlockDiag,
+    PMatMixed,
+)
 from nngeometry.object.vector import random_pvector
 
 
 def test_pmatmixed_ekfac():
     for get_task in [get_conv_bn_task]:
-        for i in range(2):
+        for it in range(2):
             loader, lc, parameters, model, function = get_task()
 
             pmat_mixed = FIM(
@@ -88,5 +96,46 @@ def test_pmatmixed_ekfac():
             torch.testing.assert_close(mapTMmap_direct, mapTMmap_ekfac)
 
             # 2nd time the diag is updated
-            if i == 0:
+            if it == 0:
                 pmat_mixed.update_diag(loader)
+
+
+class PMatMixedNoUpdateDiag(PMatMixed):
+    """A mixed representation only used for test below"""
+
+    def __init__(self, layer_collection, generator, data=None, examples=None, **kwargs):
+        pmm = PMatMixed.from_mapping(
+            layer_collection,
+            generator,
+            data=data,
+            examples=examples,
+            default_representation=PMatDense,
+            map_layers_to={
+                LinearLayer: PMatBlockDiag,
+            },
+            **kwargs,
+        )
+        super().__init__(
+            layer_collection,
+            generator,
+            pmm.layer_collection_each,
+            pmm.layer_map,
+            pmm.sub_pmats,
+        )
+
+
+def test_pmat_mixed_no_ekfac():
+    for get_task in [get_conv_bn_task]:
+        loader, lc, parameters, model, function = get_task()
+        pmat_custom = FIM(
+            model=model, loader=loader, representation=PMatMixedNoUpdateDiag
+        )
+        assert not hasattr(pmat_custom, "update_diag")
+
+        pmat_ekfac_bd = FIM(
+            model=model, loader=loader, representation=PMatEKFACBlockDiag
+        )
+        assert hasattr(pmat_ekfac_bd, "update_diag")
+        cp = deepcopy(pmat_ekfac_bd)
+        # can't update_diag because of dummy generator
+        assert not hasattr(cp, "update_diag")

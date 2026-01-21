@@ -1555,9 +1555,13 @@ class PMatMixed(PMatAbstract):
         self.layer_map = layer_map
         self.sub_pmats = sub_pmats
 
-        # hardcoded :-(
-        if PMatEKFAC in self.sub_pmats.keys():
-            self.update_diag = self.sub_pmats[PMatEKFAC].update_diag
+        def update_diag(examples):
+            for pmat in sub_pmats.values():
+                if hasattr(pmat, "update_diag"):
+                    pmat.update_diag(examples)
+
+        if any(hasattr(pmat, "update_diag") for pmat in self.sub_pmats.values()):
+            self.update_diag = update_diag
 
     @classmethod
     def from_mapping(
@@ -1703,8 +1707,7 @@ class PMatMixed(PMatAbstract):
         self.layer_map = state_dict["layer_map"]
         self.sub_pmats = state_dict["sub_pmats"]
         self.generator = DummyGenerator(state_dict["device"])
-        if PMatEKFAC in self.sub_pmats.keys():
-            self.update_diag = self.sub_pmats[PMatEKFAC].update_diag
+        # can't update_diag because of dummy generator
 
     def to_torch(self):
         s = self.layer_collection.numel()
