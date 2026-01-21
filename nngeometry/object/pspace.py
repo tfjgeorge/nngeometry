@@ -103,6 +103,33 @@ class PMatAbstract(ABC):
         """
         raise NotImplementedError
 
+    def mapTMmap(self, pfmap, reduction="sum"):
+        """
+        Performs batched vTMv for each PVector v in a PFMap
+
+        :param pfmap: the PFMap to multiply
+        :type pfmap: :class:`.object.map.PFMap`
+        :param reduction: one of ["sum", "diag"]
+        :type reduction: str
+        """
+        sJ = pfmap.size()
+        J_dense = pfmap.to_torch().view(sJ[0] * sJ[1], sJ[2])
+
+        norm2 = []
+        for i in range(J_dense.size(0)):
+            v = PVector(
+                layer_collection=pfmap.layer_collection,
+                vector_repr=J_dense[i, :],
+            )
+            norm2.append(self.vTMv(v))
+        norm2 = torch.stack(norm2).view(*sJ[:-1])
+        if reduction == "sum":
+            return norm2.sum(dim=0)
+        elif reduction == "diag":
+            return norm2
+        else:
+            raise NotImplementedError
+
     @abstractmethod
     def solvePVec(self, x, regul, solve):
         raise NotImplementedError
@@ -1013,23 +1040,12 @@ class PMatEKFAC(PMatAbstract):
 
         lc_merged = self.layer_collection.merge(vs.layer_collection)
         for layer_id, layer in lc_merged.layers.items():
+            v_kfe = self._proj_to_kfe(vs_dict[layer_id], evecs[layer_id], layer)
             diag = diags[layer_id]
-            evecs_a, evecs_g = evecs[layer_id]
-            if layer.transposed:
-                evecs_a, evecs_g = evecs_g, evecs_a
-            vw = vs_dict[layer_id][0]
-            sw = vw.size()
-            v = vw.view(sw[0], -1)
-            if layer.has_bias():
-                v = torch.cat([v, vs_dict[layer_id][1].unsqueeze(1)], dim=1)
-            v_kfe = torch.mm(torch.mm(evecs_g.t(), v), evecs_a)
+
             mv_kfe = v_kfe * diag.view(*v_kfe.size())
-            mv = torch.mm(torch.mm(evecs_g, mv_kfe), evecs_a.t())
-            if layer.has_bias():
-                mv_tuple = (mv[:, :-1].contiguous().view(*sw), mv[:, -1].contiguous())
-            else:
-                mv_tuple = (mv.view(*sw),)
-            out_dict[layer_id] = mv_tuple
+
+            out_dict[layer_id] = self._proj_from_kfe(mv_kfe, evecs[layer_id], layer)
         return PVector(layer_collection=lc_merged, dict_repr=out_dict)
 
     def vTMv(self, vector):
@@ -1039,16 +1055,35 @@ class PMatEKFAC(PMatAbstract):
         norm2 = 0
         lc_merged = self.layer_collection.merge(vector.layer_collection)
         for layer_id, layer in lc_merged.layers.items():
-            evecs_a, evecs_g = evecs[layer_id]
-            if layer.transposed:
-                evecs_a, evecs_g = evecs_g, evecs_a
+            v_kfe = self._proj_to_kfe(vector_dict[layer_id], evecs[layer_id], layer)
             diag = diags[layer_id]
-            v = vector_dict[layer_id][0].view(vector_dict[layer_id][0].size(0), -1)
-            if len(vector_dict[layer_id]) > 1:
-                v = torch.cat([v, vector_dict[layer_id][1].unsqueeze(1)], dim=1)
-
-            v_kfe = torch.mm(torch.mm(evecs_g.t(), v), evecs_a)
             norm2 += torch.dot(v_kfe.view(-1) ** 2, diag.view(-1))
+        return norm2
+
+    def mapTMmap(self, pfmap, reduction="sum"):
+        self._check_diag_updated()
+
+        evecs, diags = self.data
+        norm2 = 0
+        lc_merged = self.layer_collection.merge(pfmap.layer_collection)
+        for layer_id, layer, vals in pfmap.iter_by_layer():
+            if layer_id not in lc_merged.layers:
+                continue
+            v_kfe = self._proj_to_kfe_batched(vals, evecs[layer_id], layer)
+            diag = diags[layer_id]
+            sv = v_kfe.size()
+            if reduction == "sum":
+                norm2 += (
+                    torch.mv(v_kfe.view(sv[0] * sv[1], -1) ** 2, diag.view(-1))
+                    .view(sv[0], sv[1])
+                    .sum(dim=0)
+                )
+            elif reduction == "diag":
+                norm2 += torch.mv(
+                    v_kfe.view(sv[0] * sv[1], -1) ** 2, diag.view(-1)
+                ).view(sv[0], sv[1])
+            else:
+                raise NotImplementedError
         return norm2
 
     def trace(self):
@@ -1105,33 +1140,18 @@ class PMatEKFAC(PMatAbstract):
         out_dict = dict()
         evecs, diags = self.data
         lc_merged = self.layer_collection.merge(x.layer_collection)
-        for l_id, l in lc_merged.layers.items():
-            diag = diags[l_id]
-            evecs_a, evecs_g = evecs[l_id]
-            if l.transposed:
-                evecs_a, evecs_g = evecs_g, evecs_a
-            vw = vs_dict[l_id][0]
-            sw = vw.size()
-            v = vw.view(sw[0], -1)
-            if l.has_bias():
-                v = torch.cat([v, vs_dict[l_id][1].unsqueeze(1)], dim=1)
-            v_kfe = torch.mm(torch.mm(evecs_g.t(), v), evecs_a)
+        for layer_id, layer in lc_merged.layers.items():
+            v_kfe = self._proj_to_kfe(vs_dict[layer_id], evecs[layer_id], layer)
 
+            diag = diags[layer_id]
             diag_view = diag.view(*v_kfe.size())
+
             if solve == "default":
                 inv_kfe = v_kfe / (diag_view + regul)
             elif solve == "lstsq":
                 inv_kfe = torch.where(diag_view <= regul, 0, v_kfe / diag_view)
 
-            inv = torch.mm(torch.mm(evecs_g, inv_kfe), evecs_a.t())
-            if l.has_bias():
-                inv_tuple = (
-                    inv[:, :-1].contiguous().view(*sw),
-                    inv[:, -1].contiguous(),
-                )
-            else:
-                inv_tuple = (inv.view(*sw),)
-            out_dict[l_id] = inv_tuple
+            out_dict[layer_id] = self._proj_from_kfe(inv_kfe, evecs[layer_id], layer)
         return PVector(layer_collection=lc_merged, dict_repr=out_dict)
 
     def solvePFMap(self, x, regul=1e-8, solve="default"):
@@ -1142,22 +1162,12 @@ class PMatEKFAC(PMatAbstract):
         out_dict = OrderedDict()
         evecs, diags = self.data
         lc_merged = self.layer_collection.merge(x.layer_collection)
-        for l_id, layer, vals in x.iter_by_layer():
-            if l_id not in lc_merged.layers:
+        for layer_id, layer, vals in x.iter_by_layer():
+            if layer_id not in lc_merged.layers:
                 continue
 
-            diag = diags[l_id]
-            evecs_a, evecs_g = evecs[l_id]
-            if layer.transposed:
-                evecs_a, evecs_g = evecs_g, evecs_a
-            vw = vals[0]
-            sw = vw.size()
-            v = vw.view(sw[0], sw[1], sw[2], -1)
-            if len(vals) > 1:
-                vb = vals[1]
-                v = torch.cat([v, vb.unsqueeze(3)], dim=3)
-
-            v_kfe = torch.einsum("ijkl,ka,lb->ijab", v, evecs_g, evecs_a)
+            diag = diags[layer_id]
+            v_kfe = self._proj_to_kfe_batched(vals, evecs[layer_id], layer)
 
             sv_kfe = v_kfe.size()
 
@@ -1167,16 +1177,9 @@ class PMatEKFAC(PMatAbstract):
             elif solve == "lstsq":
                 inv_kfe = torch.where(diag_view <= regul, 0, v_kfe / diag_view)
 
-            inv = torch.einsum("ijkl,ak,bl->ijab", inv_kfe, evecs_g, evecs_a)
-
-            if len(vals) > 1:
-                inv_tuple = (
-                    inv[:, :, :, :-1].contiguous().view(*sw),
-                    inv[:, :, :, -1].contiguous(),
-                )
-            else:
-                inv_tuple = (inv.view(*sw),)
-            out_dict[l_id] = inv_tuple
+            out_dict[layer_id] = self._proj_from_kfe_batched(
+                inv_kfe, evecs[layer_id], layer
+            )
 
         return PFMapDense.from_dict(
             generator=self.generator,
@@ -1202,6 +1205,58 @@ class PMatEKFAC(PMatAbstract):
                           to using KFAC"""
                 )
             )
+
+    def _proj_to_kfe(self, v, evecs, layer):
+        evecs_a, evecs_g = evecs
+        if layer.transposed:
+            evecs_a, evecs_g = evecs_g, evecs_a
+        vw = v[0].view(v[0].size(0), -1)
+        if layer.has_bias():
+            v = torch.cat([vw, v[1].unsqueeze(1)], dim=1)
+        else:
+            v = vw
+        return torch.mm(torch.mm(evecs_g.t(), v), evecs_a)
+
+    def _proj_to_kfe_batched(self, vs, evecs, layer):
+        evecs_a, evecs_g = evecs
+        if layer.transposed:
+            evecs_a, evecs_g = evecs_g, evecs_a
+        sw = vs[0].size()
+        vw = vs[0].view(sw[0], sw[1], sw[2], -1)
+        if layer.has_bias():
+            v = torch.cat([vw, vs[1].unsqueeze(3)], dim=3)
+        else:
+            v = vw
+
+        return torch.einsum("ijkl,ka,lb->ijab", v, evecs_g, evecs_a)
+
+    def _proj_from_kfe(self, v, evecs, layer):
+        evecs_a, evecs_g = evecs
+        if layer.transposed:
+            evecs_a, evecs_g = evecs_g, evecs_a
+        v_back = torch.mm(torch.mm(evecs_g, v), evecs_a.t())
+        if layer.has_bias():
+            v_back = (
+                v_back[:, :-1].contiguous().view(*layer.weight.size),
+                v_back[:, -1].contiguous(),
+            )
+        else:
+            v_back = (v_back.view(*layer.weight.size),)
+        return v_back
+
+    def _proj_from_kfe_batched(self, vs, evecs, layer):
+        evecs_a, evecs_g = evecs
+        if layer.transposed:
+            evecs_a, evecs_g = evecs_g, evecs_a
+        v_back = torch.einsum("ijkl,ak,bl->ijab", vs, evecs_g, evecs_a)
+        if layer.has_bias():
+            v_back = (
+                v_back[:, :, :, :-1].contiguous(),
+                v_back[:, :, :, -1].contiguous(),
+            )
+        else:
+            v_back = (v_back,)
+        return v_back
 
 
 class PMatImplicit(PMatAbstract):
@@ -1610,6 +1665,14 @@ class PMatMixed(PMatAbstract):
 
     def vTMv(self, v):
         return sum([pmat.vTMv(v) for pmat in self.sub_pmats.values()])
+
+    def mapTMmap(self, pfmap, reduction="sum"):
+        return sum(
+            [
+                pmat.mapTMmap(pfmap, reduction=reduction)
+                for pmat in self.sub_pmats.values()
+            ]
+        )
 
     def __rmul__(self, x):
         return PMatMixed(

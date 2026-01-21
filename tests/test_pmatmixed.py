@@ -1,11 +1,11 @@
 from copy import deepcopy
 
 import torch
-from tasks import get_conv_bn_task
+from tasks import get_conv_bn_task, device
 
 from nngeometry.layercollection import LinearLayer
 from nngeometry.metrics import FIM
-from nngeometry.object.map import PFMapDense
+from nngeometry.object.map import PFMapDense, random_pfmap
 from nngeometry.object.pspace import (
     PMatBlockDiag,
     PMatDense,
@@ -70,6 +70,30 @@ def test_pmatmixed_ekfac():
                 stacked_v,
                 J_back.to_torch(),
             )
+
+            pfmap = random_pfmap(lc, output_size=(3, 4), device=device)
+
+            mapTMmap_direct = torch.zeros((4,))
+            pfmap_torch = pfmap.to_torch()
+            for i in range(4):
+                for j in range(3):
+                    mapTMmap_direct[i] += torch.dot(
+                        torch.mv(dense_torch, pfmap_torch[j, i]),
+                        pfmap_torch[j, i],
+                    )
+            mapTMmap_ekfac = pmat_mixed.mapTMmap(pfmap, reduction="sum")
+            torch.testing.assert_close(mapTMmap_direct, mapTMmap_ekfac)
+
+            mapTMmap_direct = torch.zeros((3, 4))
+            pfmap_torch = pfmap.to_torch()
+            for i in range(4):
+                for j in range(3):
+                    mapTMmap_direct[j, i] += torch.dot(
+                        torch.mv(dense_torch, pfmap_torch[j, i]),
+                        pfmap_torch[j, i],
+                    )
+            mapTMmap_ekfac = pmat_mixed.mapTMmap(pfmap, reduction="diag")
+            torch.testing.assert_close(mapTMmap_direct, mapTMmap_ekfac)
 
             # 2nd time the diag is updated
             if i == 0:
