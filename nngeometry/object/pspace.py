@@ -103,17 +103,17 @@ class PMatAbstract(ABC):
         """
         raise NotImplementedError
 
-    def mapTMmap(self, pfmap, reduce="sum"):
+    def mapTMmap(self, pfmap, reduction="sum"):
         """
-        desc todo
+        Performs batched vTMv for each PVector v in a PFMap
 
         :param pfmap: the PFMap to multiply
         :type pfmap: :class:`.object.map.PFMap`
+        :param reduction: one of ["sum", "diag"]
+        :type reduction: str
         """
-        assert reduce in ["sum", "diag", "none"]
-        J_dense = pfmap.to_torch()
-        sJ = J_dense.size()
-        J_dense = J_dense.view(sJ[0] * sJ[1], sJ[2])
+        sJ = pfmap.size()
+        J_dense = pfmap.to_torch().view(sJ[0] * sJ[1], sJ[2])
 
         norm2 = []
         for i in range(J_dense.size(0)):
@@ -123,11 +123,11 @@ class PMatAbstract(ABC):
             )
             norm2.append(self.vTMv(v))
         norm2 = torch.stack(norm2).view(*sJ[:-1])
-        if reduce == "sum":
+        if reduction == "sum":
             return norm2.sum(dim=0)
-        elif reduce == "diag":
+        elif reduction == "diag":
             return norm2
-        elif reduce == "none":
+        else:
             raise NotImplementedError
 
     @abstractmethod
@@ -1060,8 +1060,7 @@ class PMatEKFAC(PMatAbstract):
             norm2 += torch.dot(v_kfe.view(-1) ** 2, diag.view(-1))
         return norm2
 
-    def mapTMmap(self, pfmap, reduce="sum"):
-        assert reduce in ["none", "diag", "sum"]
+    def mapTMmap(self, pfmap, reduction="sum"):
         self._check_diag_updated()
 
         evecs, diags = self.data
@@ -1073,18 +1072,18 @@ class PMatEKFAC(PMatAbstract):
             v_kfe = self._proj_to_kfe_batched(vals, evecs[layer_id], layer)
             diag = diags[layer_id]
             sv = v_kfe.size()
-            if reduce == "sum":
+            if reduction == "sum":
                 norm2 += (
                     torch.mv(v_kfe.view(sv[0] * sv[1], -1) ** 2, diag.view(-1))
                     .view(sv[0], sv[1])
                     .sum(dim=0)
                 )
-            elif reduce == "diag":
+            elif reduction == "diag":
                 norm2 += torch.mv(
                     v_kfe.view(sv[0] * sv[1], -1) ** 2, diag.view(-1)
                 ).view(sv[0], sv[1])
-            elif reduce == "none":
-                raise NotImplementedError("TODO")
+            else:
+                raise NotImplementedError
         return norm2
 
     def trace(self):
@@ -1663,9 +1662,12 @@ class PMatMixed(PMatAbstract):
     def vTMv(self, v):
         return sum([pmat.vTMv(v) for pmat in self.sub_pmats.values()])
 
-    def mapTMmap(self, pfmap, reduce="sum"):
+    def mapTMmap(self, pfmap, reduction="sum"):
         return sum(
-            [pmat.mapTMmap(pfmap, reduce=reduce) for pmat in self.sub_pmats.values()]
+            [
+                pmat.mapTMmap(pfmap, reduction=reduction)
+                for pmat in self.sub_pmats.values()
+            ]
         )
 
     def __rmul__(self, x):

@@ -44,7 +44,6 @@ def test_pmatmixed_ekfac():
             v_back = pmat_mixed_inv.mv(mv_nng + regul * v)
             torch.testing.assert_close(v.to_torch(), v_back.to_torch())
 
-
             # Test solve with jacobian
             c = 1.678
             stacked_mv = torch.stack([c**i * mv_torch for i in range(6)]).reshape(
@@ -74,7 +73,7 @@ def test_pmatmixed_ekfac():
                         torch.mv(dense_torch, pfmap_torch[j, i]),
                         pfmap_torch[j, i],
                     )
-            mapTMmap_ekfac = pmat_mixed.mapTMmap(pfmap, reduce="sum")
+            mapTMmap_ekfac = pmat_mixed.mapTMmap(pfmap, reduction="sum")
             torch.testing.assert_close(mapTMmap_direct, mapTMmap_ekfac)
 
             mapTMmap_direct = torch.zeros((3, 4))
@@ -85,7 +84,7 @@ def test_pmatmixed_ekfac():
                         torch.mv(dense_torch, pfmap_torch[j, i]),
                         pfmap_torch[j, i],
                     )
-            mapTMmap_ekfac = pmat_mixed.mapTMmap(pfmap, reduce="diag")
+            mapTMmap_ekfac = pmat_mixed.mapTMmap(pfmap, reduction="diag")
             torch.testing.assert_close(mapTMmap_direct, mapTMmap_ekfac)
 
             # 2nd time the diag is updated
