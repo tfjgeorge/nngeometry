@@ -17,7 +17,7 @@ from nngeometry.object.vector import random_pvector
 
 def test_pmatmixed_ekfac():
     for get_task in [get_conv_bn_task]:
-        for i in range(2):
+        for it in range(2):
             loader, lc, parameters, model, function = get_task()
 
             pmat_mixed = FIM(
@@ -96,7 +96,7 @@ def test_pmatmixed_ekfac():
             torch.testing.assert_close(mapTMmap_direct, mapTMmap_ekfac)
 
             # 2nd time the diag is updated
-            if i == 0:
+            if it == 0:
                 pmat_mixed.update_diag(loader)
 
 
