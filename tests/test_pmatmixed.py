@@ -1,4 +1,5 @@
 import torch
+from nngeometry.layercollection import Conv2dLayer, LayerCollection, LinearLayer
 from tasks import get_conv_bn_task, device
 
 from nngeometry.metrics import FIM
@@ -86,6 +87,39 @@ def test_pmatmixed_ekfac():
                     )
             mapTMmap_ekfac = pmat_mixed.mapTMmap(pfmap, reduction="diag")
             torch.testing.assert_close(mapTMmap_direct, mapTMmap_ekfac)
+
+            # 2nd time the diag is updated
+            if i == 0:
+                pmat_mixed.update_diag(loader)
+
+
+def test_pmatmixed_onlyekfac():
+    for get_task in [get_conv_bn_task]:
+        for i in range(2):
+            loader, lc, parameters, model, function = get_task()
+
+            lc_restricted = LayerCollection()
+            for layer_id, layer in lc.layers.items():
+                if type(layer) in [Conv2dLayer, LinearLayer]:
+                    lc_restricted.add_layer_from_model(
+                        model, model.get_submodule(layer_id)
+                    )
+
+            pmat_mixed = FIM(
+                model=model,
+                loader=loader,
+                representation=PMatEKFACBlockDiag,
+                layer_collection=lc_restricted,
+            )
+            v = random_pvector(lc_restricted)
+
+            # Test pinverse
+            regul = 1e-12
+            M_inv = pmat_mixed.pinv(atol=regul)
+            torch.testing.assert_close(
+                M_inv.mv(v).to_torch(),
+                pmat_mixed.solve(v, regul=regul, solve="lstsq").to_torch(),
+            )
 
             # 2nd time the diag is updated
             if i == 0:

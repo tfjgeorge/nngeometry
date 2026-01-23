@@ -1117,10 +1117,21 @@ class PMatEKFAC(PMatAbstract):
         self._check_diag_updated()
         return self.pow(-1, regul=regul)
 
-    def pow(self, pow, regul=1e-8):
+    def pinv(self, atol=1e-8):
+        self._check_diag_updated()
+        return self.pow(-1, regul=atol, impl="lstsq")
+
+    def pow(self, pow, regul=1e-8, impl="default"):
         self._check_diag_updated()
         evecs, diags = self.data
-        inv_diags = {i: (d + regul) ** pow for i, d in diags.items()}
+        if impl in ["default"]:
+            inv_diags = {i: (d + regul) ** pow for i, d in diags.items()}
+
+        elif impl == "lstsq":
+            inv_diags = {
+                i: torch.where(d <= regul, 0, d**pow) for i, d in diags.items()
+            }
+
         return PMatEKFAC(
             generator=self.generator,
             data=(evecs, inv_diags),
@@ -1688,6 +1699,15 @@ class PMatMixed(PMatAbstract):
             {k: pmat.inverse(regul) for k, pmat in self.sub_pmats.items()},
         )
 
+    def pinv(self, atol=1e-8):
+        return PMatMixed(
+            layer_collection=self.layer_collection,
+            generator=self.generator,
+            layer_collection_each=self.layer_collection_each,
+            layer_map=self.layer_map,
+            sub_pmats={k: pmat.pinv(atol=atol) for k, pmat in self.sub_pmats.items()},
+        )
+
     def __getstate__(self):
         return {
             "layer_collection": self.layer_collection,
@@ -1793,6 +1813,18 @@ class PMatEye(PMatAbstract):
         return PMatEye(
             layer_collection=self.layer_collection,
             scaling=x * self.scaling,
+        )
+
+    def inverse(self, regul=1e-8):
+        return PMatEye(
+            layer_collection=self.layer_collection,
+            scaling=(self.scaling + regul) ** -1,
+        )
+
+    def pinv(self, atol=1e-8):
+        return PMatEye(
+            layer_collection=self.layer_collection,
+            scaling=self.scaling**-1 if self.scaling > atol else torch.tensor(0.0),
         )
 
 
