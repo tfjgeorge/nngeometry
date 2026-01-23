@@ -1094,6 +1094,10 @@ class PMatEKFAC(PMatAbstract):
         self._check_diag_updated()
         return sum([(d**2).sum() for d in self.data[1].values()]) ** 0.5
 
+    def spectral_norm(self):
+        self._check_diag_updated()
+        return max([evals.max() for evals in self.data[1].values()])
+
     def norm(self, ord="spectral"):
         """
         Norm of the matrix
@@ -1103,7 +1107,7 @@ class PMatEKFAC(PMatAbstract):
         """
         self._check_diag_updated()
         if ord == "spectral":
-            return max([evals.max() for evals in self.data[1].values()])
+            return self.spectral_norm()
         elif ord == "fro":
             return self.frobenius_norm()
         else:
@@ -1607,6 +1611,9 @@ class PMatMixed(PMatAbstract):
             layer_collection, generator, layer_collection_each, layer_map, sub_pmats
         )
 
+    def spectral_norm(self):
+        return max([pmat.spectral_norm() for pmat in self.sub_pmats.values()])
+
     def frobenius_norm(self):
         return (
             sum([pmat.frobenius_norm() ** 2 for pmat in self.sub_pmats.values()]) ** 0.5
@@ -1785,6 +1792,9 @@ class PMatEye(PMatAbstract):
     def vTMv(self, v):
         v_flat = v.to_torch()
         return self.scaling * torch.dot(v_flat, v_flat)
+
+    def spectral_norm(self):
+        return self.scaling
 
     def frobenius_norm(self):
         return self.size(0) ** 0.5 * torch.abs(self.scaling)
