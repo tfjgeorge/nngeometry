@@ -8,7 +8,7 @@ from tasks import (
     get_fullyconnect_task,
     get_linear_3d_task,
 )
-from utils import check_ratio, check_tensors
+from utils import check_ratio
 
 from nngeometry.backend import TorchHooksJacobianBackend
 from nngeometry.object.map import PFMapDense
@@ -99,14 +99,14 @@ def test_pspace_ekfac_vs_direct():
 
             mv_direct = torch.mv(M_ekfac_torch, v.to_torch())
             mv_ekfac = M_ekfac.mv(v)
-            check_tensors(mv_direct, mv_ekfac.to_torch())
+            torch.testing.assert_close(mv_direct, mv_ekfac.to_torch())
 
             # Test pow
-            check_tensors(
+            torch.testing.assert_close(
                 (M_ekfac**2).to_torch(),
                 torch.mm(M_ekfac_torch, M_ekfac_torch),
             )
-            check_tensors(
+            torch.testing.assert_close(
                 torch.mm(
                     (M_ekfac ** (1 / 3)).to_torch(),
                     (M_ekfac ** (2 / 3)).to_torch(),
@@ -115,24 +115,24 @@ def test_pspace_ekfac_vs_direct():
             )
 
             # Test inverse
-            regul = 1e-5
+            regul = 1e-6
             M_inv = M_ekfac.inverse(regul=regul)
             v_back = M_inv.mv(mv_ekfac + regul * v)
-            check_tensors(v.to_torch(), v_back.to_torch())
+            torch.testing.assert_close(v.to_torch(), v_back.to_torch())
 
-            regul = 1e-5
+            # Test pinv
             M_inv = M_ekfac.pinv(atol=regul)
-            check_tensors(
+            torch.testing.assert_close(
                 M_inv.mv(v).to_torch(),
                 M_ekfac.solve(v, regul=regul, solve="lstsq").to_torch(),
             )
 
             # Test solve with vector
             v_back = M_ekfac.solve(mv_ekfac + regul * v, regul=regul)
-            check_tensors(v.to_torch(), v_back.to_torch())
+            torch.testing.assert_close(v.to_torch(), v_back.to_torch())
 
             # Test solve with jacobian
-            # TODO improve
+            # TODO imp
             c = 1.678
             stacked_mv = torch.stack([c**i * mv_direct for i in range(6)]).reshape(
                 2, 3, -1
@@ -184,6 +184,6 @@ def test_pspace_ekfac_vs_direct():
 
             # Test rmul
             M_mul = 1.23 * M_ekfac
-            check_tensors(1.23 * M_ekfac_torch, M_mul.to_torch())
+            torch.testing.assert_close(1.23 * M_ekfac_torch, M_mul.to_torch())
 
             M_ekfac.update_diag(loader)

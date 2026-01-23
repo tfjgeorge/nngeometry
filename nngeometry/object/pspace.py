@@ -1701,11 +1701,11 @@ class PMatMixed(PMatAbstract):
 
     def pinv(self, atol=1e-8):
         return PMatMixed(
-            self.layer_collection,
-            self.generator,
-            self.layer_collection_each,
-            self.layer_map,
-            {k: pmat.pinv(atol) for k, pmat in self.sub_pmats.items()},
+            layer_collection=self.layer_collection,
+            generator=self.generator,
+            layer_collection_each=self.layer_collection_each,
+            layer_map=self.layer_map,
+            sub_pmats={k: pmat.pinv(atol=atol) for k, pmat in self.sub_pmats.items()},
         )
 
     def __getstate__(self):
