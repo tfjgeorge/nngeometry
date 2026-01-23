@@ -67,8 +67,8 @@ def test_pmateye():
             ),
         )
 
-        # test pinverse
+        # test pinv
         torch.testing.assert_close(
             torch.zeros((lc.numel(), lc.numel()), dtype=torch.float64),
-            pmat_eye2.pinverse(atol=10).to_torch(),
+            pmat_eye2.pinv(atol=10).to_torch(),
         )

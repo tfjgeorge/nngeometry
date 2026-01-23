@@ -1117,7 +1117,7 @@ class PMatEKFAC(PMatAbstract):
         self._check_diag_updated()
         return self.pow(-1, regul=regul)
 
-    def pinverse(self, atol=1e-8):
+    def pinv(self, atol=1e-8):
         self._check_diag_updated()
         return self.pow(-1, regul=atol, impl="lstsq")
 
@@ -1699,13 +1699,13 @@ class PMatMixed(PMatAbstract):
             {k: pmat.inverse(regul) for k, pmat in self.sub_pmats.items()},
         )
 
-    def pinverse(self, atol=1e-8):
+    def pinv(self, atol=1e-8):
         return PMatMixed(
             self.layer_collection,
             self.generator,
             self.layer_collection_each,
             self.layer_map,
-            {k: pmat.pinverse(atol) for k, pmat in self.sub_pmats.items()},
+            {k: pmat.pinv(atol) for k, pmat in self.sub_pmats.items()},
         )
 
     def __getstate__(self):
@@ -1821,7 +1821,7 @@ class PMatEye(PMatAbstract):
             scaling=(self.scaling + regul) ** -1,
         )
 
-    def pinverse(self, atol=1e-8):
+    def pinv(self, atol=1e-8):
         return PMatEye(
             layer_collection=self.layer_collection,
             scaling=self.scaling**-1 if self.scaling > atol else torch.tensor(0.0),
