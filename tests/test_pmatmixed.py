@@ -115,10 +115,11 @@ def test_pmatmixed_onlyekfac():
 
             # Test pinverse
             regul = 1e-12
+            max_eval = pmat_mixed.spectral_norm()
             M_inv = pmat_mixed.pinv(atol=regul)
             torch.testing.assert_close(
                 M_inv.mv(v).to_torch(),
-                pmat_mixed.solve(v, regul=regul, solve="lstsq").to_torch(),
+                pmat_mixed.solve(v, regul=regul * max_eval, solve="lstsq").to_torch(),
             )
 
             # 2nd time the diag is updated
