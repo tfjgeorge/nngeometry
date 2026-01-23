@@ -1117,6 +1117,10 @@ class PMatEKFAC(PMatAbstract):
         self._check_diag_updated()
         return self.pow(-1, regul=regul)
 
+    def pinverse(self, atol=1e-8):
+        self._check_diag_updated()
+        return self.pow(-1, regul=atol, impl="lstsq")
+
     def pow(self, pow, regul=1e-8, impl="default"):
         self._check_diag_updated()
         evecs, diags = self.data
@@ -1692,7 +1696,16 @@ class PMatMixed(PMatAbstract):
             self.generator,
             self.layer_collection_each,
             self.layer_map,
-            {k: pmat.inverse(regul, solve) for k, pmat in self.sub_pmats.items()},
+            {k: pmat.inverse(regul) for k, pmat in self.sub_pmats.items()},
+        )
+
+    def pinverse(self, atol=1e-8):
+        return PMatMixed(
+            self.layer_collection,
+            self.generator,
+            self.layer_collection_each,
+            self.layer_map,
+            {k: pmat.pinverse(atol) for k, pmat in self.sub_pmats.items()},
         )
 
     def __getstate__(self):

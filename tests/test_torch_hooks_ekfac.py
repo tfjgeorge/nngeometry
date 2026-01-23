@@ -121,7 +121,7 @@ def test_pspace_ekfac_vs_direct():
             check_tensors(v.to_torch(), v_back.to_torch())
 
             regul = 1e-5
-            M_inv = M_ekfac.inverse(regul=regul, solve="lstsq")
+            M_inv = M_ekfac.pinverse(atol=regul)
             check_tensors(
                 M_inv.mv(v).to_torch(),
                 M_ekfac.solve(v, regul=regul, solve="lstsq").to_torch(),
