@@ -55,3 +55,20 @@ def test_pmateye():
         pmat_eye2 = -1.234 * pmat_eye
         assert torch.norm(pmat_eye2.to_torch() - pmat_eye.to_torch()) > 0.1
         pmat_eye = pmat_eye2
+
+        # test inverse
+        regul = 1e-5
+        torch.testing.assert_close(
+            torch.eye(lc.numel(), dtype=torch.float32),
+            torch.mm(
+                pmat_eye2.to_torch()
+                + regul * torch.eye(lc.numel(), dtype=torch.float32),
+                pmat_eye2.inverse(regul=regul).to_torch(),
+            ),
+        )
+
+        # test pinverse
+        torch.testing.assert_close(
+            torch.zeros((lc.numel(), lc.numel()), dtype=torch.float64),
+            pmat_eye2.pinverse(atol=10).to_torch(),
+        )

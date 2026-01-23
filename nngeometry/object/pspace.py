@@ -290,18 +290,15 @@ class PMatDense(PMatAbstract):
             self._ldl_factors = (LD, pivots)
         return torch.linalg.ldl_solve(LD, pivots, x.t()).t()
 
-    def inverse(self, regul=1e-8, solve="default"):
-        if solve in ["default", "solve"]:
-            inv_tensor = torch.inverse(
-                self.data + regul * torch.eye(self.size(0), device=self.get_device())
-            )
-            return PMatDense(
-                generator=self.generator,
-                data=inv_tensor,
-                layer_collection=self.layer_collection,
-            )
-        else:
-            raise NotImplementedError
+    def inverse(self, regul=1e-8):
+        inv_tensor = torch.inverse(
+            self.data + regul * torch.eye(self.size(0), device=self.get_device())
+        )
+        return PMatDense(
+            generator=self.generator,
+            data=inv_tensor,
+            layer_collection=self.layer_collection,
+        )
 
     def get_device(self):
         return self.data.device
@@ -395,16 +392,13 @@ class PMatDiag(PMatAbstract):
                 examples, layer_collection=layer_collection
             )
 
-    def inverse(self, regul=1e-8, solve="default"):
-        if solve in ["default", "solve"]:
-            inv_tensor = 1.0 / (self.data + regul)
-            return PMatDiag(
-                generator=self.generator,
-                data=inv_tensor,
-                layer_collection=self.layer_collection,
-            )
-        else:
-            raise NotImplementedError
+    def inverse(self, regul=1e-8):
+        inv_tensor = 1.0 / (self.data + regul)
+        return PMatDiag(
+            generator=self.generator,
+            data=inv_tensor,
+            layer_collection=self.layer_collection,
+        )
 
     def get_device(self):
         return self.data.device
@@ -592,22 +586,19 @@ class PMatBlockDiag(PMatAbstract):
             layer_collection=lc_merged, generator=self.generator, data_dict=out_dict
         )
 
-    def inverse(self, regul=1e-8, solve="default"):
-        if solve in ["solve", "default"]:
-            inv_data = dict()
-            for layer_id, layer in self.layer_collection.layers.items():
-                b = self.data[layer_id]
-                inv_b = torch.inverse(
-                    b + regul * torch.eye(b.size(0), device=self.get_device())
-                )
-                inv_data[layer_id] = inv_b
-            return PMatBlockDiag(
-                generator=self.generator,
-                data=inv_data,
-                layer_collection=self.layer_collection,
+    def inverse(self, regul=1e-8):
+        inv_data = dict()
+        for layer_id, layer in self.layer_collection.layers.items():
+            b = self.data[layer_id]
+            inv_b = torch.inverse(
+                b + regul * torch.eye(b.size(0), device=self.get_device())
             )
-        else:
-            raise NotImplementedError
+            inv_data[layer_id] = inv_b
+        return PMatBlockDiag(
+            generator=self.generator,
+            data=inv_data,
+            layer_collection=self.layer_collection,
+        )
 
     def frobenius_norm(self):
         # TODO test
@@ -685,10 +676,7 @@ class PMatKFAC(PMatAbstract):
     def trace(self):
         return sum([torch.trace(a) * torch.trace(g) for a, g in self.data.values()])
 
-    def inverse(self, regul=1e-8, use_pi=True, solve="default"):
-        if solve != "default":
-            raise NotImplementedError
-
+    def inverse(self, regul=1e-8, use_pi=True):
         inv_data = dict()
         for layer_id, layer in self.layer_collection.layers.items():
             a, g = self.data[layer_id]
@@ -1125,17 +1113,17 @@ class PMatEKFAC(PMatAbstract):
         self._check_diag_updated()
         raise NotImplementedError
 
-    def inverse(self, regul=1e-8, solve="default"):
+    def inverse(self, regul=1e-8):
         self._check_diag_updated()
-        return self.pow(-1, regul=regul, solve=solve)
+        return self.pow(-1, regul=regul)
 
-    def pow(self, pow, regul=1e-8, solve="default"):
+    def pow(self, pow, regul=1e-8, impl="default"):
         self._check_diag_updated()
         evecs, diags = self.data
-        if solve in ["default", "solve"]:
+        if impl in ["default"]:
             inv_diags = {i: (d + regul) ** pow for i, d in diags.items()}
 
-        elif solve == "lstsq":
+        elif impl == "lstsq":
             inv_diags = {
                 i: torch.where(d <= regul, 0, d**pow) for i, d in diags.items()
             }
@@ -1698,7 +1686,7 @@ class PMatMixed(PMatAbstract):
             {k: x * pmat for k, pmat in self.sub_pmats.items()},
         )
 
-    def inverse(self, regul=1e-8, solve="default"):
+    def inverse(self, regul=1e-8):
         return PMatMixed(
             self.layer_collection,
             self.generator,
@@ -1812,6 +1800,18 @@ class PMatEye(PMatAbstract):
         return PMatEye(
             layer_collection=self.layer_collection,
             scaling=x * self.scaling,
+        )
+
+    def inverse(self, regul=1e-8):
+        return PMatEye(
+            layer_collection=self.layer_collection,
+            scaling=(self.scaling + regul) ** -1,
+        )
+
+    def pinverse(self, atol=1e-8):
+        return PMatEye(
+            layer_collection=self.layer_collection,
+            scaling=self.scaling**-1 if self.scaling > atol else torch.tensor(0.0),
         )
 
 
