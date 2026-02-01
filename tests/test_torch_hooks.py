@@ -214,7 +214,7 @@ def test_jacobian_fdense_vs_pullback():
             check_ratio(vTMv_pullforward, vTMv_FMat)
 
             # Test frobenius
-            frob_FMat = FMat_dense.frobenius_norm()
+            frob_FMat = FMat_dense.norm()
             frob_direct = (FMat_dense.to_torch() ** 2).sum() ** 0.5
             check_ratio(frob_direct, frob_FMat)
 
@@ -364,7 +364,7 @@ def test_jacobian_pdense():
             check_tensors(torch.diag(PMat_dense.to_torch()), PMat_dense.get_diag())
 
             # Test frobenius
-            frob_PMat = PMat_dense.frobenius_norm()
+            frob_PMat = PMat_dense.norm()
             frob_direct = (PMat_dense.to_torch() ** 2).sum() ** 0.5
             check_ratio(frob_direct, frob_PMat)
 
@@ -464,7 +464,7 @@ def test_jacobian_pdiag_vs_pdense():
         check_ratio(torch.trace(matrix_diag), PMat_diag.trace())
 
         # Test frobenius
-        check_ratio(torch.norm(matrix_diag), PMat_diag.frobenius_norm())
+        check_ratio(torch.norm(matrix_diag), PMat_diag.norm())
 
         # Test mv
         mv_direct = torch.mv(matrix_diag, dw.to_torch())
@@ -587,7 +587,7 @@ def test_jacobian_pblockdiag():
         check_tensors(torch.diag(dense_tensor), PMat_blockdiag.get_diag())
 
         # Test frobenius
-        frob_PMat = PMat_blockdiag.frobenius_norm()
+        frob_PMat = PMat_blockdiag.norm()
         frob_direct = (dense_tensor**2).sum() ** 0.5
         check_ratio(frob_direct, frob_PMat)
 
@@ -744,7 +744,7 @@ def test_jacobian_plowrank():
         check_tensors(torch.diag(dense_tensor), PMat_lowrank.get_diag(), eps=1e-4)
 
         # Test frobenius
-        frob_PMat = PMat_lowrank.frobenius_norm()
+        frob_PMat = PMat_lowrank.norm()
         frob_direct = (dense_tensor**2).sum() ** 0.5
         check_ratio(frob_direct, frob_PMat)
 
@@ -885,7 +885,7 @@ def test_jacobian_pquasidiag():
 
         check_tensors(torch.diag(dense_tensor), PMat_qd.get_diag())
 
-        check_ratio(torch.norm(dense_tensor), PMat_qd.frobenius_norm())
+        check_ratio(torch.norm(dense_tensor), PMat_qd.norm())
 
         check_ratio(torch.trace(dense_tensor), PMat_qd.trace())
 

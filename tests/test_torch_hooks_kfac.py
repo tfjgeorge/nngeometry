@@ -192,7 +192,7 @@ def test_jacobian_kfac():
 
         # Test frobenius norm
         frob_direct = torch.norm(G_kfac)
-        frob_kfac = M_kfac.frobenius_norm()
+        frob_kfac = M_kfac.norm()
         check_ratio(frob_direct, frob_kfac)
 
         # Test get_diag

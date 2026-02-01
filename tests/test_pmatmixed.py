@@ -21,7 +21,7 @@ def test_pmatmixed_ekfac():
 
             torch.testing.assert_close(torch.trace(dense_torch), pmat_mixed.trace())
             torch.testing.assert_close(
-                torch.norm(dense_torch), pmat_mixed.frobenius_norm()
+                torch.norm(dense_torch), pmat_mixed.norm()
             )
 
             x = 2
@@ -115,7 +115,7 @@ def test_pmatmixed_onlyekfac():
 
             # Test pinverse
             regul = 1e-12
-            max_eval = pmat_mixed.spectral_norm()
+            max_eval = pmat_mixed.norm(2)
             M_inv = pmat_mixed.pinv(atol=regul)
             torch.testing.assert_close(
                 M_inv.mv(v).to_torch(),

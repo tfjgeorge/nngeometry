@@ -19,7 +19,7 @@ def test_pmateye():
 
         torch.testing.assert_close(torch.trace(dense_torch), pmat_eye.trace())
         torch.testing.assert_close(
-            torch.norm(dense_torch), pmat_eye.frobenius_norm(), atol=1e-4, rtol=1e-4
+            torch.norm(dense_torch), pmat_eye.norm(), atol=1e-4, rtol=1e-4
         )
 
         v = random_pvector(lc, dtype=torch.float32)

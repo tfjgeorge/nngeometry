@@ -42,8 +42,8 @@ class FMatDense(FMatAbstract):
             v_flat, torch.mv(self.data.view(sd[0] * sd[1], sd[2] * sd[3]), v_flat)
         )
 
-    def frobenius_norm(self):
-        return torch.norm(self.data)
+    def norm(self, ord=None):
+        return torch.linalg.norm(self.data, ord=ord)
 
     def project_to_diag(self, v):
         # TODO: test

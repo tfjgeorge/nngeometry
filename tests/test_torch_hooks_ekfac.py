@@ -153,7 +153,7 @@ def test_pspace_ekfac_vs_direct():
 
             # Test solve lstsq with jacobian, against torch.linalg.lstsq
             # on the dense matrix
-            max_eval = M_ekfac.norm(ord="spectral")
+            max_eval = M_ekfac.norm(ord=2)
 
             torch.testing.assert_close(
                 torch.linalg.lstsq(
