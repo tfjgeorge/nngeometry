@@ -116,7 +116,7 @@ def test_pspace_ekfac_vs_direct():
 
             # Test inverse
             regul = 1e-6
-            M_inv = M_ekfac.inverse(regul=regul)
+            M_inv = M_ekfac.inv(regul=regul)
             v_back = M_inv.mv(mv_ekfac + regul * v)
             torch.testing.assert_close(v.to_torch(), v_back.to_torch())
 

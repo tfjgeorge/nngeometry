@@ -41,7 +41,7 @@ def test_pmatmixed_ekfac():
             torch.testing.assert_close(v.to_torch(), v_back.to_torch())
 
             # Test inverse
-            pmat_mixed_inv = pmat_mixed.inverse(regul=regul)
+            pmat_mixed_inv = pmat_mixed.inv(regul=regul)
             v_back = pmat_mixed_inv.mv(mv_nng + regul * v)
             torch.testing.assert_close(v.to_torch(), v_back.to_torch())
 

@@ -224,7 +224,7 @@ def test_jacobian_kfac():
         regul = 1e-7
 
         mv2 = M_kfac.mv(mv_kfac)
-        kfac_inverse = M_kfac.inverse(regul)
+        kfac_inverse = M_kfac.inv(regul)
         mv_back = kfac_inverse.mv(mv2 + regul * mv_kfac)
         check_tensors(
             mv_kfac.to_torch(),
