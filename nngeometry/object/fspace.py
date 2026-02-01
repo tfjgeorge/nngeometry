@@ -1,3 +1,4 @@
+import warnings
 from abc import ABC, abstractmethod
 
 import torch
@@ -41,6 +42,10 @@ class FMatDense(FMatAbstract):
         return torch.dot(
             v_flat, torch.mv(self.data.view(sd[0] * sd[1], sd[2] * sd[3]), v_flat)
         )
+
+    @warnings.deprecated("""Use norm(ord="fro") instead""")
+    def frobenius_norm(self):
+        return self.norm(ord="fro")
 
     def norm(self, ord=None):
         return torch.linalg.norm(self.data, ord=ord)
