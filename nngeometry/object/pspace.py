@@ -619,6 +619,12 @@ class PMatBlockDiag(PMatAbstract):
             for block in self.data.values():
                 norm += torch.sum(block**2)
             return norm**0.5
+        elif ord in [-2, 2]:
+            op = max if ord == 2 else min
+            norm = 0
+            for block in self.data.values():
+                norm = op(norm, torch.linalg.norm(block, ord=ord))
+            return norm
         else:
             raise NotImplementedError(f"ord {ord} is not supported")
 

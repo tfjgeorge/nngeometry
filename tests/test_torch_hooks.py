@@ -368,6 +368,11 @@ def test_jacobian_pdense():
             frob_direct = (PMat_dense.to_torch() ** 2).sum() ** 0.5
             check_ratio(frob_direct, frob_PMat)
 
+            # Test spectral
+            spec_PMat = PMat_dense.norm(2)
+            spec_direct = torch.linalg.eigvalsh(PMat_dense.to_torch()).max()
+            check_ratio(spec_direct, spec_PMat)
+
             # Test trace
             trace_PMat = PMat_dense.trace()
             trace_direct = torch.trace(PMat_dense.to_torch())
@@ -465,6 +470,9 @@ def test_jacobian_pdiag_vs_pdense():
 
         # Test frobenius
         check_ratio(torch.norm(matrix_diag), PMat_diag.norm())
+
+        # Test frobenius
+        check_ratio(torch.max(matrix_diag), PMat_diag.norm(2))
 
         # Test mv
         mv_direct = torch.mv(matrix_diag, dw.to_torch())
@@ -590,6 +598,11 @@ def test_jacobian_pblockdiag():
         frob_PMat = PMat_blockdiag.norm()
         frob_direct = (dense_tensor**2).sum() ** 0.5
         check_ratio(frob_direct, frob_PMat)
+
+        # Test spectral
+        spec_PMat = PMat_blockdiag.norm(2)
+        spec_direct = torch.linalg.norm(dense_tensor, 2)
+        check_ratio(spec_direct, spec_PMat)
 
         # Test trace
         trace_PMat = PMat_blockdiag.trace()
@@ -747,6 +760,11 @@ def test_jacobian_plowrank():
         frob_PMat = PMat_lowrank.norm()
         frob_direct = (dense_tensor**2).sum() ** 0.5
         check_ratio(frob_direct, frob_PMat)
+
+        # Test spectral
+        spec_PMat = PMat_lowrank.norm(2)
+        spec_direct = torch.linalg.norm(dense_tensor, 2)
+        check_ratio(spec_direct, spec_PMat)
 
         # Test trace
         trace_PMat = PMat_lowrank.trace()
