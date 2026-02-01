@@ -43,8 +43,10 @@ class FMatDense(FMatAbstract):
             v_flat, torch.mv(self.data.view(sd[0] * sd[1], sd[2] * sd[3]), v_flat)
         )
 
-    @warnings.deprecated("""Use norm(ord="fro") instead""")
     def frobenius_norm(self):
+        warnings.warn(
+            """Use norm(ord="fro") instead""", DeprecationWarning, stacklevel=2
+        )
         return self.norm(ord="fro")
 
     def norm(self, ord=None):

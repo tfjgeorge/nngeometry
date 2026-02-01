@@ -48,8 +48,10 @@ class PMatAbstract(ABC):
     def trace(self):
         raise NotImplementedError
 
-    @warnings.deprecated("""Use norm(ord="fro") instead""")
     def frobenius_norm(self):
+        warnings.warn(
+            """Use norm(ord="fro") instead""", DeprecationWarning, stacklevel=2
+        )
         return self.norm(ord="fro")
 
     @abstractmethod
