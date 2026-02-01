@@ -679,6 +679,9 @@ def test_jacobian_pimplicit_vs_pdense():
         PMat_dense = PMatDense(
             generator=generator, examples=loader, layer_collection=lc
         )
+        PMat_bd = PMatBlockDiag(
+            generator=generator, examples=loader, layer_collection=lc
+        )
         dw = random_pvector(layer_collection=lc, device=device)
 
         # Test trace
@@ -704,6 +707,25 @@ def test_jacobian_pimplicit_vs_pdense():
                 PMat_implicit.vTMv(dw)
         else:
             check_ratio(PMat_dense.vTMv(dw), PMat_implicit.vTMv(dw))
+
+        # Test solvePVec
+        regul = 1e-3
+        if "BatchNorm1dLayer" in [
+            l.__class__.__name__ for l in lc.layers.values()
+        ] or "BatchNorm2dLayer" in [l.__class__.__name__ for l in lc.layers.values()]:
+            with pytest.raises(NotImplementedError):
+                PMat_implicit.solvePVec(dw)
+        else:
+            check_tensors(
+                PMat_dense.solve(dw, regul=regul).to_torch(),
+                PMat_implicit.solve(dw, regul=regul, M=PMat_dense).to_torch(),
+                eps=1e-3,
+            )  # perfect preconditioner
+            check_tensors(
+                PMat_dense.solve(dw, regul=regul).to_torch(),
+                PMat_implicit.solve(dw, regul=regul, max_iter=10, M=PMat_bd).to_torch(),
+                eps=5e-1,
+            )  # worse preconditioner
 
 
 def test_jacobian_plowrank_vs_pdense():

@@ -215,11 +215,11 @@ class PVector:
             else:
                 dict_repr[layer_id] = (w,)
         return dict_repr
-    
+
     def to_torch_layer(self, layer_id):
         if self.dict_repr is not None:
             return self.dict_repr[layer_id]
-        
+
         start = self.layer_collection.p_pos[layer_id]
         layer = self.layer_collection.layers[layer_id]
         w = self.vector_repr[start : start + layer.weight.numel()].view(
@@ -337,10 +337,10 @@ class PVector:
             dot_ = 0
             for l_id, l in self.layer_collection.layers.items():
                 if l.has_bias():
-                    dot_ += torch.dot(self.dict_repr[l_id][1], other.dict_repr[l_id][1])
-                dot_ += torch.dot(
-                    self.dict_repr[l_id][0].view(-1), other.dict_repr[l_id][0].view(-1)
-                )
+                    dot_ += torch.sum(
+                        self.dict_repr[l_id][1] * other.dict_repr[l_id][1]
+                    )
+                dot_ += torch.sum(self.dict_repr[l_id][0] * other.dict_repr[l_id][0])
             return dot_
 
     def size(self):
