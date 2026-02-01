@@ -1,3 +1,4 @@
+import operator
 import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict, defaultdict
@@ -888,14 +889,22 @@ class PMatKFAC(PMatAbstract):
         return norm2
 
     def norm(self, ord=None):
+        norm = 0
+        for a, g in self.data.values():
+            norm_a = torch.linalg.norm(a, ord=ord)
+            norm_g = torch.linalg.norm(g, ord=ord)
+            norm_ag = norm_a * norm_g
+            if ord is None or ord == "fro":
+                norm += norm_ag**2
+            elif ord == 2:
+                norm = max(norm, norm_ag)
+            elif ord == -2:
+                norm = min(norm, norm_ag)
+            else:
+                raise NotImplementedError(f"ord {ord} is not supported")
         if ord is None or ord == "fro":
-            norm = 0
-            for a, g in self.data.values():
-                # todo optimize ?
-                norm += torch.trace(torch.mm(a, a)) * torch.trace(torch.mm(g, g))
-            return norm**0.5
-        else:
-            raise NotImplementedError(f"ord {ord} is not supported")
+            norm **= 0.5
+        return norm
 
     def compute_eigendecomposition(self, impl="eigh"):
         self.evals = dict()
