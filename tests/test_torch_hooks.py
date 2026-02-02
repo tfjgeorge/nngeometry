@@ -718,9 +718,18 @@ def test_jacobian_pimplicit_vs_pdense():
         else:
             check_tensors(
                 PMat_dense.solve(dw, regul=regul).to_torch(),
-                PMat_implicit.solve(dw, regul=regul, M=PMat_dense).to_torch(),
+                PMat_implicit.solve(
+                    dw, regul=regul, M=PMat_dense, max_iter=1
+                ).to_torch(),
                 eps=1e-3,
             )  # perfect preconditioner
+            check_tensors(
+                PMat_dense.solve(dw, regul=regul).to_torch(),
+                PMat_implicit.solve(
+                    dw, regul=regul, x0=PMat_dense.solve(dw, regul=regul), max_iter=1
+                ).to_torch(),
+                eps=1e-3,
+            )  # good init
             check_tensors(
                 PMat_dense.solve(dw, regul=regul).to_torch(),
                 PMat_implicit.solve(dw, regul=regul, max_iter=10, M=PMat_bd).to_torch(),
