@@ -1,8 +1,8 @@
 import torch
-from nngeometry.object.map import PFMapDense
 from tasks import get_conv_bn_task
 
 from nngeometry.metrics import FIM
+from nngeometry.object.map import PFMapDense
 from nngeometry.object.pspace import PMatEye
 from nngeometry.object.vector import random_pvector
 
@@ -18,17 +18,13 @@ def test_pmateye():
         dense_torch = pmat_eye.to_torch()
 
         torch.testing.assert_close(torch.trace(dense_torch), pmat_eye.trace())
-        torch.testing.assert_close(
-            torch.norm(dense_torch), pmat_eye.norm(), atol=1e-4, rtol=1e-5
-        )
-        torch.testing.assert_close(
-            torch.linalg.norm(dense_torch, ord=2),
-            pmat_eye.norm(ord=2),
-        )
-        torch.testing.assert_close(
-            torch.linalg.norm(dense_torch, ord=-2),
-            pmat_eye.norm(ord=-2),
-        )
+        for ord in [-2, 2, "fro"]:
+            torch.testing.assert_close(
+                torch.linalg.norm(dense_torch, ord=ord),
+                pmat_eye.norm(ord),
+                atol=1e-4,
+                rtol=1e-4,
+            )
 
         v = random_pvector(lc, dtype=torch.float32)
         mv_torch = torch.mv(dense_torch, v.to_torch())

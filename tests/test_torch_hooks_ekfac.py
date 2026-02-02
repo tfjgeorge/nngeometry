@@ -93,9 +93,11 @@ def test_pspace_ekfac_vs_direct():
             trace_direct = torch.trace(M_ekfac_torch)
             check_ratio(trace_direct, trace_ekfac)
 
-            frob_ekfac = M_ekfac.norm(ord="fro")
-            frob_direct = torch.linalg.matrix_norm(M_ekfac_torch)
-            check_ratio(frob_direct, frob_ekfac)
+            # Test norm
+            for ord in ["fro", 2, -2]:
+                norm_direct = torch.linalg.norm(M_ekfac_torch, ord=ord)
+                norm_ekfac = M_ekfac.norm(ord=ord)
+                torch.testing.assert_close(norm_ekfac, norm_direct)
 
             mv_direct = torch.mv(M_ekfac_torch, v.to_torch())
             mv_ekfac = M_ekfac.mv(v)

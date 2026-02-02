@@ -189,19 +189,11 @@ def test_jacobian_kfac():
         trace_kfac = M_kfac.trace()
         torch.testing.assert_close(trace_direct, trace_kfac)
 
-        # Test frobenius norm
-        frob_direct = torch.norm(G_kfac)
-        frob_kfac = M_kfac.norm()
-        torch.testing.assert_close(frob_direct, frob_kfac)
-
-        # Test spectral norm
-        spec_direct = torch.linalg.norm(G_kfac, 2)
-        spec_kfac = M_kfac.norm(2)
-        torch.testing.assert_close(spec_direct, spec_kfac)
-
-        spec_direct = torch.linalg.norm(G_kfac, -2)
-        spec_kfac = M_kfac.norm(-2)
-        torch.testing.assert_close(spec_direct, spec_kfac)
+        # Test norm
+        for ord in ["fro", 2, -2]:
+            norm_direct = torch.linalg.norm(G_kfac, ord=ord)
+            norm_kfac = M_kfac.norm(ord=ord)
+            torch.testing.assert_close(norm_kfac, norm_direct)
 
         # Test get_diag
         torch.testing.assert_close(
