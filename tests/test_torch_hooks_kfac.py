@@ -190,15 +190,11 @@ def test_jacobian_kfac():
         trace_kfac = M_kfac.trace()
         check_ratio(trace_direct, trace_kfac)
 
-        # Test frobenius norm
-        frob_direct = torch.norm(G_kfac)
-        frob_kfac = M_kfac.norm()
-        check_ratio(frob_direct, frob_kfac)
-
-        # Test spectral norm
-        spec_direct = torch.linalg.norm(G_kfac, 2)
-        spec_kfac = M_kfac.norm(2)
-        check_ratio(spec_direct, spec_kfac)
+        # Test norm
+        for ord in ["fro", 2, -2]:
+            norm_direct = torch.linalg.norm(G_kfac, ord=ord)
+            norm_kfac = M_kfac.norm(ord=ord)
+            torch.testing.assert_close(norm_kfac, norm_direct)
 
         # Test get_diag
         check_tensors(torch.diag(G_kfac_split), M_kfac.get_diag(split_weight_bias=True))

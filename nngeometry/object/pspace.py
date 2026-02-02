@@ -1,3 +1,4 @@
+import math
 import operator
 import warnings
 from abc import ABC, abstractmethod
@@ -425,9 +426,9 @@ class PMatDiag(PMatAbstract):
         if ord is None or ord == "fro":
             return torch.sum(self.data**2) ** 0.5
         elif ord == 2:
-            return torch.max(self.data)
+            return torch.max(torch.abs(self.data))
         elif ord == -2:
-            return torch.min(self.data)
+            return torch.min(torch.abs(self.data))
         else:
             raise NotImplementedError(f"ord {ord} not supported")
 
@@ -615,19 +616,20 @@ class PMatBlockDiag(PMatAbstract):
         )
 
     def norm(self, ord=None):
+        norm = math.inf if ord == -2 else 0
+        for block in self.data.values():
+            norm_block = torch.linalg.norm(block, ord=ord)
+            if ord is None or ord == "fro":
+                norm += norm_block**2
+            elif ord == 2:
+                norm = max(norm, norm_block)
+            elif ord == -2:
+                norm = min(norm, norm_block)
+            else:
+                raise NotImplementedError(f"ord {ord} is not supported")
         if ord is None or ord == "fro":
-            norm = 0
-            for block in self.data.values():
-                norm += torch.sum(block**2)
-            return norm**0.5
-        elif ord in [-2, 2]:
-            op = max if ord == 2 else min
-            norm = 0
-            for block in self.data.values():
-                norm = op(norm, torch.linalg.norm(block, ord=ord))
-            return norm
-        else:
-            raise NotImplementedError(f"ord {ord} is not supported")
+            norm **= 0.5
+        return norm
 
     def vTMv(self, vector):
         # TODO test
@@ -889,7 +891,7 @@ class PMatKFAC(PMatAbstract):
         return norm2
 
     def norm(self, ord=None):
-        norm = 0
+        norm = math.inf if ord == -2 else 0
         for a, g in self.data.values():
             norm_a = torch.linalg.norm(a, ord=ord)
             norm_g = torch.linalg.norm(g, ord=ord)
@@ -1124,19 +1126,19 @@ class PMatEKFAC(PMatAbstract):
 
     def norm(self, ord=None):
         self._check_diag_updated()
-        if ord is None or ord == "fro":
-            norm = 0
-            for evals in self.data[1].values():
+        norm = math.inf if ord == -2 else 0
+        for evals in self.data[1].values():
+            if ord is None or ord == "fro":
                 norm += (evals**2).sum()
-            return norm**0.5
-        elif ord in [-2, 2]:
-            op, top = (max, torch.max) if ord == 2 else (min, torch.min)
-            norm = 0
-            for evals in self.data[1].values():
-                norm = op(norm, top(evals))
-            return norm
-        else:
-            raise NotImplementedError(f"ord {ord} not supported")
+            elif ord == 2:
+                norm = max(norm, evals.max())
+            elif ord == -2:
+                norm = min(norm, evals.min())
+            else:
+                raise NotImplementedError(f"ord {ord} is not supported")
+        if ord is None or ord == "fro":
+            norm **= 0.5
+        return norm
 
     def get_diag(self, v):
         self._check_diag_updated()
@@ -1640,19 +1642,19 @@ class PMatMixed(PMatAbstract):
         )
 
     def norm(self, ord=None):
-        if ord is None or ord == "fro":
-            norm = 0
-            for pmat in self.sub_pmats.values():
+        norm = math.inf if ord == -2 else 0
+        for pmat in self.sub_pmats.values():
+            if ord is None or ord == "fro":
                 norm += pmat.norm("fro") ** 2
-            return norm**0.5
-        elif ord in [-2, 2]:
-            op = max if ord == 2 else min
-            norm = 0
-            for pmat in self.sub_pmats.values():
-                norm = op(norm, pmat.norm(ord=ord))
-            return norm
-        else:
-            raise NotImplementedError(f"ord {ord} not supported")
+            elif ord == 2:
+                norm = max(norm, pmat.norm(2))
+            elif ord == -2:
+                norm = min(norm, pmat.norm(-2))
+            else:
+                raise NotImplementedError(f"ord {ord} is not supported")
+        if ord is None or ord == "fro":
+            norm **= 0.5
+        return norm
 
     def get_device(self):
         device = None
@@ -1832,7 +1834,7 @@ class PMatEye(PMatAbstract):
         if ord is None or ord == "fro":
             return self.size(0) ** 0.5 * torch.abs(self.scaling)
         elif ord in [-2, 2]:
-            return self.scaling
+            return torch.abs(self.scaling)
         else:
             raise NotImplementedError(f"ord {ord} not supported")
 
