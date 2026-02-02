@@ -468,11 +468,10 @@ def test_jacobian_pdiag_vs_pdense():
         # Test trace
         check_ratio(torch.trace(matrix_diag), PMat_diag.trace())
 
-        # Test frobenius
+        # Test norms
         check_ratio(torch.norm(matrix_diag), PMat_diag.norm())
-
-        # Test frobenius
         check_ratio(torch.max(matrix_diag), PMat_diag.norm(2))
+        check_ratio(torch.min(torch.diag(matrix_diag)), PMat_diag.norm(-2))
 
         # Test mv
         mv_direct = torch.mv(matrix_diag, dw.to_torch())
