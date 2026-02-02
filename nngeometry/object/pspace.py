@@ -901,7 +901,10 @@ class PMatKFAC(PMatAbstract):
             elif ord == 2:
                 norm = max(norm, norm_ag)
             elif ord == -2:
-                norm = min(norm, norm_ag)
+                if norm is None:
+                    norm = norm_ag
+                else:
+                    norm = min(norm, norm_ag)
             else:
                 raise NotImplementedError(f"ord {ord} is not supported")
         if ord is None or ord == "fro":
@@ -1832,7 +1835,9 @@ class PMatEye(PMatAbstract):
 
     def norm(self, ord=None):
         if ord is None or ord == "fro":
-            return self.size(0) ** 0.5 * torch.abs(self.scaling)
+            return torch.abs(self.scaling) * torch.sqrt(
+                torch.tensor(self.size(0), dtype=self.scaling.dtype)
+            )
         elif ord in [-2, 2]:
             return torch.abs(self.scaling)
         else:
