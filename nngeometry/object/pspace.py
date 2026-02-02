@@ -15,7 +15,7 @@ from nngeometry.layercollection import (
 from nngeometry.object.map import PFMap, PFMapDense
 
 from ..maths import kronecker
-from .vector import PVector
+from .vector import PVector, rademacher_pvector_dict
 
 
 class PMatAbstract(ABC):
@@ -1296,14 +1296,33 @@ class PMatImplicit(PMatAbstract):
         )
 
     def vTMv(self, v):
-        return self.generator.implicit_vTMv(
-            v, self.examples, layer_collection=self.layer_collection
-        )
+        if hasattr(self.generator, "implicit_vTMv"):
+            return self.generator.implicit_vTMv(
+                v, self.examples, layer_collection=self.layer_collection
+            )
+        else:
+            return v.dot(self.mv(v))
 
-    def trace(self):
-        return self.generator.implicit_trace(
-            self.examples, layer_collection=self.layer_collection
-        )
+    def trace(self, V=100):
+        if hasattr(self.generator, "implicit_trace"):
+            return self.generator.implicit_trace(
+                self.examples, layer_collection=self.layer_collection
+            )
+        else:
+            t = 0
+            layerid_to_mod = self.layer_collection.get_layerid_module_map(
+                self.generator.model
+            )
+            device = self.generator.get_device(layerid_to_mod.values())
+            dtype = self.generator.get_dtype(layerid_to_mod.values())
+            for _ in range(V):
+                v = rademacher_pvector_dict(
+                    self.layer_collection,
+                    device=device,
+                    dtype=dtype,
+                )
+                t += self.vTMv(v)
+            return t / V
 
     def frobenius_norm(self):
         raise NotImplementedError
