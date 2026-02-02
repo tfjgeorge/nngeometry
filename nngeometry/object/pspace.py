@@ -180,6 +180,13 @@ class PMatAbstract(ABC):
         """
         raise NotImplementedError
 
+    def inverse(self, regul=1e-8):
+        if hasattr(self, "inv"):
+            warnings.warn("""Use inv() instead""", DeprecationWarning, stacklevel=2)
+            return self.inv(regul)
+        else:
+            raise NotImplementedError
+
     def size(self, dim=None):
         """
         Size of the matrix as a tuple, regardless of the actual size in memory.
@@ -290,10 +297,6 @@ class PMatDense(PMatAbstract):
             self._ldl_factors = (LD, pivots)
         return torch.linalg.ldl_solve(LD, pivots, x.t()).t()
 
-    def inverse(self, regul=1e-8):
-        warnings.warn("""Use inv() instead""", DeprecationWarning, stacklevel=2)
-        return self.inv(regul)
-
     def inv(self, regul=1e-8):
         inv_tensor = torch.linalg.inv(
             self.data + regul * torch.eye(self.size(0), device=self.get_device())
@@ -395,10 +398,6 @@ class PMatDiag(PMatAbstract):
             self.data = generator.get_covariance_diag(
                 examples, layer_collection=layer_collection
             )
-
-    def inverse(self, regul=1e-8):
-        warnings.warn("""Use inv() instead""", DeprecationWarning, stacklevel=2)
-        return self.inv(regul)
 
     def inv(self, regul=1e-8):
         inv_tensor = 1.0 / (self.data + regul)
@@ -593,10 +592,6 @@ class PMatBlockDiag(PMatAbstract):
         return PFMapDense.from_dict(
             layer_collection=lc_merged, generator=self.generator, data_dict=out_dict
         )
-
-    def inverse(self, regul=1e-8):
-        warnings.warn("""Use inv() instead""", DeprecationWarning, stacklevel=2)
-        return self.inv(regul)
 
     def inv(self, regul=1e-8):
         inv_data = dict()
@@ -1128,10 +1123,6 @@ class PMatEKFAC(PMatAbstract):
     def get_diag(self, v):
         self._check_diag_updated()
         raise NotImplementedError
-
-    def inverse(self, regul=1e-8):
-        warnings.warn("""Use inv() instead""", DeprecationWarning, stacklevel=2)
-        return self.inv(regul)
 
     def inv(self, regul=1e-8):
         self._check_diag_updated()
@@ -1710,10 +1701,6 @@ class PMatMixed(PMatAbstract):
             {k: x * pmat for k, pmat in self.sub_pmats.items()},
         )
 
-    def inverse(self, regul=1e-8):
-        warnings.warn("""Use inv() instead""", DeprecationWarning, stacklevel=2)
-        return self.inv(regul)
-
     def inv(self, regul=1e-8):
         return PMatMixed(
             self.layer_collection,
@@ -1838,10 +1825,6 @@ class PMatEye(PMatAbstract):
             layer_collection=self.layer_collection,
             scaling=x * self.scaling,
         )
-
-    def inverse(self, regul=1e-8):
-        warnings.warn("""Use inv() instead""", DeprecationWarning, stacklevel=2)
-        return self.inv(regul)
 
     def inv(self, regul=1e-8):
         return PMatEye(
