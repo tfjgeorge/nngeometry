@@ -1,10 +1,7 @@
-import torch
-
-from nngeometry.object.vector import PVector
-
-
-def zero_pvector(layer_collection):
-    return PVector(layer_collection, vector_repr=torch.zeros(layer_collection.numel()))
+def zero_like_pvector(pvector):
+    zero_pvector = pvector.clone()
+    zero_pvector *= 0
+    return zero_pvector
 
 
 def cg(A, b, regul=1e-8, x0=None, rtol=1e-5, atol=0, max_iter=None, M=None):
@@ -14,7 +11,7 @@ def cg(A, b, regul=1e-8, x0=None, rtol=1e-5, atol=0, max_iter=None, M=None):
 
     if x0 is None:
         r = b
-        x = zero_pvector(A.layer_collection)
+        x = zero_like_pvector(r)
     else:
         r = b - A.mv(x0)
         if regul > 0:  # should we have a PMatImplicitDamp ?

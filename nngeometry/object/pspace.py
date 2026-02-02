@@ -1312,9 +1312,9 @@ class PMatImplicit(PMatAbstract):
     def to_torch(self):
         raise NotImplementedError
 
-    def solvePVec(self, v, regul=1e-8, solve="cg", **kwargs):
+    def solvePVec(self, x, regul=1e-8, solve="cg", **kwargs):
         if solve in ["default", "cg"]:
-            return cg(self, v, regul=regul, **kwargs)
+            return cg(self, x, regul=regul, **kwargs)
         else:
             raise NotImplementedError
 
