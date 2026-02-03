@@ -70,7 +70,7 @@ def test_pmateye():
             torch.mm(
                 pmat_eye2.to_torch()
                 + regul * torch.eye(lc.numel(), dtype=torch.float32),
-                pmat_eye2.inverse(regul=regul).to_torch(),
+                pmat_eye2.inv(regul=regul).to_torch(),
             ),
         )
 

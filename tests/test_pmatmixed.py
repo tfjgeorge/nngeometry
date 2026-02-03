@@ -44,7 +44,7 @@ def test_pmatmixed_ekfac():
             torch.testing.assert_close(v.to_torch(), v_back.to_torch())
 
             # Test inverse
-            pmat_mixed_inv = pmat_mixed.inverse(regul=regul)
+            pmat_mixed_inv = pmat_mixed.inv(regul=regul)
             v_back = pmat_mixed_inv.mv(mv_nng + regul * v)
             torch.testing.assert_close(v.to_torch(), v_back.to_torch())
 
@@ -117,12 +117,11 @@ def test_pmatmixed_onlyekfac():
             v = random_pvector(lc_restricted)
 
             # Test pinverse
-            regul = 1e-12
-            max_eval = pmat_mixed.norm(2)
+            regul = 1e-6
             M_inv = pmat_mixed.pinv(atol=regul)
             torch.testing.assert_close(
                 M_inv.mv(v).to_torch(),
-                pmat_mixed.solve(v, regul=regul * max_eval, solve="lstsq").to_torch(),
+                pmat_mixed.solve(v, regul=regul, solve="lstsq").to_torch(),
             )
 
             # 2nd time the diag is updated

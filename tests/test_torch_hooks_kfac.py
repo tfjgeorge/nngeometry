@@ -231,7 +231,7 @@ def test_jacobian_kfac():
         regul = 1e-7
 
         mv2 = M_kfac.mv(mv_kfac)
-        kfac_inverse = M_kfac.inverse(regul)
+        kfac_inverse = M_kfac.inv(regul)
         mv_back = kfac_inverse.mv(mv2 + regul * mv_kfac)
         torch.testing.assert_close(
             mv_kfac.to_torch(), mv_back.to_torch(), atol=1e-3, rtol=1e-3

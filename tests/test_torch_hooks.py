@@ -424,7 +424,7 @@ def test_jacobian_pdense():
             )
 
             # Test inv
-            PMat_inv = PMat_dense.inverse(regul=regul)
+            PMat_inv = PMat_dense.inv(regul=regul)
             check_tensors(
                 dw.to_torch(),
                 PMat_inv.mv(PMat_dense.mv(dw) + regul * dw).to_torch(),
@@ -499,7 +499,7 @@ def test_jacobian_pdiag_vs_pdense():
 
         # Test inverse
         regul = 1e-3
-        PMat_diag_inverse = PMat_diag.inverse(regul)
+        PMat_diag_inverse = PMat_diag.inv(regul)
         prod = torch.mm(
             matrix_diag + regul * torch.eye(lc.numel(), device=device),
             PMat_diag_inverse.to_torch(),
@@ -660,7 +660,7 @@ def test_jacobian_pblockdiag():
         )
 
         # Test inv
-        PMat_inv = PMat_blockdiag.inverse(regul=regul)
+        PMat_inv = PMat_blockdiag.inv(regul=regul)
         check_tensors(
             dw.to_torch(),
             PMat_inv.mv(PMat_blockdiag.mv(dw) + regul * dw).to_torch(),

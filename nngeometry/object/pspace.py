@@ -188,6 +188,13 @@ class PMatAbstract(ABC):
         """
         raise NotImplementedError
 
+    def inverse(self, regul=1e-8):
+        if hasattr(self, "inv"):
+            warnings.warn("""Use inv() instead""", DeprecationWarning, stacklevel=2)
+            return self.inv(regul)
+        else:
+            raise NotImplementedError
+
     def size(self, dim=None):
         """
         Size of the matrix as a tuple, regardless of the actual size in memory.
@@ -298,8 +305,8 @@ class PMatDense(PMatAbstract):
             self._ldl_factors = (LD, pivots)
         return torch.linalg.ldl_solve(LD, pivots, x.t()).t()
 
-    def inverse(self, regul=1e-8):
-        inv_tensor = torch.inverse(
+    def inv(self, regul=1e-8):
+        inv_tensor = torch.linalg.inv(
             self.data + regul * torch.eye(self.size(0), device=self.get_device())
         )
         return PMatDense(
@@ -400,7 +407,7 @@ class PMatDiag(PMatAbstract):
                 examples, layer_collection=layer_collection
             )
 
-    def inverse(self, regul=1e-8):
+    def inv(self, regul=1e-8):
         inv_tensor = 1.0 / (self.data + regul)
         return PMatDiag(
             generator=self.generator,
@@ -601,11 +608,11 @@ class PMatBlockDiag(PMatAbstract):
             layer_collection=lc_merged, generator=self.generator, data_dict=out_dict
         )
 
-    def inverse(self, regul=1e-8):
+    def inv(self, regul=1e-8):
         inv_data = dict()
         for layer_id, layer in self.layer_collection.layers.items():
             b = self.data[layer_id]
-            inv_b = torch.inverse(
+            inv_b = torch.linalg.inv(
                 b + regul * torch.eye(b.size(0), device=self.get_device())
             )
             inv_data[layer_id] = inv_b
@@ -704,6 +711,10 @@ class PMatKFAC(PMatAbstract):
         return sum([torch.trace(a) * torch.trace(g) for a, g in self.data.values()])
 
     def inverse(self, regul=1e-8, use_pi=True):
+        warnings.warn("""Use inv() instead""", DeprecationWarning, stacklevel=2)
+        return self.inv(regul, use_pi)
+
+    def inv(self, regul=1e-8, use_pi=True):
         inv_data = dict()
         for layer_id, layer in self.layer_collection.layers.items():
             a, g = self.data[layer_id]
@@ -711,10 +722,10 @@ class PMatKFAC(PMatAbstract):
                 pi = (torch.trace(a) / torch.trace(g) * g.size(0) / a.size(0)) ** 0.5
             else:
                 pi = 1
-            inv_a = torch.inverse(
+            inv_a = torch.linalg.inv(
                 a + pi * regul**0.5 * torch.eye(a.size(0), device=self.get_device())
             )
-            inv_g = torch.inverse(
+            inv_g = torch.linalg.inv(
                 g + regul**0.5 / pi * torch.eye(g.size(0), device=self.get_device())
             )
             inv_data[layer_id] = (inv_a, inv_g)
@@ -1144,7 +1155,7 @@ class PMatEKFAC(PMatAbstract):
         self._check_diag_updated()
         raise NotImplementedError
 
-    def inverse(self, regul=1e-8):
+    def inv(self, regul=1e-8):
         self._check_diag_updated()
         return self.pow(-1, regul=regul)
 
@@ -1734,13 +1745,13 @@ class PMatMixed(PMatAbstract):
             {k: x * pmat for k, pmat in self.sub_pmats.items()},
         )
 
-    def inverse(self, regul=1e-8):
+    def inv(self, regul=1e-8):
         return PMatMixed(
             self.layer_collection,
             self.generator,
             self.layer_collection_each,
             self.layer_map,
-            {k: pmat.inverse(regul) for k, pmat in self.sub_pmats.items()},
+            {k: pmat.inv(regul) for k, pmat in self.sub_pmats.items()},
         )
 
     def pinv(self, atol=1e-8):
@@ -1866,7 +1877,7 @@ class PMatEye(PMatAbstract):
             scaling=x * self.scaling,
         )
 
-    def inverse(self, regul=1e-8):
+    def inv(self, regul=1e-8):
         return PMatEye(
             layer_collection=self.layer_collection,
             scaling=(self.scaling + regul) ** -1,
