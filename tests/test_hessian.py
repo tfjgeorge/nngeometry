@@ -92,7 +92,9 @@ def test_Hdense_vs_Himplicit():
         dw = random_pvector(lc)
         check_tensors(H_dense.mv(dw).to_torch(), H_implicit.mv(dw).to_torch())
         check_ratio(H_dense.vTMv(dw), H_implicit.vTMv(dw))
-        check_ratio(H_dense.trace(), H_implicit.trace(500), eps=0.1)
+
+        with pytest.raises(NotImplementedError):
+            H_implicit.trace()
 
 
 def test_H_vs_linearization():

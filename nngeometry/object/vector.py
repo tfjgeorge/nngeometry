@@ -29,37 +29,6 @@ def random_pvector_dict(layer_collection, device=None, dtype=None):
     return PVector(layer_collection, dict_repr=v_dict)
 
 
-def rademacher(size, device=None, dtype=None):
-    v = 2 * (torch.rand(size) < 0.5) - 1
-    return v.to(dtype=dtype).to(device=device)
-
-
-def rademacher_pvector_dict(layer_collection, device=None, dtype=None):
-    """
-    Returns a random :class:`nngeometry.object.PVector` object using
-    the structure defined by the `layer_collection` parameter, with
-    each components drawn from a rademacher distribution (with random signs).
-
-    The returned `PVector` will internally use a dict representation.
-
-    :param layer_collection: The :class:`nngeometry.layercollection.LayerCollection`
-    describing the structure of the random pvector
-    """
-    v_dict = dict()
-
-    for layer_id, layer in layer_collection.layers.items():
-        if layer.has_bias():
-            v_dict[layer_id] = (
-                rademacher(layer.weight.size, device=device, dtype=dtype),
-                rademacher(layer.bias.size, device=device, dtype=dtype),
-            )
-        else:
-            v_dict[layer_id] = (
-                rademacher(layer.weight.size, device=device, dtype=dtype),
-            )
-    return PVector(layer_collection, dict_repr=v_dict)
-
-
 def random_pvector(layer_collection, device=None, dtype=torch.float64):
     """
     Returns a random :class:`nngeometry.object.PVector` object using
@@ -77,20 +46,8 @@ def random_pvector(layer_collection, device=None, dtype=torch.float64):
     return PVector(layer_collection=layer_collection, vector_repr=random_v_flat)
 
 
-def random_fvector(
-    n_samples,
-    n_output=1,
-    device=None,
-):
-    random_v_flat = torch.normal(
-        0,
-        1,
-        (
-            n_output,
-            n_samples,
-        ),
-        device=device,
-    )
+def random_fvector(n_samples, n_output=1, device=None):
+    random_v_flat = torch.normal(0, 1, (n_output, n_samples), device=device)
     return FVector(vector_repr=random_v_flat)
 
 
