@@ -53,7 +53,7 @@ class FMatDense(FMatAbstract):
         if ord is None or ord == "fro":
             return torch.sum(self.data**2) ** 0.5
         else:  # what should we do for 4D tensor ?
-            raise NotImplementedError(f"ord {ord} is not supported")
+            raise RuntimeError(f"Order {ord} not supported.")
 
     def project_to_diag(self, v):
         # TODO: test

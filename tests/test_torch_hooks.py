@@ -218,6 +218,9 @@ def test_jacobian_fdense_vs_pullback():
             frob_direct = (FMat_dense.to_torch() ** 2).sum() ** 0.5
             check_ratio(frob_direct, frob_FMat)
 
+            with pytest.raises(RuntimeError):
+                FMat_dense.norm(2)
+
 
 def test_jacobian_eigendecomposition_fdense():
     for get_task in [get_small_conv_transpose_task]:
@@ -377,6 +380,9 @@ def test_jacobian_pdense():
             spec_direct = torch.linalg.eigvalsh(PMat_dense.to_torch()).min()
             torch.testing.assert_close(spec_PMat, spec_direct)
 
+            with pytest.raises(RuntimeError):
+                PMat_dense.norm(ord="prout")
+
             # Test trace
             trace_PMat = PMat_dense.trace()
             trace_direct = torch.trace(PMat_dense.to_torch())
@@ -477,6 +483,9 @@ def test_jacobian_pdiag_vs_pdense():
             norm_direct = torch.linalg.norm(matrix_diag, ord=ord)
             norm_diag = PMat_diag.norm(ord=ord)
             torch.testing.assert_close(norm_diag, norm_direct)
+
+        with pytest.raises(RuntimeError):
+            PMat_diag.norm(ord="prout")
 
         # Test mv
         mv_direct = torch.mv(matrix_diag, dw.to_torch())
@@ -603,6 +612,9 @@ def test_jacobian_pblockdiag():
             norm_PMat = PMat_blockdiag.norm(ord=ord)
             norm_direct = torch.linalg.norm(dense_tensor, ord=ord)
             torch.testing.assert_close(norm_direct, norm_PMat)
+
+        with pytest.raises(RuntimeError):
+            PMat_blockdiag.norm(ord="prout")
 
         # Test trace
         trace_PMat = PMat_blockdiag.trace()
@@ -761,6 +773,9 @@ def test_jacobian_plowrank():
             norm_PMat = PMat_lowrank.norm(ord=ord)
             norm_direct = torch.linalg.norm(dense_tensor, ord=ord)
             check_ratio(norm_direct, norm_PMat)
+
+        with pytest.raises(RuntimeError):
+            PMat_lowrank.norm(ord="prout")
 
         # Test trace
         trace_PMat = PMat_lowrank.trace()
