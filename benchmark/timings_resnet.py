@@ -80,7 +80,7 @@ def perform_timing():
         
         try:
             time_start = time.time()
-            F.frobenius_norm()
+            F.norm()
             time_end = time.time()
             timings[repr]['frob'] = time_end - time_start
         except NotImplementedError:

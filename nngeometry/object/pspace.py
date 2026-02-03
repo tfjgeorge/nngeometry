@@ -1,3 +1,5 @@
+import math
+import operator
 import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict, defaultdict
@@ -48,8 +50,14 @@ class PMatAbstract(ABC):
     def trace(self):
         raise NotImplementedError
 
-    @abstractmethod
     def frobenius_norm(self):
+        warnings.warn(
+            """Use norm(ord="fro") instead""", DeprecationWarning, stacklevel=2
+        )
+        return self.norm(ord="fro")
+
+    @abstractmethod
+    def norm(self, ord=None):
         raise NotImplementedError
 
     @abstractmethod
@@ -311,8 +319,8 @@ class PMatDense(PMatAbstract):
         v_flat = v.to_torch()
         return torch.dot(v_flat, torch.mv(self.data, v_flat))
 
-    def frobenius_norm(self):
-        return torch.norm(self.data)
+    def norm(self, ord=None):
+        return torch.linalg.norm(self.data, ord=ord)
 
     def project_to_diag(self, v):
         # TODO: test
@@ -414,8 +422,15 @@ class PMatDiag(PMatAbstract):
         v_flat = v.to_torch()
         return torch.dot(v_flat, self.data * v_flat)
 
-    def frobenius_norm(self):
-        return torch.norm(self.data)
+    def norm(self, ord=None):
+        if ord is None or ord == "fro":
+            return torch.sum(self.data**2) ** 0.5
+        elif ord == 2:
+            return torch.max(torch.abs(self.data))
+        elif ord == -2:
+            return torch.min(torch.abs(self.data))
+        else:
+            raise RuntimeError(f"ord {ord} not supported")
 
     def to_torch(self):
         return torch.diag(self.data)
@@ -600,9 +615,21 @@ class PMatBlockDiag(PMatAbstract):
             layer_collection=self.layer_collection,
         )
 
-    def frobenius_norm(self):
-        # TODO test
-        return sum([torch.norm(b) ** 2 for b in self.data.values()]) ** 0.5
+    def norm(self, ord=None):
+        norm = math.inf if ord == -2 else 0
+        for block in self.data.values():
+            norm_block = torch.linalg.norm(block, ord=ord)
+            if ord is None or ord == "fro":
+                norm += norm_block**2
+            elif ord == 2:
+                norm = max(norm, norm_block)
+            elif ord == -2:
+                norm = min(norm, norm_block)
+            else:
+                raise RuntimeError(f"Order {ord} not supported.")
+        if ord is None or ord == "fro":
+            norm **= 0.5
+        return norm
 
     def vTMv(self, vector):
         # TODO test
@@ -863,16 +890,23 @@ class PMatKFAC(PMatAbstract):
             norm2 += torch.dot(torch.mm(torch.mm(g, v), a).view(-1), v.view(-1))
         return norm2
 
-    def frobenius_norm(self):
-        return (
-            sum(
-                [
-                    torch.trace(torch.mm(a, a)) * torch.trace(torch.mm(g, g))
-                    for a, g in self.data.values()
-                ]
-            )
-            ** 0.5
-        )
+    def norm(self, ord=None):
+        norm = math.inf if ord == -2 else 0
+        for a, g in self.data.values():
+            norm_a = torch.linalg.norm(a, ord=ord)
+            norm_g = torch.linalg.norm(g, ord=ord)
+            norm_ag = norm_a * norm_g
+            if ord is None or ord == "fro":
+                norm += norm_ag**2
+            elif ord == 2:
+                norm = max(norm, norm_ag)
+            elif ord == -2:
+                norm = min(norm, norm_ag)
+            else:
+                raise RuntimeError(f"Order {ord} not supported.")
+        if ord is None or ord == "fro":
+            norm **= 0.5
+        return norm
 
     def compute_eigendecomposition(self, impl="eigh"):
         self.evals = dict()
@@ -1090,24 +1124,21 @@ class PMatEKFAC(PMatAbstract):
         self._check_diag_updated()
         return sum([d.sum() for d in self.data[1].values()])
 
-    def frobenius_norm(self):
+    def norm(self, ord=None):
         self._check_diag_updated()
-        return sum([(d**2).sum() for d in self.data[1].values()]) ** 0.5
-
-    def norm(self, ord="spectral"):
-        """
-        Norm of the matrix
-
-        :param ord: Type of norm, possible choices are 'spectral' for
-            the spectral norm, or 'fro' for the frobenius norm
-        """
-        self._check_diag_updated()
-        if ord == "spectral":
-            return max([evals.max() for evals in self.data[1].values()])
-        elif ord == "fro":
-            return self.frobenius_norm()
-        else:
-            raise NotImplementedError
+        norm = math.inf if ord == -2 else 0
+        for evals in self.data[1].values():
+            if ord is None or ord == "fro":
+                norm += (evals**2).sum()
+            elif ord == 2:
+                norm = max(norm, evals.max())
+            elif ord == -2:
+                norm = min(norm, evals.min())
+            else:
+                raise RuntimeError(f"Order {ord} not supported.")
+        if ord is None or ord == "fro":
+            norm **= 0.5
+        return norm
 
     def get_diag(self, v):
         self._check_diag_updated()
@@ -1305,7 +1336,7 @@ class PMatImplicit(PMatAbstract):
             self.examples, layer_collection=self.layer_collection
         )
 
-    def frobenius_norm(self):
+    def norm(self, ord=None):
         raise NotImplementedError
 
     def to_torch(self):
@@ -1373,12 +1404,12 @@ class PMatLowRank(PMatAbstract):
         )
         return torch.trace(A)
 
-    def frobenius_norm(self):
+    def norm(self, ord=None):
         A = torch.mm(
             self.data.view(-1, self.data.size(-1)),
             self.data.view(-1, self.data.size(-1)).t(),
         )
-        return torch.norm(A)
+        return torch.linalg.norm(A, ord=ord)
 
     def solvePVec(self, x, regul=1e-8, solve="svd"):
         if solve not in ["svd", "default"]:
@@ -1454,15 +1485,18 @@ class PMatQuasiDiag(PMatAbstract):
             M[start : start + block_s, start : start + block_s].add_(block)
         return M
 
-    def frobenius_norm(self):
-        norm2 = 0
-        for layer_id in self.layer_collection.layers.keys():
-            diag, cross = self.data[layer_id]
-            norm2 += torch.dot(diag, diag)
-            if cross is not None:
-                norm2 += 2 * torch.dot(cross.view(-1), cross.view(-1))
+    def norm(self, ord=None):
+        if ord is None or ord == "fro":
+            norm2 = 0
+            for layer_id in self.layer_collection.layers.keys():
+                diag, cross = self.data[layer_id]
+                norm2 += torch.dot(diag, diag)
+                if cross is not None:
+                    norm2 += 2 * torch.dot(cross.view(-1), cross.view(-1))
 
-        return norm2**0.5
+            return norm2**0.5
+        else:
+            raise RuntimeError(f"Order {ord} not supported.")
 
     def get_diag(self):
         return torch.cat(
@@ -1607,10 +1641,20 @@ class PMatMixed(PMatAbstract):
             layer_collection, generator, layer_collection_each, layer_map, sub_pmats
         )
 
-    def frobenius_norm(self):
-        return (
-            sum([pmat.frobenius_norm() ** 2 for pmat in self.sub_pmats.values()]) ** 0.5
-        )
+    def norm(self, ord=None):
+        norm = math.inf if ord == -2 else 0
+        for pmat in self.sub_pmats.values():
+            if ord is None or ord == "fro":
+                norm += pmat.norm("fro") ** 2
+            elif ord == 2:
+                norm = max(norm, pmat.norm(2))
+            elif ord == -2:
+                norm = min(norm, pmat.norm(-2))
+            else:
+                raise RuntimeError(f"Order {ord} not supported.")
+        if ord is None or ord == "fro":
+            norm **= 0.5
+        return norm
 
     def get_device(self):
         device = None
@@ -1786,8 +1830,15 @@ class PMatEye(PMatAbstract):
         v_flat = v.to_torch()
         return self.scaling * torch.dot(v_flat, v_flat)
 
-    def frobenius_norm(self):
-        return self.size(0) ** 0.5 * torch.abs(self.scaling)
+    def norm(self, ord=None):
+        if ord is None or ord == "fro":
+            return torch.abs(self.scaling) * torch.sqrt(
+                torch.tensor(self.size(0), dtype=self.scaling.dtype)
+            )
+        elif ord in [-2, 2]:
+            return torch.abs(self.scaling)
+        else:
+            raise RuntimeError(f"ord {ord} not supported")
 
     def mv(self, v):
         v_flat = v.to_torch() * self.scaling
