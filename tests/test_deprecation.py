@@ -1,7 +1,7 @@
 import pytest
 
 from nngeometry.backend.torch_hooks.torch_hooks import TorchHooksJacobianBackend
-from nngeometry.object.pspace import PMatEye, PMatKFAC
+from nngeometry.object.pspace import PMatEye, PMatKFAC, PMatQuasiDiag
 from tests.tasks import get_conv_task
 
 
@@ -13,9 +13,12 @@ def test_inverse_deprecation():
     pmat_eye = PMatEye(layer_collection=lc)
     generator = TorchHooksJacobianBackend(model)
     pmat_kfac = PMatKFAC(lc, generator, examples=loader)
+    pmat_qd = PMatQuasiDiag(lc, generator, examples=loader)
 
     with pytest.warns(DeprecationWarning):
         pmat_eye.inverse()
     with pytest.warns(DeprecationWarning):
         pmat_kfac.inverse()
         pmat_kfac.inverse(use_pi=False)
+    with pytest.raises(NotImplementedError):
+        pmat_qd.inverse()
