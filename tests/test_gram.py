@@ -4,9 +4,9 @@ from tasks import (
     get_conv_task,
     get_fullyconnect_task,
 )
+from utils import check_ratio, check_tensors
 
-from nngeometry import Jacobian, GramMatrix
-from utils import check_tensors
+from nngeometry import GramMatrix, Jacobian
 
 nonlinear_tasks = [get_conv_gn_task, get_fullyconnect_task, get_conv_task]
 
@@ -29,3 +29,5 @@ def test_gram_vs_jacobian():
             gram.to_torch(),
             eps=1e-4,
         )
+
+        check_ratio(gram.norm(), torch.linalg.norm(gram_computed))
