@@ -195,6 +195,9 @@ def test_jacobian_kfac():
             norm_kfac = M_kfac.norm(ord=ord)
             torch.testing.assert_close(norm_kfac, norm_direct)
 
+        with pytest.raises(RuntimeError):
+            M_kfac.norm("prout")
+
         # Test get_diag
         torch.testing.assert_close(
             torch.diag(G_kfac_split), M_kfac.get_diag(split_weight_bias=True)

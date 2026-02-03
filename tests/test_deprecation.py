@@ -3,11 +3,11 @@ import pytest
 from nngeometry.backend.torch_hooks.torch_hooks import TorchHooksJacobianBackend
 from nngeometry.object.fspace import FMatDense
 from nngeometry.object.pspace import PMatEye
-from tests.tasks import get_conv_bn_task
+from tests.tasks import get_conv_task
 
 
 def test_frobenius_norm_deprecation():
-    get_task = get_conv_bn_task
+    get_task = get_conv_task
 
     loader, lc, parameters, model, function = get_task()
 

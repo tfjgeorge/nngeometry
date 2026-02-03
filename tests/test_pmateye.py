@@ -1,3 +1,4 @@
+import pytest
 import torch
 from tasks import get_conv_bn_task
 
@@ -25,6 +26,8 @@ def test_pmateye():
                 atol=1e-4,
                 rtol=1e-4,
             )
+        with pytest.raises(RuntimeError):
+            pmat_eye.norm("prout")
 
         v = random_pvector(lc, dtype=torch.float32)
         mv_torch = torch.mv(dense_torch, v.to_torch())

@@ -99,6 +99,9 @@ def test_pspace_ekfac_vs_direct():
                 norm_ekfac = M_ekfac.norm(ord=ord)
                 torch.testing.assert_close(norm_ekfac, norm_direct)
 
+            with pytest.raises(RuntimeError):
+                M_ekfac.norm("prout")
+
             mv_direct = torch.mv(M_ekfac_torch, v.to_torch())
             mv_ekfac = M_ekfac.mv(v)
             torch.testing.assert_close(mv_direct, mv_ekfac.to_torch())

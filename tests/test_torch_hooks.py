@@ -219,7 +219,7 @@ def test_jacobian_fdense_vs_pullback():
             check_ratio(frob_direct, frob_FMat)
 
             with pytest.raises(RuntimeError):
-                FMat_dense.norm(2)
+                FMat_dense.norm("prout")
 
 
 def test_jacobian_eigendecomposition_fdense():
@@ -914,7 +914,9 @@ def test_jacobian_pquasidiag():
 
         check_tensors(torch.diag(dense_tensor), PMat_qd.get_diag())
 
-        check_ratio(torch.norm(dense_tensor), PMat_qd.norm())
+        check_ratio(torch.linalg.norm(dense_tensor), PMat_qd.norm())
+        with pytest.raises(RuntimeError):
+            PMat_qd.norm("prout")
 
         check_ratio(torch.trace(dense_tensor), PMat_qd.trace())
 
