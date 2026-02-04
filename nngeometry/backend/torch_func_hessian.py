@@ -1,10 +1,11 @@
 import torch
 
+from nngeometry.object.vector import PVector
+
 from ._backend import AbstractBackend
 
 
 class TorchFuncHessianBackend(AbstractBackend):
-
     def __init__(self, model, function, verbose=False):
         self.model = model
         self.function = function
@@ -89,3 +90,49 @@ class TorchFuncHessianBackend(AbstractBackend):
                         )
 
         return H
+
+    def implicit_mv(self, v, examples, layer_collection):
+        layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
+        device = self._check_same_device(layerid_to_mod.values())
+
+        loader = self._get_dataloader(examples)
+
+        def compute_loss(params, inputs, targets):
+            prediction = torch.func.functional_call(self.model, params, (inputs,))
+            return self.function(prediction, targets)
+
+        params_dict = dict(layer_collection.named_parameters(layerid_to_mod))
+        v_dict = {}  # replace with function in PVector ?
+        for key, value in v.to_dict().items():
+            if len(value) > 1:
+                v_dict[key + ".weight"] = value[0]
+                v_dict[key + ".bias"] = value[1]
+            else:
+                v_dict[key + ".weight"] = value[0]
+
+        hvp = {k: torch.zeros_like(p) for k, p in params_dict.items()}
+
+        for d in self._get_iter_loader(loader):
+            inputs = d[0].to(device)
+            targets = d[1].to(device)
+
+            hvp_mb = torch.func.jvp(
+                lambda p: torch.func.grad(compute_loss)(p, inputs, targets),
+                primals=(params_dict,),
+                tangents=(v_dict,),
+            )[1]
+
+            for k in hvp:
+                hvp[k] += hvp_mb[k].detach()
+
+        output_dict = dict()
+        for layer_id, layer in layer_collection.layers.items():
+            if layer.has_bias():
+                output_dict[layer_id] = (
+                    hvp[layer_id + ".weight"],
+                    hvp[layer_id + ".bias"],
+                )
+            else:
+                output_dict[layer_id] = (hvp[layer_id + ".weight"],)
+
+        return PVector(layer_collection, dict_repr=output_dict)

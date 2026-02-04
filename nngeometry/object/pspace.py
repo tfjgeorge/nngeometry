@@ -1339,14 +1339,20 @@ class PMatImplicit(PMatAbstract):
         )
 
     def vTMv(self, v):
-        return self.generator.implicit_vTMv(
-            v, self.examples, layer_collection=self.layer_collection
-        )
+        if hasattr(self.generator, "implicit_vTMv"):
+            return self.generator.implicit_vTMv(
+                v, self.examples, layer_collection=self.layer_collection
+            )
+        else:
+            return v.dot(self.mv(v))
 
     def trace(self):
-        return self.generator.implicit_trace(
-            self.examples, layer_collection=self.layer_collection
-        )
+        if hasattr(self.generator, "implicit_trace"):
+            return self.generator.implicit_trace(
+                self.examples, layer_collection=self.layer_collection
+            )
+        else:
+            raise NotImplementedError
 
     def norm(self, ord=None):
         raise NotImplementedError
