@@ -258,7 +258,7 @@ class ConvTranspose2dLayer(AbstractLayer):
         self.out_channels = out_channels
         self.kernel_size = kernel_size
         self.weight = Parameter(
-            out_channels, in_channels, kernel_size[0], kernel_size[1]
+            in_channels, out_channels, kernel_size[0], kernel_size[1]
         )
         if bias:
             self.bias = Parameter(out_channels)

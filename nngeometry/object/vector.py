@@ -215,11 +215,11 @@ class PVector:
             else:
                 dict_repr[layer_id] = (w,)
         return dict_repr
-    
+
     def to_torch_layer(self, layer_id):
         if self.dict_repr is not None:
             return self.dict_repr[layer_id]
-        
+
         start = self.layer_collection.p_pos[layer_id]
         layer = self.layer_collection.layers[layer_id]
         w = self.vector_repr[start : start + layer.weight.numel()].view(
@@ -310,6 +310,55 @@ class PVector:
                 vector_repr=(self.to_torch() - other.to_torch()),
             )
 
+    def __iadd__(self, other):
+        if self.dict_repr is not None and other.dict_repr is not None:
+            for l_id, l in self.layer_collection.layers.items():
+                if l.has_bias():
+                    w, b = self.dict_repr[l_id]
+                    w += other.dict_repr[l_id][0]
+                    b += other.dict_repr[l_id][1]
+                else:
+                    (w,) = self.dict_repr[l_id]
+                    w += other.dict_repr[l_id][0]
+            return self
+        elif self.vector_repr is not None and other.vector_repr is not None:
+            self.vector_repr += other.vector_repr
+            return self
+        else:
+            raise NotImplementedError
+
+    def __isub__(self, other):
+        if self.dict_repr is not None and other.dict_repr is not None:
+            for l_id, l in self.layer_collection.layers.items():
+                if l.has_bias():
+                    w, b = self.dict_repr[l_id]
+                    w -= other.dict_repr[l_id][0]
+                    b -= other.dict_repr[l_id][1]
+                else:
+                    (w,) = self.dict_repr[l_id]
+                    w -= other.dict_repr[l_id][0]
+            return self
+        elif self.vector_repr is not None and other.vector_repr is not None:
+            self.vector_repr -= other.vector_repr
+            return self
+        else:
+            raise NotImplementedError
+
+    def __imul__(self, other):
+        if self.dict_repr is not None:
+            for l_id, l in self.layer_collection.layers.items():
+                if l.has_bias():
+                    w, b = self.dict_repr[l_id]
+                    w *= other
+                    b *= other
+                else:
+                    (w,) = self.dict_repr[l_id]
+                    w *= other
+            return self
+        else:
+            self.vector_repr *= other
+            return self
+
     def __pow__(self, exp):
         if self.dict_repr is not None:
             v_dict = dict()
@@ -337,11 +386,14 @@ class PVector:
             dot_ = 0
             for l_id, l in self.layer_collection.layers.items():
                 if l.has_bias():
-                    dot_ += torch.dot(self.dict_repr[l_id][1], other.dict_repr[l_id][1])
-                dot_ += torch.dot(
-                    self.dict_repr[l_id][0].view(-1), other.dict_repr[l_id][0].view(-1)
-                )
+                    dot_ += torch.sum(
+                        self.dict_repr[l_id][1] * other.dict_repr[l_id][1]
+                    )
+                dot_ += torch.sum(self.dict_repr[l_id][0] * other.dict_repr[l_id][0])
             return dot_
+
+    def __matmul__(self, other):
+        return self.dot(other)
 
     def size(self):
         """

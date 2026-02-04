@@ -15,6 +15,7 @@ from nngeometry.layercollection import (
     LinearLayer,
 )
 from nngeometry.object.map import PFMap, PFMapDense
+from nngeometry.solve import cg
 
 from ..maths import kronecker
 from .vector import PVector
@@ -139,10 +140,10 @@ class PMatAbstract(ABC):
             raise NotImplementedError
 
     @abstractmethod
-    def solvePVec(self, x, regul, solve):
+    def solvePVec(self, x, regul, solve, **kwargs):
         raise NotImplementedError
 
-    def solvePFMap(self, x, regul, solve):
+    def solvePFMap(self, x, regul, solve, **kwargs):
         J_dense = x.to_torch()
         sJ = J_dense.size()
         J_dense = J_dense.view(sJ[0] * sJ[1], sJ[2])
@@ -153,7 +154,7 @@ class PMatAbstract(ABC):
                 layer_collection=x.layer_collection,
                 vector_repr=J_dense[i, :],
             )
-            v_solve = self.solvePVec(v, regul=regul, solve=solve)
+            v_solve = self.solvePVec(v, regul=regul, solve=solve, **kwargs)
             vs_solve.append(v_solve.to_torch())
         return PFMapDense(
             generator=self.generator,
@@ -161,7 +162,7 @@ class PMatAbstract(ABC):
             layer_collection=x.layer_collection,
         )
 
-    def solve(self, x, regul, solve="default"):
+    def solve(self, x, regul, solve="default", **kwargs):
         """
         Solves Fx = b in x
 
@@ -173,9 +174,9 @@ class PMatAbstract(ABC):
         :param solve: solve implementation, this is dependent on the PMat representation
         """
         if isinstance(x, PVector):
-            return self.solvePVec(x, regul=regul, solve=solve)
+            return self.solvePVec(x, regul=regul, solve=solve, **kwargs)
         elif isinstance(x, PFMap):
-            return self.solvePFMap(x, regul=regul, solve=solve)
+            return self.solvePFMap(x, regul=regul, solve=solve, **kwargs)
         else:
             raise NotImplementedError("`x` should be an instance of PVector or PFMap")
 
@@ -579,7 +580,7 @@ class PMatBlockDiag(PMatAbstract):
         if layer.has_bias():
             inv_v_tuple = (
                 inv_v_tuple[0],
-                inv_v[:, layer.weight.numel() :].reshape(-1, *layer.bias.size),
+                inv_v[:, layer.weight.numel() :].view(-1, *layer.bias.size),
             )
 
         return inv_v_tuple
@@ -1353,8 +1354,11 @@ class PMatImplicit(PMatAbstract):
     def to_torch(self):
         raise NotImplementedError
 
-    def solvePVec(self, *args):
-        raise NotImplementedError
+    def solvePVec(self, x, regul=1e-8, solve="cg", **kwargs):
+        if solve in ["default", "cg"]:
+            return cg(self, x, regul=regul, **kwargs)
+        else:
+            raise NotImplementedError
 
     def get_diag(self):
         raise NotImplementedError
