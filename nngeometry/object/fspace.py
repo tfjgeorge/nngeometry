@@ -1,3 +1,4 @@
+import warnings
 from abc import ABC, abstractmethod
 
 import torch
@@ -43,7 +44,16 @@ class FMatDense(FMatAbstract):
         )
 
     def frobenius_norm(self):
-        return torch.norm(self.data)
+        warnings.warn(
+            """Use norm(ord="fro") instead""", DeprecationWarning, stacklevel=2
+        )
+        return self.norm(ord="fro")
+
+    def norm(self, ord=None):
+        if ord is None or ord == "fro":
+            return torch.sum(self.data**2) ** 0.5
+        else:  # what should we do for 4D tensor ?
+            raise RuntimeError(f"Order {ord} not supported.")
 
     def project_to_diag(self, v):
         # TODO: test

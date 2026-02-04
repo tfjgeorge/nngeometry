@@ -1,3 +1,5 @@
+import math
+import operator
 import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict, defaultdict
@@ -13,6 +15,7 @@ from nngeometry.layercollection import (
     LinearLayer,
 )
 from nngeometry.object.map import PFMap, PFMapDense
+from nngeometry.solve import cg
 
 from ..maths import kronecker
 from .vector import PVector
@@ -48,8 +51,14 @@ class PMatAbstract(ABC):
     def trace(self):
         raise NotImplementedError
 
-    @abstractmethod
     def frobenius_norm(self):
+        warnings.warn(
+            """Use norm(ord="fro") instead""", DeprecationWarning, stacklevel=2
+        )
+        return self.norm(ord="fro")
+
+    @abstractmethod
+    def norm(self, ord=None):
         raise NotImplementedError
 
     @abstractmethod
@@ -131,10 +140,10 @@ class PMatAbstract(ABC):
             raise NotImplementedError
 
     @abstractmethod
-    def solvePVec(self, x, regul, solve):
+    def solvePVec(self, x, regul, solve, **kwargs):
         raise NotImplementedError
 
-    def solvePFMap(self, x, regul, solve):
+    def solvePFMap(self, x, regul, solve, **kwargs):
         J_dense = x.to_torch()
         sJ = J_dense.size()
         J_dense = J_dense.view(sJ[0] * sJ[1], sJ[2])
@@ -145,7 +154,7 @@ class PMatAbstract(ABC):
                 layer_collection=x.layer_collection,
                 vector_repr=J_dense[i, :],
             )
-            v_solve = self.solvePVec(v, regul=regul, solve=solve)
+            v_solve = self.solvePVec(v, regul=regul, solve=solve, **kwargs)
             vs_solve.append(v_solve.to_torch())
         return PFMapDense(
             generator=self.generator,
@@ -153,7 +162,7 @@ class PMatAbstract(ABC):
             layer_collection=x.layer_collection,
         )
 
-    def solve(self, x, regul, solve="default"):
+    def solve(self, x, regul, solve="default", **kwargs):
         """
         Solves Fx = b in x
 
@@ -165,9 +174,9 @@ class PMatAbstract(ABC):
         :param solve: solve implementation, this is dependent on the PMat representation
         """
         if isinstance(x, PVector):
-            return self.solvePVec(x, regul=regul, solve=solve)
+            return self.solvePVec(x, regul=regul, solve=solve, **kwargs)
         elif isinstance(x, PFMap):
-            return self.solvePFMap(x, regul=regul, solve=solve)
+            return self.solvePFMap(x, regul=regul, solve=solve, **kwargs)
         else:
             raise NotImplementedError("`x` should be an instance of PVector or PFMap")
 
@@ -179,6 +188,13 @@ class PMatAbstract(ABC):
         :return: a PyTorch Tensor
         """
         raise NotImplementedError
+
+    def inverse(self, regul=1e-8):
+        if hasattr(self, "inv"):
+            warnings.warn("""Use inv() instead""", DeprecationWarning, stacklevel=2)
+            return self.inv(regul)
+        else:
+            raise NotImplementedError
 
     def size(self, dim=None):
         """
@@ -290,8 +306,8 @@ class PMatDense(PMatAbstract):
             self._ldl_factors = (LD, pivots)
         return torch.linalg.ldl_solve(LD, pivots, x.t()).t()
 
-    def inverse(self, regul=1e-8):
-        inv_tensor = torch.inverse(
+    def inv(self, regul=1e-8):
+        inv_tensor = torch.linalg.inv(
             self.data + regul * torch.eye(self.size(0), device=self.get_device())
         )
         return PMatDense(
@@ -311,8 +327,8 @@ class PMatDense(PMatAbstract):
         v_flat = v.to_torch()
         return torch.dot(v_flat, torch.mv(self.data, v_flat))
 
-    def frobenius_norm(self):
-        return torch.norm(self.data)
+    def norm(self, ord=None):
+        return torch.linalg.norm(self.data, ord=ord)
 
     def project_to_diag(self, v):
         # TODO: test
@@ -392,7 +408,7 @@ class PMatDiag(PMatAbstract):
                 examples, layer_collection=layer_collection
             )
 
-    def inverse(self, regul=1e-8):
+    def inv(self, regul=1e-8):
         inv_tensor = 1.0 / (self.data + regul)
         return PMatDiag(
             generator=self.generator,
@@ -414,8 +430,15 @@ class PMatDiag(PMatAbstract):
         v_flat = v.to_torch()
         return torch.dot(v_flat, self.data * v_flat)
 
-    def frobenius_norm(self):
-        return torch.norm(self.data)
+    def norm(self, ord=None):
+        if ord is None or ord == "fro":
+            return torch.sum(self.data**2) ** 0.5
+        elif ord == 2:
+            return torch.max(torch.abs(self.data))
+        elif ord == -2:
+            return torch.min(torch.abs(self.data))
+        else:
+            raise RuntimeError(f"ord {ord} not supported")
 
     def to_torch(self):
         return torch.diag(self.data)
@@ -557,7 +580,7 @@ class PMatBlockDiag(PMatAbstract):
         if layer.has_bias():
             inv_v_tuple = (
                 inv_v_tuple[0],
-                inv_v[:, layer.weight.numel() :].reshape(-1, *layer.bias.size),
+                inv_v[:, layer.weight.numel() :].view(-1, *layer.bias.size),
             )
 
         return inv_v_tuple
@@ -586,11 +609,11 @@ class PMatBlockDiag(PMatAbstract):
             layer_collection=lc_merged, generator=self.generator, data_dict=out_dict
         )
 
-    def inverse(self, regul=1e-8):
+    def inv(self, regul=1e-8):
         inv_data = dict()
         for layer_id, layer in self.layer_collection.layers.items():
             b = self.data[layer_id]
-            inv_b = torch.inverse(
+            inv_b = torch.linalg.inv(
                 b + regul * torch.eye(b.size(0), device=self.get_device())
             )
             inv_data[layer_id] = inv_b
@@ -600,9 +623,21 @@ class PMatBlockDiag(PMatAbstract):
             layer_collection=self.layer_collection,
         )
 
-    def frobenius_norm(self):
-        # TODO test
-        return sum([torch.norm(b) ** 2 for b in self.data.values()]) ** 0.5
+    def norm(self, ord=None):
+        norm = math.inf if ord == -2 else 0
+        for block in self.data.values():
+            norm_block = torch.linalg.norm(block, ord=ord)
+            if ord is None or ord == "fro":
+                norm += norm_block**2
+            elif ord == 2:
+                norm = max(norm, norm_block)
+            elif ord == -2:
+                norm = min(norm, norm_block)
+            else:
+                raise RuntimeError(f"Order {ord} not supported.")
+        if ord is None or ord == "fro":
+            norm **= 0.5
+        return norm
 
     def vTMv(self, vector):
         # TODO test
@@ -677,6 +712,10 @@ class PMatKFAC(PMatAbstract):
         return sum([torch.trace(a) * torch.trace(g) for a, g in self.data.values()])
 
     def inverse(self, regul=1e-8, use_pi=True):
+        warnings.warn("""Use inv() instead""", DeprecationWarning, stacklevel=2)
+        return self.inv(regul, use_pi)
+
+    def inv(self, regul=1e-8, use_pi=True):
         inv_data = dict()
         for layer_id, layer in self.layer_collection.layers.items():
             a, g = self.data[layer_id]
@@ -684,10 +723,10 @@ class PMatKFAC(PMatAbstract):
                 pi = (torch.trace(a) / torch.trace(g) * g.size(0) / a.size(0)) ** 0.5
             else:
                 pi = 1
-            inv_a = torch.inverse(
+            inv_a = torch.linalg.inv(
                 a + pi * regul**0.5 * torch.eye(a.size(0), device=self.get_device())
             )
-            inv_g = torch.inverse(
+            inv_g = torch.linalg.inv(
                 g + regul**0.5 / pi * torch.eye(g.size(0), device=self.get_device())
             )
             inv_data[layer_id] = (inv_a, inv_g)
@@ -863,16 +902,23 @@ class PMatKFAC(PMatAbstract):
             norm2 += torch.dot(torch.mm(torch.mm(g, v), a).view(-1), v.view(-1))
         return norm2
 
-    def frobenius_norm(self):
-        return (
-            sum(
-                [
-                    torch.trace(torch.mm(a, a)) * torch.trace(torch.mm(g, g))
-                    for a, g in self.data.values()
-                ]
-            )
-            ** 0.5
-        )
+    def norm(self, ord=None):
+        norm = math.inf if ord == -2 else 0
+        for a, g in self.data.values():
+            norm_a = torch.linalg.norm(a, ord=ord)
+            norm_g = torch.linalg.norm(g, ord=ord)
+            norm_ag = norm_a * norm_g
+            if ord is None or ord == "fro":
+                norm += norm_ag**2
+            elif ord == 2:
+                norm = max(norm, norm_ag)
+            elif ord == -2:
+                norm = min(norm, norm_ag)
+            else:
+                raise RuntimeError(f"Order {ord} not supported.")
+        if ord is None or ord == "fro":
+            norm **= 0.5
+        return norm
 
     def compute_eigendecomposition(self, impl="eigh"):
         self.evals = dict()
@@ -1090,30 +1136,27 @@ class PMatEKFAC(PMatAbstract):
         self._check_diag_updated()
         return sum([d.sum() for d in self.data[1].values()])
 
-    def frobenius_norm(self):
+    def norm(self, ord=None):
         self._check_diag_updated()
-        return sum([(d**2).sum() for d in self.data[1].values()]) ** 0.5
-
-    def norm(self, ord="spectral"):
-        """
-        Norm of the matrix
-
-        :param ord: Type of norm, possible choices are 'spectral' for
-            the spectral norm, or 'fro' for the frobenius norm
-        """
-        self._check_diag_updated()
-        if ord == "spectral":
-            return max([evals.max() for evals in self.data[1].values()])
-        elif ord == "fro":
-            return self.frobenius_norm()
-        else:
-            raise NotImplementedError
+        norm = math.inf if ord == -2 else 0
+        for evals in self.data[1].values():
+            if ord is None or ord == "fro":
+                norm += (evals**2).sum()
+            elif ord == 2:
+                norm = max(norm, evals.max())
+            elif ord == -2:
+                norm = min(norm, evals.min())
+            else:
+                raise RuntimeError(f"Order {ord} not supported.")
+        if ord is None or ord == "fro":
+            norm **= 0.5
+        return norm
 
     def get_diag(self, v):
         self._check_diag_updated()
         raise NotImplementedError
 
-    def inverse(self, regul=1e-8):
+    def inv(self, regul=1e-8):
         self._check_diag_updated()
         return self.pow(-1, regul=regul)
 
@@ -1319,14 +1362,17 @@ class PMatImplicit(PMatAbstract):
         else:
             return super().mmap(pfmap)
 
-    def frobenius_norm(self):
+    def norm(self, ord=None):
         raise NotImplementedError
 
     def to_torch(self):
         raise NotImplementedError
 
-    def solvePVec(self, *args):
-        raise NotImplementedError
+    def solvePVec(self, x, regul=1e-8, solve="cg", **kwargs):
+        if solve in ["default", "cg"]:
+            return cg(self, x, regul=regul, **kwargs)
+        else:
+            raise NotImplementedError
 
     def get_diag(self):
         raise NotImplementedError
@@ -1387,12 +1433,12 @@ class PMatLowRank(PMatAbstract):
         )
         return torch.trace(A)
 
-    def frobenius_norm(self):
+    def norm(self, ord=None):
         A = torch.mm(
             self.data.view(-1, self.data.size(-1)),
             self.data.view(-1, self.data.size(-1)).t(),
         )
-        return torch.norm(A)
+        return torch.linalg.norm(A, ord=ord)
 
     def solvePVec(self, x, regul=1e-8, solve="svd"):
         if solve not in ["svd", "default"]:
@@ -1468,15 +1514,18 @@ class PMatQuasiDiag(PMatAbstract):
             M[start : start + block_s, start : start + block_s].add_(block)
         return M
 
-    def frobenius_norm(self):
-        norm2 = 0
-        for layer_id in self.layer_collection.layers.keys():
-            diag, cross = self.data[layer_id]
-            norm2 += torch.dot(diag, diag)
-            if cross is not None:
-                norm2 += 2 * torch.dot(cross.view(-1), cross.view(-1))
+    def norm(self, ord=None):
+        if ord is None or ord == "fro":
+            norm2 = 0
+            for layer_id in self.layer_collection.layers.keys():
+                diag, cross = self.data[layer_id]
+                norm2 += torch.dot(diag, diag)
+                if cross is not None:
+                    norm2 += 2 * torch.dot(cross.view(-1), cross.view(-1))
 
-        return norm2**0.5
+            return norm2**0.5
+        else:
+            raise RuntimeError(f"Order {ord} not supported.")
 
     def get_diag(self):
         return torch.cat(
@@ -1621,10 +1670,20 @@ class PMatMixed(PMatAbstract):
             layer_collection, generator, layer_collection_each, layer_map, sub_pmats
         )
 
-    def frobenius_norm(self):
-        return (
-            sum([pmat.frobenius_norm() ** 2 for pmat in self.sub_pmats.values()]) ** 0.5
-        )
+    def norm(self, ord=None):
+        norm = math.inf if ord == -2 else 0
+        for pmat in self.sub_pmats.values():
+            if ord is None or ord == "fro":
+                norm += pmat.norm("fro") ** 2
+            elif ord == 2:
+                norm = max(norm, pmat.norm(2))
+            elif ord == -2:
+                norm = min(norm, pmat.norm(-2))
+            else:
+                raise RuntimeError(f"Order {ord} not supported.")
+        if ord is None or ord == "fro":
+            norm **= 0.5
+        return norm
 
     def get_device(self):
         device = None
@@ -1704,13 +1763,13 @@ class PMatMixed(PMatAbstract):
             {k: x * pmat for k, pmat in self.sub_pmats.items()},
         )
 
-    def inverse(self, regul=1e-8):
+    def inv(self, regul=1e-8):
         return PMatMixed(
             self.layer_collection,
             self.generator,
             self.layer_collection_each,
             self.layer_map,
-            {k: pmat.inverse(regul) for k, pmat in self.sub_pmats.items()},
+            {k: pmat.inv(regul) for k, pmat in self.sub_pmats.items()},
         )
 
     def pinv(self, atol=1e-8):
@@ -1800,8 +1859,15 @@ class PMatEye(PMatAbstract):
         v_flat = v.to_torch()
         return self.scaling * torch.dot(v_flat, v_flat)
 
-    def frobenius_norm(self):
-        return self.size(0) ** 0.5 * torch.abs(self.scaling)
+    def norm(self, ord=None):
+        if ord is None or ord == "fro":
+            return torch.abs(self.scaling) * torch.sqrt(
+                torch.tensor(self.size(0), dtype=self.scaling.dtype)
+            )
+        elif ord in [-2, 2]:
+            return torch.abs(self.scaling)
+        else:
+            raise RuntimeError(f"ord {ord} not supported")
 
     def mv(self, v):
         v_flat = v.to_torch() * self.scaling
@@ -1829,7 +1895,7 @@ class PMatEye(PMatAbstract):
             scaling=x * self.scaling,
         )
 
-    def inverse(self, regul=1e-8):
+    def inv(self, regul=1e-8):
         return PMatEye(
             layer_collection=self.layer_collection,
             scaling=(self.scaling + regul) ** -1,

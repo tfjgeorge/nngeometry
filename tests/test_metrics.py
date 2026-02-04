@@ -219,7 +219,7 @@ def test_direct_vs_MC_regression():
             function=lambda *d: model(to_device(d[0])),
         )
 
-    assert ((F - F_MC).frobenius_norm() / F.frobenius_norm()) < 0.1
+    assert ((F - F_MC).norm() / F.norm()) < 0.1
 
 
 def test_FIM_MC_vs_linearization_segmentation():

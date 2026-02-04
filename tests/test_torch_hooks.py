@@ -214,9 +214,12 @@ def test_jacobian_fdense_vs_pullback():
             check_ratio(vTMv_pullforward, vTMv_FMat)
 
             # Test frobenius
-            frob_FMat = FMat_dense.frobenius_norm()
+            frob_FMat = FMat_dense.norm()
             frob_direct = (FMat_dense.to_torch() ** 2).sum() ** 0.5
             check_ratio(frob_direct, frob_FMat)
+
+            with pytest.raises(RuntimeError):
+                FMat_dense.norm("prout")
 
 
 def test_jacobian_eigendecomposition_fdense():
@@ -364,9 +367,21 @@ def test_jacobian_pdense():
             check_tensors(torch.diag(PMat_dense.to_torch()), PMat_dense.get_diag())
 
             # Test frobenius
-            frob_PMat = PMat_dense.frobenius_norm()
+            frob_PMat = PMat_dense.norm()
             frob_direct = (PMat_dense.to_torch() ** 2).sum() ** 0.5
             check_ratio(frob_direct, frob_PMat)
+
+            # Test spectral
+            spec_PMat = PMat_dense.norm(2)
+            spec_direct = torch.linalg.eigvalsh(PMat_dense.to_torch()).max()
+            check_ratio(spec_direct, spec_PMat)
+
+            spec_PMat = PMat_dense.norm(-2)
+            spec_direct = torch.linalg.eigvalsh(PMat_dense.to_torch()).min()
+            torch.testing.assert_close(spec_PMat, spec_direct)
+
+            with pytest.raises(RuntimeError):
+                PMat_dense.norm(ord="prout")
 
             # Test trace
             trace_PMat = PMat_dense.trace()
@@ -409,7 +424,7 @@ def test_jacobian_pdense():
             )
 
             # Test inv
-            PMat_inv = PMat_dense.inverse(regul=regul)
+            PMat_inv = PMat_dense.inv(regul=regul)
             check_tensors(
                 dw.to_torch(),
                 PMat_inv.mv(PMat_dense.mv(dw) + regul * dw).to_torch(),
@@ -463,8 +478,14 @@ def test_jacobian_pdiag_vs_pdense():
         # Test trace
         check_ratio(torch.trace(matrix_diag), PMat_diag.trace())
 
-        # Test frobenius
-        check_ratio(torch.norm(matrix_diag), PMat_diag.frobenius_norm())
+        # Test norm
+        for ord in ["fro", 2, -2]:
+            norm_direct = torch.linalg.norm(matrix_diag, ord=ord)
+            norm_diag = PMat_diag.norm(ord=ord)
+            torch.testing.assert_close(norm_diag, norm_direct)
+
+        with pytest.raises(RuntimeError):
+            PMat_diag.norm(ord="prout")
 
         # Test mv
         mv_direct = torch.mv(matrix_diag, dw.to_torch())
@@ -478,7 +499,7 @@ def test_jacobian_pdiag_vs_pdense():
 
         # Test inverse
         regul = 1e-3
-        PMat_diag_inverse = PMat_diag.inverse(regul)
+        PMat_diag_inverse = PMat_diag.inv(regul)
         prod = torch.mm(
             matrix_diag + regul * torch.eye(lc.numel(), device=device),
             PMat_diag_inverse.to_torch(),
@@ -586,10 +607,14 @@ def test_jacobian_pblockdiag():
         # Test get_diag
         check_tensors(torch.diag(dense_tensor), PMat_blockdiag.get_diag())
 
-        # Test frobenius
-        frob_PMat = PMat_blockdiag.frobenius_norm()
-        frob_direct = (dense_tensor**2).sum() ** 0.5
-        check_ratio(frob_direct, frob_PMat)
+        # Test norm
+        for ord in [-2, 2, "fro"]:
+            norm_PMat = PMat_blockdiag.norm(ord=ord)
+            norm_direct = torch.linalg.norm(dense_tensor, ord=ord)
+            torch.testing.assert_close(norm_direct, norm_PMat)
+
+        with pytest.raises(RuntimeError):
+            PMat_blockdiag.norm(ord="prout")
 
         # Test trace
         trace_PMat = PMat_blockdiag.trace()
@@ -635,7 +660,7 @@ def test_jacobian_pblockdiag():
         )
 
         # Test inv
-        PMat_inv = PMat_blockdiag.inverse(regul=regul)
+        PMat_inv = PMat_blockdiag.inv(regul=regul)
         check_tensors(
             dw.to_torch(),
             PMat_inv.mv(PMat_blockdiag.mv(dw) + regul * dw).to_torch(),
@@ -667,6 +692,8 @@ def test_jacobian_pblockdiag():
 
 
 def test_jacobian_pimplicit_vs_pdense():
+    solve_tested = False
+
     for get_task in linear_tasks + nonlinear_tasks:
         loader, lc, parameters, model, function = get_task()
         generator = TorchHooksJacobianBackend(
@@ -679,10 +706,13 @@ def test_jacobian_pimplicit_vs_pdense():
         PMat_dense = PMatDense(
             generator=generator, examples=loader, layer_collection=lc
         )
+        PMat_bd = PMatBlockDiag(
+            generator=generator, examples=loader, layer_collection=lc
+        )
         dw = random_pvector(layer_collection=lc, device=device)
 
         # Test trace
-        check_ratio(PMat_dense.trace(), PMat_implicit.trace())
+        torch.testing.assert_close(PMat_dense.trace(), PMat_implicit.trace())
 
         # Test mv
         if "BatchNorm1dLayer" in [
@@ -691,7 +721,7 @@ def test_jacobian_pimplicit_vs_pdense():
             with pytest.raises(NotImplementedError):
                 PMat_implicit.mv(dw)
         else:
-            check_tensors(
+            torch.testing.assert_close(
                 PMat_dense.mv(dw).to_torch(),
                 PMat_implicit.mv(dw).to_torch(),
             )
@@ -703,7 +733,43 @@ def test_jacobian_pimplicit_vs_pdense():
             with pytest.raises(NotImplementedError):
                 PMat_implicit.vTMv(dw)
         else:
-            check_ratio(PMat_dense.vTMv(dw), PMat_implicit.vTMv(dw))
+            torch.testing.assert_close(PMat_dense.vTMv(dw), PMat_implicit.vTMv(dw))
+
+        # Test solvePVec
+        regul = 1e-3
+        if "BatchNorm1dLayer" in [
+            l.__class__.__name__ for l in lc.layers.values()
+        ] or "BatchNorm2dLayer" in [l.__class__.__name__ for l in lc.layers.values()]:
+            with pytest.raises(NotImplementedError):
+                PMat_implicit.solvePVec(dw)
+        elif lc.numel() < 100:  # this is a slow test, it is applied only to small nets
+            torch.testing.assert_close(
+                PMat_dense.solve(dw, regul=regul).to_torch(),
+                PMat_implicit.solve(
+                    dw, regul=regul, M=PMat_dense, max_iter=1
+                ).to_torch(),
+                atol=1e-3,
+                rtol=1e-3,
+            )  # perfect preconditioner
+            torch.testing.assert_close(
+                PMat_dense.solve(dw, regul=regul).to_torch(),
+                PMat_implicit.solve(
+                    dw, regul=regul, x0=PMat_dense.solve(dw, regul=regul), max_iter=1
+                ).to_torch(),
+                atol=1e-3,
+                rtol=1e-3,
+            )  # good init
+            torch.testing.assert_close(
+                PMat_dense.solve(dw, regul=regul).to_torch(),
+                PMat_implicit.solve(
+                    dw, regul=regul, max_iter=100, M=PMat_bd, x0=dw, rtol=1e-3
+                ).to_torch(),
+                atol=1e-3,
+                rtol=1e-3,
+            )  # worse preconditioner
+            solve_tested = True
+
+    assert solve_tested
 
 
 def test_jacobian_plowrank_vs_pdense():
@@ -743,10 +809,14 @@ def test_jacobian_plowrank():
         # Test get_diag
         check_tensors(torch.diag(dense_tensor), PMat_lowrank.get_diag(), eps=1e-4)
 
-        # Test frobenius
-        frob_PMat = PMat_lowrank.frobenius_norm()
-        frob_direct = (dense_tensor**2).sum() ** 0.5
-        check_ratio(frob_direct, frob_PMat)
+        # Test norm
+        for ord in [2, "fro"]:
+            norm_PMat = PMat_lowrank.norm(ord=ord)
+            norm_direct = torch.linalg.norm(dense_tensor, ord=ord)
+            check_ratio(norm_direct, norm_PMat)
+
+        with pytest.raises(RuntimeError):
+            PMat_lowrank.norm(ord="prout")
 
         # Test trace
         trace_PMat = PMat_lowrank.trace()
@@ -885,7 +955,9 @@ def test_jacobian_pquasidiag():
 
         check_tensors(torch.diag(dense_tensor), PMat_qd.get_diag())
 
-        check_ratio(torch.norm(dense_tensor), PMat_qd.frobenius_norm())
+        check_ratio(torch.linalg.norm(dense_tensor), PMat_qd.norm())
+        with pytest.raises(RuntimeError):
+            PMat_qd.norm("prout")
 
         check_ratio(torch.trace(dense_tensor), PMat_qd.trace())
 
