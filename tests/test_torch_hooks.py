@@ -667,6 +667,8 @@ def test_jacobian_pblockdiag():
 
 
 def test_jacobian_pimplicit_vs_pdense():
+    solve_tested = False
+
     for get_task in linear_tasks + nonlinear_tasks:
         loader, lc, parameters, model, function = get_task()
         generator = TorchHooksJacobianBackend(
@@ -685,7 +687,7 @@ def test_jacobian_pimplicit_vs_pdense():
         dw = random_pvector(layer_collection=lc, device=device)
 
         # Test trace
-        check_ratio(PMat_dense.trace(), PMat_implicit.trace())
+        torch.testing.assert_close(PMat_dense.trace(), PMat_implicit.trace())
 
         # Test mv
         if "BatchNorm1dLayer" in [
@@ -694,7 +696,7 @@ def test_jacobian_pimplicit_vs_pdense():
             with pytest.raises(NotImplementedError):
                 PMat_implicit.mv(dw)
         else:
-            check_tensors(
+            torch.testing.assert_close(
                 PMat_dense.mv(dw).to_torch(),
                 PMat_implicit.mv(dw).to_torch(),
             )
@@ -706,7 +708,7 @@ def test_jacobian_pimplicit_vs_pdense():
             with pytest.raises(NotImplementedError):
                 PMat_implicit.vTMv(dw)
         else:
-            check_ratio(PMat_dense.vTMv(dw), PMat_implicit.vTMv(dw))
+            torch.testing.assert_close(PMat_dense.vTMv(dw), PMat_implicit.vTMv(dw))
 
         # Test solvePVec
         regul = 1e-3
@@ -715,28 +717,34 @@ def test_jacobian_pimplicit_vs_pdense():
         ] or "BatchNorm2dLayer" in [l.__class__.__name__ for l in lc.layers.values()]:
             with pytest.raises(NotImplementedError):
                 PMat_implicit.solvePVec(dw)
-        else:
-            check_tensors(
+        elif lc.numel() < 100:  # this is a slow test, it is applied only to small nets
+            torch.testing.assert_close(
                 PMat_dense.solve(dw, regul=regul).to_torch(),
                 PMat_implicit.solve(
                     dw, regul=regul, M=PMat_dense, max_iter=1
                 ).to_torch(),
-                eps=1e-3,
+                atol=1e-3,
+                rtol=1e-3,
             )  # perfect preconditioner
-            check_tensors(
+            torch.testing.assert_close(
                 PMat_dense.solve(dw, regul=regul).to_torch(),
                 PMat_implicit.solve(
                     dw, regul=regul, x0=PMat_dense.solve(dw, regul=regul), max_iter=1
                 ).to_torch(),
-                eps=1e-3,
+                atol=1e-3,
+                rtol=1e-3,
             )  # good init
-            check_tensors(
+            torch.testing.assert_close(
                 PMat_dense.solve(dw, regul=regul).to_torch(),
                 PMat_implicit.solve(
-                    dw, regul=regul, max_iter=1000, M=PMat_bd, x0=dw, rtol=1e-2
+                    dw, regul=regul, max_iter=100, M=PMat_bd, x0=dw, rtol=1e-3
                 ).to_torch(),
-                eps=1e-2,
+                atol=1e-3,
+                rtol=1e-3,
             )  # worse preconditioner
+            solve_tested = True
+
+    assert solve_tested
 
 
 def test_jacobian_plowrank_vs_pdense():
