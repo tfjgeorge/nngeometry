@@ -11,7 +11,6 @@ def Hessian(
     layer_collection=None,
     verbose=False,
 ):
-
     generator = TorchFuncHessianBackend(model=model, function=function, verbose=verbose)
 
     if layer_collection is None:
