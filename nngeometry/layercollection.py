@@ -171,23 +171,13 @@ class LayerCollection:
     def parameters(self, layerid_to_module):
         for layer_id, layer in self.layers.items():
             yield layerid_to_module[layer_id].weight
-            if isinstance(layer, BatchNorm1dLayer) or isinstance(
-                layer, BatchNorm2dLayer
-            ):
-                yield layerid_to_module[layer_id].bias
-            # otherwise it is a Linear or Conv2d with optional bias
-            elif layer.bias:
+            if layer.has_bias():
                 yield layerid_to_module[layer_id].bias
 
     def named_parameters(self, layerid_to_module):
         for layer_id, layer in self.layers.items():
             yield layer_id + ".weight", layerid_to_module[layer_id].weight
-            if isinstance(layer, BatchNorm1dLayer) or isinstance(
-                layer, BatchNorm2dLayer
-            ):
-                yield layer_id + ".bias", layerid_to_module[layer_id].bias
-            # otherwise it is a Linear or Conv2d with optional bias
-            elif layer.bias:
+            if layer.has_bias():
                 yield layer_id + ".bias", layerid_to_module[layer_id].bias
 
     def __eq__(self, other):
