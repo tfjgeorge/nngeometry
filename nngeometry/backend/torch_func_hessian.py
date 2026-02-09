@@ -27,11 +27,10 @@ def batched_hvp(func, primals, batched_tangents):
 
 
 class TorchFuncHessianBackend(AbstractBackend):
-    def __init__(self, model, function, verbose=False, compiled=False):
+    def __init__(self, model, function, verbose=False):
         self.model = model
         self.function = function
         self.verbose = verbose
-        self.compiled = compiled
 
     def get_covariance_matrix(self, examples, layer_collection):
         layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
@@ -48,15 +47,12 @@ class TorchFuncHessianBackend(AbstractBackend):
 
         params_dict = dict(layer_collection.named_parameters(layerid_to_mod))
 
-        if self.compiled:
-            hessian_fn = torch.compile(torch.func.hessian)
-        else:
-            hessian_fn = torch.func.hessian
-
         for d in self._get_iter_loader(loader):
             inputs = d[0].to(device)
 
-            H_mb = hessian_fn(compute_loss)(params_dict, inputs, d[1].to(device))
+            H_mb = torch.func.hessian(compute_loss)(
+                params_dict, inputs, d[1].to(device)
+            )
 
             for layer_id_x, layer_x in layer_collection.layers.items():
                 start_x = layer_collection.p_pos[layer_id_x]
@@ -137,16 +133,11 @@ class TorchFuncHessianBackend(AbstractBackend):
 
         hvp_dict = {k: torch.zeros_like(p) for k, p in params_dict.items()}
 
-        if self.compiled:
-            hvp_fn = torch.compile(hvp)
-        else:
-            hvp_fn = hvp
-
         for d in self._get_iter_loader(loader):
             inputs = d[0].to(device)
             targets = d[1].to(device)
 
-            hvp_mb = hvp_fn(
+            hvp_mb = hvp(
                 partial(compute_loss, inputs=inputs, targets=targets),
                 params_dict,
                 v_dict,
@@ -194,16 +185,11 @@ class TorchFuncHessianBackend(AbstractBackend):
             for k, p in params_dict.items()
         }
 
-        if self.compiled:
-            batched_hvp_fn = torch.compile(batched_hvp)
-        else:
-            batched_hvp_fn = batched_hvp
-
         for d in self._get_iter_loader(loader):
             inputs = d[0].to(device)
             targets = d[1].to(device)
 
-            b_hvp_mb = batched_hvp_fn(
+            b_hvp_mb = batched_hvp(
                 partial(compute_loss, inputs=inputs, targets=targets),
                 params_dict,
                 pfmap_dict,
