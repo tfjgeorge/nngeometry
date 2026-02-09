@@ -221,6 +221,49 @@ def test_dot():
     check_ratio(torch.dot(r1.to_torch(), r2.to_torch()), dotr1r2)
     check_ratio(torch.dot(r1.to_torch(), r2.to_torch()), dotr2r1)
 
+    r1 = random_pvector(layer_collection)
+    r2 = random_pvector_dict(layer_collection)
+    dotr1r2 = r1 @ r2
+    dotr2r1 = r2 @ r1
+    check_ratio(r1.to_torch() @ r2.to_torch(), dotr1r2)
+    check_ratio(r1.to_torch() @ r2.to_torch(), dotr2r1)
+
+
+def test_inplace():
+    model = ConvNet()
+    layer_collection = LayerCollection.from_model(model)
+    for r1, r2 in [
+        (random_pvector(layer_collection), random_pvector(layer_collection)),
+        (random_pvector_dict(layer_collection), random_pvector_dict(layer_collection)),
+    ]:
+        og_r1 = r1.clone()
+        iopr1r2 = og_r1
+        iopr1r2 += r2
+        opr1r2 = r1 + r2
+        check_tensors(opr1r2.to_torch(), iopr1r2.to_torch())
+        assert not torch.allclose(og_r1.to_torch(), r1.to_torch())
+
+        og_r1 = r1.clone()
+        iopr1r2 = og_r1
+        iopr1r2 -= r2
+        opr1r2 = r1 - r2
+        check_tensors(opr1r2.to_torch(), iopr1r2.to_torch())
+        assert not torch.allclose(og_r1.to_torch(), r1.to_torch())
+
+        og_r1 = r1.clone()
+        iopr1r2 = og_r1
+        iopr1r2 *= 2
+        opr1r2 = 2 * r1
+        check_tensors(opr1r2.to_torch(), iopr1r2.to_torch())
+        assert not torch.allclose(og_r1.to_torch(), r1.to_torch())
+
+    # can't use inplace operations for different representations
+    r1, r2 = random_pvector(layer_collection), random_pvector_dict(layer_collection)
+    with pytest.raises(NotImplementedError):
+        r1 += r2
+    with pytest.raises(NotImplementedError):
+        r1 -= r2
+
 
 def test_size():
     model = ConvNet()

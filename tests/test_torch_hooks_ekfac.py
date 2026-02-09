@@ -93,9 +93,14 @@ def test_pspace_ekfac_vs_direct():
             trace_direct = torch.trace(M_ekfac_torch)
             check_ratio(trace_direct, trace_ekfac)
 
-            frob_ekfac = M_ekfac.norm(ord="fro")
-            frob_direct = torch.linalg.matrix_norm(M_ekfac_torch)
-            check_ratio(frob_direct, frob_ekfac)
+            # Test norm
+            for ord in ["fro", 2, -2]:
+                norm_direct = torch.linalg.norm(M_ekfac_torch, ord=ord)
+                norm_ekfac = M_ekfac.norm(ord=ord)
+                torch.testing.assert_close(norm_ekfac, norm_direct)
+
+            with pytest.raises(RuntimeError):
+                M_ekfac.norm("prout")
 
             mv_direct = torch.mv(M_ekfac_torch, v.to_torch())
             mv_ekfac = M_ekfac.mv(v)
@@ -116,7 +121,7 @@ def test_pspace_ekfac_vs_direct():
 
             # Test inverse
             regul = 1e-6
-            M_inv = M_ekfac.inverse(regul=regul)
+            M_inv = M_ekfac.inv(regul=regul)
             v_back = M_inv.mv(mv_ekfac + regul * v)
             torch.testing.assert_close(v.to_torch(), v_back.to_torch())
 
@@ -153,7 +158,7 @@ def test_pspace_ekfac_vs_direct():
 
             # Test solve lstsq with jacobian, against torch.linalg.lstsq
             # on the dense matrix
-            max_eval = M_ekfac.norm(ord="spectral")
+            max_eval = M_ekfac.norm(ord=2)
 
             torch.testing.assert_close(
                 torch.linalg.lstsq(

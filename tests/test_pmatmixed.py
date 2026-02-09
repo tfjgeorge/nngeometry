@@ -1,7 +1,7 @@
 import torch
-from nngeometry.layercollection import Conv2dLayer, LayerCollection, LinearLayer
-from tasks import get_conv_bn_task, device
+from tasks import device, get_conv_bn_task
 
+from nngeometry.layercollection import Conv2dLayer, LayerCollection, LinearLayer
 from nngeometry.metrics import FIM
 from nngeometry.object.map import PFMapDense, random_pfmap
 from nngeometry.object.pspace import PMatEKFACBlockDiag
@@ -20,9 +20,12 @@ def test_pmatmixed_ekfac():
             dense_torch = pmat_mixed.to_torch()
 
             torch.testing.assert_close(torch.trace(dense_torch), pmat_mixed.trace())
-            torch.testing.assert_close(
-                torch.norm(dense_torch), pmat_mixed.frobenius_norm()
-            )
+
+            # Test norm
+            for ord in ["fro", 2, -2]:
+                norm_direct = torch.linalg.norm(dense_torch, ord=ord)
+                norm_mixed = pmat_mixed.norm(ord=ord)
+                torch.testing.assert_close(norm_mixed, norm_direct)
 
             x = 2
             torch.testing.assert_close((x * pmat_mixed).to_torch(), x * dense_torch)
@@ -41,7 +44,7 @@ def test_pmatmixed_ekfac():
             torch.testing.assert_close(v.to_torch(), v_back.to_torch())
 
             # Test inverse
-            pmat_mixed_inv = pmat_mixed.inverse(regul=regul)
+            pmat_mixed_inv = pmat_mixed.inv(regul=regul)
             v_back = pmat_mixed_inv.mv(mv_nng + regul * v)
             torch.testing.assert_close(v.to_torch(), v_back.to_torch())
 
@@ -114,7 +117,7 @@ def test_pmatmixed_onlyekfac():
             v = random_pvector(lc_restricted)
 
             # Test pinverse
-            regul = 1e-12
+            regul = 1e-6
             M_inv = pmat_mixed.pinv(atol=regul)
             torch.testing.assert_close(
                 M_inv.mv(v).to_torch(),

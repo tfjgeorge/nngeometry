@@ -13,7 +13,7 @@ from tasks import (
     to_device_model,
 )
 from torch.utils.data import DataLoader, Subset
-from utils import angle, check_ratio, check_tensors
+from utils import angle
 
 from nngeometry.backend import TorchHooksJacobianBackend
 from nngeometry.layercollection import LayerCollection
@@ -167,7 +167,7 @@ def test_jacobian_kfac_vs_pblockdiag():
 
         G_kfac = M_kfac.to_torch(split_weight_bias=True)
         G_blockdiag = M_blockdiag.to_torch()
-        check_tensors(G_blockdiag, G_kfac * mult, only_print_diff=False)
+        torch.testing.assert_close(G_blockdiag, G_kfac * mult)
 
 
 def test_jacobian_kfac():
@@ -179,7 +179,6 @@ def test_jacobian_kfac():
         get_linear_3d_task,
     ]:
         loader, lc, parameters, model, function = get_task()
-
         generator = TorchHooksJacobianBackend(model=model, function=function)
         M_kfac = PMatKFAC(generator=generator, examples=loader, layer_collection=lc)
         G_kfac_split = M_kfac.to_torch(split_weight_bias=True)
@@ -188,15 +187,21 @@ def test_jacobian_kfac():
         # Test trace
         trace_direct = torch.trace(G_kfac_split)
         trace_kfac = M_kfac.trace()
-        check_ratio(trace_direct, trace_kfac)
+        torch.testing.assert_close(trace_direct, trace_kfac)
 
-        # Test frobenius norm
-        frob_direct = torch.norm(G_kfac)
-        frob_kfac = M_kfac.frobenius_norm()
-        check_ratio(frob_direct, frob_kfac)
+        # Test norm
+        for ord in ["fro", 2, -2]:
+            norm_direct = torch.linalg.norm(G_kfac, ord=ord)
+            norm_kfac = M_kfac.norm(ord=ord)
+            torch.testing.assert_close(norm_kfac, norm_direct)
+
+        with pytest.raises(RuntimeError):
+            M_kfac.norm("prout")
 
         # Test get_diag
-        check_tensors(torch.diag(G_kfac_split), M_kfac.get_diag(split_weight_bias=True))
+        torch.testing.assert_close(
+            torch.diag(G_kfac_split), M_kfac.get_diag(split_weight_bias=True)
+        )
 
         # sample random vector
         random_v = random_pvector(lc, device)
@@ -204,18 +209,20 @@ def test_jacobian_kfac():
         # Test mv
         mv_direct = torch.mv(G_kfac_split, random_v.to_torch())
         mv_kfac = M_kfac.mv(random_v)
-        check_tensors(mv_direct, mv_kfac.to_torch())
+        torch.testing.assert_close(mv_direct, mv_kfac.to_torch())
 
         # Test vTMv
         mnorm_kfac = M_kfac.vTMv(random_v)
         mnorm_direct = torch.dot(mv_direct, random_v.to_torch())
-        check_ratio(mnorm_direct, mnorm_kfac)
+        torch.testing.assert_close(mnorm_direct, mnorm_kfac)
 
         # Test pow
         M_pow = M_kfac**2
-        check_tensors(
+        torch.testing.assert_close(
             M_pow.to_torch(),
             torch.mm(M_kfac.to_torch(), M_kfac.to_torch()),
+            atol=1e-3,
+            rtol=1e-3,
         )
 
         # Test inverse
@@ -224,20 +231,16 @@ def test_jacobian_kfac():
         regul = 1e-7
 
         mv2 = M_kfac.mv(mv_kfac)
-        kfac_inverse = M_kfac.inverse(regul)
+        kfac_inverse = M_kfac.inv(regul)
         mv_back = kfac_inverse.mv(mv2 + regul * mv_kfac)
-        check_tensors(
-            mv_kfac.to_torch(),
-            mv_back.to_torch(),
-            eps=1e-2,
+        torch.testing.assert_close(
+            mv_kfac.to_torch(), mv_back.to_torch(), atol=1e-3, rtol=1e-3
         )
 
         # Test solve
         mv_back = M_kfac.solve(mv2 + regul * mv_kfac, regul=regul)
-        check_tensors(
-            mv_kfac.to_torch(),
-            mv_back.to_torch(),
-            eps=1e-2,
+        torch.testing.assert_close(
+            mv_kfac.to_torch(), mv_back.to_torch(), atol=1e-3, rtol=1e-3
         )
 
 
@@ -282,7 +285,9 @@ def test_pspace_kfac_eigendecomposition():
                 angle_v_Mv = angle(Mv, evec_v)
                 assert angle_v_Mv < 1 + eps and angle_v_Mv > 1 - eps
                 norm_mv = torch.norm(Mv.to_torch())
-                check_ratio(evals[l_id][0][i_a] * evals[l_id][1][i_g], norm_mv)
+                torch.testing.assert_close(
+                    evals[l_id][0][i_a] * evals[l_id][1][i_g], norm_mv
+                )
 
 
 def test_kfac():
@@ -302,4 +307,6 @@ def test_kfac():
 
         prod_tensor = prod.to_torch(split_weight_bias=True)
 
-        check_tensors(torch.mm(M_kfac1_tensor, M_kfac2_tensor), prod_tensor)
+        torch.testing.assert_close(
+            torch.mm(M_kfac1_tensor, M_kfac2_tensor), prod_tensor
+        )
