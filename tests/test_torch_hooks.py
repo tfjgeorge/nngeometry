@@ -31,7 +31,7 @@ from utils import check_ratio, check_tensors, get_output_vector, update_model
 from nngeometry import Jacobian
 from nngeometry.backend import TorchHooksJacobianBackend
 from nngeometry.object.fspace import FMatDense
-from nngeometry.object.map import PFMapDense, PFMapImplicit
+from nngeometry.object.map import PFMapDense, PFMapImplicit, random_pfmap
 from nngeometry.object.pspace import (
     PMatBlockDiag,
     PMatDense,
@@ -217,6 +217,24 @@ def test_jacobian_fdense_vs_pullback():
             frob_FMat = FMat_dense.norm()
             frob_direct = (FMat_dense.to_torch() ** 2).sum() ** 0.5
             check_ratio(frob_direct, frob_FMat)
+
+            x = random_pfmap(lc, (len(loader.sampler), n_output), device=device)
+            torch.testing.assert_close(
+                (FMat_dense.T @ x).to_torch(), (x @ FMat_dense).to_torch()
+            )
+            df = random_fvector(len(loader.sampler), n_output, device=device)
+            torch.testing.assert_close(
+                (FMat_dense.T @ df).to_torch(), (df @ FMat_dense).to_torch()
+            )
+
+            torch.testing.assert_close(
+                (FMat_dense + FMat_dense).to_torch(), (2 * FMat_dense).to_torch()
+            )
+
+            torch.testing.assert_close(
+                (FMat_dense - FMat_dense + FMat_dense).to_torch(),
+                (FMat_dense).to_torch(),
+            )
 
             with pytest.raises(RuntimeError):
                 FMat_dense.norm("prout")

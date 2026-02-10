@@ -132,29 +132,37 @@ def test_Hdense_vs_Himplicit():
                     imp_mmap.to_torch_layer(layer_id)[1],
                 )
 
-        torch.testing.assert_close(
-            H_dense.solve(dw, regul=1).to_torch(),
-            H_implicit.solve(dw, regul=1, max_iter=10000, rtol=0, atol=1e-5).to_torch(),
-            atol=1e-3,
-            rtol=1e-3,
-        )
-
-        dense_solvepfmap = H_dense.solve(x, regul=1)
-        imp_solvepfmap = H_implicit.solve(x, regul=1, max_iter=200, rtol=0, atol=1e-5)
-        for layer_id, layer in lc.layers.items():
+        dense_solvepvec = H_dense.solve(dw, regul=1)
+        for x0 in [None, dense_solvepvec]:
             torch.testing.assert_close(
-                dense_solvepfmap.to_torch_layer(layer_id)[0],
-                imp_solvepfmap.to_torch_layer(layer_id)[0],
+                dense_solvepvec.to_torch(),
+                H_implicit.solve(
+                    dw, regul=1, max_iter=10000, rtol=0, atol=1e-5, x0=x0
+                ).to_torch(),
                 atol=1e-3,
                 rtol=1e-3,
             )
-            if layer.has_bias():
+
+        dense_solvepfmap = H_dense.solve(x, regul=1)
+        for x0 in [None, dense_solvepfmap]:
+            imp_solvepfmap = H_implicit.solve(
+                x, regul=1, max_iter=200, rtol=0, atol=1e-5, x0=x0
+            )
+
+            for layer_id, layer in lc.layers.items():
                 torch.testing.assert_close(
-                    dense_solvepfmap.to_torch_layer(layer_id)[1],
-                    imp_solvepfmap.to_torch_layer(layer_id)[1],
+                    dense_solvepfmap.to_torch_layer(layer_id)[0],
+                    imp_solvepfmap.to_torch_layer(layer_id)[0],
                     atol=1e-3,
                     rtol=1e-3,
                 )
+                if layer.has_bias():
+                    torch.testing.assert_close(
+                        dense_solvepfmap.to_torch_layer(layer_id)[1],
+                        imp_solvepfmap.to_torch_layer(layer_id)[1],
+                        atol=1e-3,
+                        rtol=1e-3,
+                    )
 
 
 def test_H_vs_linearization():

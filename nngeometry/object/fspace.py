@@ -119,17 +119,22 @@ class FMatDense(FMatAbstract):
         return self.data
 
     def __add__(self, other):
-        # TODO: test
         sum_data = self.data + other.data
-        return FMatDense(generator=self.generator, data=sum_data)
+        return FMatDense(
+            layer_collection=self.layer_collection,
+            generator=self.generator,
+            data=sum_data,
+        )
 
     def __sub__(self, other):
-        # TODO: test
         sub_data = self.data - other.data
-        return FMatDense(generator=self.generator, data=sub_data)
+        return FMatDense(
+            layer_collection=self.layer_collection,
+            generator=self.generator,
+            data=sub_data,
+        )
 
     def __rmul__(self, other):
-        # TODO: test
         rmul_data = other * self.data
         return FMatDense(
             layer_collection=self.layer_collection,
