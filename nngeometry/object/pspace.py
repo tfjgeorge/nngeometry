@@ -14,10 +14,10 @@ from nngeometry.layercollection import (
     LayerCollection,
     LinearLayer,
 )
-from nngeometry.object.map import PFMap, PFMapDense
-from nngeometry.solve import cg
+from nngeometry.solve import block_cg, cg
 
 from ..maths import kronecker
+from .map import PFMap, PFMapDense
 from .vector import PVector
 
 
@@ -1354,6 +1354,14 @@ class PMatImplicit(PMatAbstract):
         else:
             raise NotImplementedError
 
+    def mmap(self, pfmap):
+        if hasattr(self.generator, "implicit_mmap"):
+            return self.generator.implicit_mmap(
+                pfmap, self.examples, layer_collection=self.layer_collection
+            )
+        else:
+            return super().mmap(pfmap)
+
     def norm(self, ord=None):
         raise NotImplementedError
 
@@ -1363,6 +1371,12 @@ class PMatImplicit(PMatAbstract):
     def solvePVec(self, x, regul=1e-8, solve="cg", **kwargs):
         if solve in ["default", "cg"]:
             return cg(self, x, regul=regul, **kwargs)
+        else:
+            raise NotImplementedError
+
+    def solvePFMap(self, x, regul=1e-8, solve="cg", **kwargs):
+        if solve in ["default", "cg"]:
+            return block_cg(self, x, regul=regul, **kwargs)
         else:
             raise NotImplementedError
 

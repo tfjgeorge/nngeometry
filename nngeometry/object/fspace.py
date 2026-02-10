@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 
 import torch
 
+from .map import PFMap, PFMapDense
 from .vector import FVector, PVector
 
 
@@ -10,6 +11,22 @@ class FMatAbstract(ABC):
     @abstractmethod
     def __init__(self, generator):
         return NotImplementedError
+
+    def __matmul__(self, other):
+        if isinstance(other, FVector):
+            return self.mv(other)
+        elif isinstance(other, PFMap):
+            return self.mmap(other)
+        else:
+            return NotImplemented
+
+    def __rmatmul__(self, other):
+        if isinstance(other, FVector):
+            return self.T.mv(other)
+        elif isinstance(other, PFMap):
+            return self.T.mmap(other)
+        else:
+            return NotImplemented
 
 
 class FMatDense(FMatAbstract):
@@ -32,9 +49,29 @@ class FMatDense(FMatAbstract):
             raise NotImplementedError
 
     def mv(self, v):
-        # TODO: test
-        v_flat = torch.mv(self.data, v.to_torch())
+        v_flat = v.to_torch().view(-1)
+        s = self.data.size()
+        v_flat = torch.mv(self.data.view(s[0] * s[1], s[2] * s[3]), v_flat)
         return FVector(vector_repr=v_flat)
+
+    def mmap(self, pfmap):
+        s = self.data.size()
+        pfmap_flat = pfmap.to_torch().view(s[2] * s[3], -1)
+        return PFMapDense(
+            self.layer_collection,
+            self.generator,
+            data=torch.mm(self.data.view(s[0] * s[1], s[2] * s[3]), pfmap_flat).view(
+                s[0], s[1], -1
+            ),
+        )
+
+    @property
+    def T(self):
+        return FMatDense(
+            layer_collection=self.layer_collection,
+            generator=self.generator,
+            data=self.data.permute(2, 3, 0, 1),
+        )
 
     def vTMv(self, v):
         v_flat = v.to_torch().view(-1)
@@ -82,11 +119,29 @@ class FMatDense(FMatAbstract):
         return self.data
 
     def __add__(self, other):
-        # TODO: test
         sum_data = self.data + other.data
-        return FMatDense(generator=self.generator, data=sum_data)
+        return FMatDense(
+            layer_collection=self.layer_collection,
+            generator=self.generator,
+            data=sum_data,
+        )
 
     def __sub__(self, other):
-        # TODO: test
         sub_data = self.data - other.data
-        return FMatDense(generator=self.generator, data=sub_data)
+        return FMatDense(
+            layer_collection=self.layer_collection,
+            generator=self.generator,
+            data=sub_data,
+        )
+
+    def __rmul__(self, other):
+        rmul_data = other * self.data
+        return FMatDense(
+            layer_collection=self.layer_collection,
+            generator=self.generator,
+            data=rmul_data,
+        )
+
+    def __imul__(self, other):
+        self.data *= other
+        return self
