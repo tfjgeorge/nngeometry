@@ -104,12 +104,11 @@ def block_cg(A, b, regul=1e-8, x0=None, rtol=1e-5, atol=0, max_iter=None, M=None
         Ap = A @ p
         if regul > 0:
             Ap = Ap + regul * p
-        rz = fmat(p, z)
         pTAp = fmat(p, Ap)
-        α = solve_fmat(pTAp, rz, regul=0)
+        α = solve_fmat(pTAp, fmat(p, r), regul=0)
         x = x + p @ α
         r = r - Ap @ α
-        z = r if M is None else M.solve(r)
+        z = r if M is None else M.solve(r, regul=regul)
         β = solve_fmat(pTAp, fmat(z, Ap).T)
         β *= -1
         p = z + p @ β
