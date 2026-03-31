@@ -787,6 +787,12 @@ def test_jacobian_pimplicit_vs_pdense():
             )  # worse preconditioner
             solve_tested = True
 
+        # unsupported ops
+        with pytest.raises(NotImplementedError):
+            PMat_implicit.to_torch()
+            PMat_implicit.norm()
+            PMat_implicit.get_diag()
+
     assert solve_tested
 
 
