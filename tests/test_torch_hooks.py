@@ -790,7 +790,9 @@ def test_jacobian_pimplicit_vs_pdense():
         # unsupported ops
         with pytest.raises(NotImplementedError):
             PMat_implicit.to_torch()
+        with pytest.raises(NotImplementedError):
             PMat_implicit.norm()
+        with pytest.raises(NotImplementedError):
             PMat_implicit.get_diag()
 
     assert solve_tested
