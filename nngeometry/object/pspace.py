@@ -1354,6 +1354,14 @@ class PMatImplicit(PMatAbstract):
         else:
             raise NotImplementedError
 
+    def mmap(self, pfmap):
+        if hasattr(self.generator, "implicit_mmap"):
+            return self.generator.implicit_mmap(
+                pfmap, self.examples, layer_collection=self.layer_collection
+            )
+        else:
+            return super().mmap(pfmap)
+
     def norm(self, ord=None):
         raise NotImplementedError
 

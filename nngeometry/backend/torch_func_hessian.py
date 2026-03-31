@@ -1,8 +1,29 @@
+from functools import partial
+
 import torch
 
+from nngeometry.object.map import PFMapDense
 from nngeometry.object.vector import PVector
 
 from ._backend import AbstractBackend
+
+
+def hvp(func, primals, tangents):
+    return torch.func.jvp(
+        lambda p: torch.func.grad(func)(p),
+        primals=(primals,),
+        tangents=(tangents,),
+    )[1]
+
+
+def batched_hvp(func, primals, batched_tangents):
+    return torch.vmap(
+        lambda tangents: torch.func.jvp(
+            lambda p: torch.func.grad(func)(p),
+            primals=(primals,),
+            tangents=(tangents,),
+        )[1]
+    )(batched_tangents)
 
 
 class TorchFuncHessianBackend(AbstractBackend):
@@ -110,29 +131,85 @@ class TorchFuncHessianBackend(AbstractBackend):
             else:
                 v_dict[key + ".weight"] = value[0]
 
-        hvp = {k: torch.zeros_like(p) for k, p in params_dict.items()}
+        hvp_dict = {k: torch.zeros_like(p) for k, p in params_dict.items()}
 
         for d in self._get_iter_loader(loader):
             inputs = d[0].to(device)
             targets = d[1].to(device)
 
-            hvp_mb = torch.func.jvp(
-                lambda p: torch.func.grad(compute_loss)(p, inputs, targets),
-                primals=(params_dict,),
-                tangents=(v_dict,),
-            )[1]
+            hvp_mb = hvp(
+                partial(compute_loss, inputs=inputs, targets=targets),
+                params_dict,
+                v_dict,
+            )
 
-            for k in hvp:
-                hvp[k] += hvp_mb[k].detach()
+            for k in hvp_mb:
+                hvp_dict[k] += hvp_mb[k].detach()
 
         output_dict = dict()
         for layer_id, layer in layer_collection.layers.items():
             if layer.has_bias():
                 output_dict[layer_id] = (
-                    hvp[layer_id + ".weight"],
-                    hvp[layer_id + ".bias"],
+                    hvp_dict[layer_id + ".weight"],
+                    hvp_dict[layer_id + ".bias"],
                 )
             else:
-                output_dict[layer_id] = (hvp[layer_id + ".weight"],)
+                output_dict[layer_id] = (hvp_dict[layer_id + ".weight"],)
 
         return PVector(layer_collection, dict_repr=output_dict)
+
+    def implicit_mmap(self, pfmap, examples, layer_collection):
+        layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
+        device = self._check_same_device(layerid_to_mod.values())
+
+        loader = self._get_dataloader(examples)
+
+        def compute_loss(params, inputs, targets):
+            prediction = torch.func.functional_call(self.model, params, (inputs,))
+            return self.function(prediction, targets)
+
+        so, sb, *_ = pfmap.size()
+
+        params_dict = dict(layer_collection.named_parameters(layerid_to_mod))
+        pfmap_dict = {}
+        for layer_id, layer in layer_collection.layers.items():
+            d = pfmap.to_torch_layer(layer_id)
+            if layer.has_bias():
+                pfmap_dict[layer_id + ".weight"] = d[0].view(-1, *layer.weight.size)
+                pfmap_dict[layer_id + ".bias"] = d[1].view(-1, *layer.bias.size)
+            else:
+                pfmap_dict[layer_id + ".weight"] = d[0].view(-1, *layer.weight.size)
+
+        b_hvp_dict = {
+            k: torch.zeros((so * sb, *p.shape), dtype=p.dtype, device=p.device)
+            for k, p in params_dict.items()
+        }
+
+        for d in self._get_iter_loader(loader):
+            inputs = d[0].to(device)
+            targets = d[1].to(device)
+
+            b_hvp_mb = batched_hvp(
+                partial(compute_loss, inputs=inputs, targets=targets),
+                params_dict,
+                pfmap_dict,
+            )
+
+            for k in b_hvp_mb:
+                b_hvp_dict[k] += b_hvp_mb[k].detach()
+
+        output_dict = dict()
+        for layer_id, layer in layer_collection.layers.items():
+            if layer.has_bias():
+                output_dict[layer_id] = (
+                    b_hvp_dict[layer_id + ".weight"].view(so, sb, -1),
+                    b_hvp_dict[layer_id + ".bias"].view(so, sb, -1),
+                )
+            else:
+                output_dict[layer_id] = (
+                    b_hvp_dict[layer_id + ".weight"].view(so, sb, -1),
+                )
+
+        return PFMapDense.from_dict(
+            generator=None, data_dict=output_dict, layer_collection=layer_collection
+        )

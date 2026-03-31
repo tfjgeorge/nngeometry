@@ -12,6 +12,7 @@ from tasks import (
 from utils import check_ratio, check_tensors, update_model
 
 from nngeometry import FIM, Hessian
+from nngeometry.object.map import random_pfmap
 from nngeometry.object.pspace import PMatDense, PMatImplicit
 from nngeometry.object.vector import PVector, random_pvector
 from nngeometry.utils import grad
@@ -55,14 +56,29 @@ def test_hessian_vs_FIM(representation):
             representation=representation,
             function=f,
         )
+        n_examples = len(loader.sampler)
 
         if isinstance(representation, PMatDense):
-            torch.testing.assert_close(F.to_torch(), H.to_torch() / len(loader.sampler))
-        else:
-            dw = random_pvector(lc)
+            torch.testing.assert_close(F.to_torch(), H.to_torch() / n_examples)
+
+        dw = random_pvector(lc)
+        torch.testing.assert_close(
+            F.mv(dw).to_torch(), H.mv(dw).to_torch() / n_examples
+        )
+
+        x = random_pfmap(lc, (10, 100))
+        h_mmap = H.mmap(x)
+        f_mmap = F.mmap(x)
+        for layer_id, layer in lc.layers.items():
             torch.testing.assert_close(
-                F.mv(dw).to_torch(), H.mv(dw).to_torch() / len(loader.sampler)
+                h_mmap.to_torch_layer(layer_id)[0] / n_examples,
+                f_mmap.to_torch_layer(layer_id)[0],
             )
+            if layer.has_bias():
+                torch.testing.assert_close(
+                    h_mmap.to_torch_layer(layer_id)[1] / n_examples,
+                    f_mmap.to_torch_layer(layer_id)[1],
+                )
 
 
 def test_Hdense_vs_Himplicit():
@@ -95,6 +111,20 @@ def test_Hdense_vs_Himplicit():
 
         with pytest.raises(NotImplementedError):
             H_implicit.trace()
+
+        x = random_pfmap(lc, (10, 100))
+        dense_mmap = H_dense.mmap(x)
+        imp_mmap = H_implicit.mmap(x)
+        for layer_id, layer in lc.layers.items():
+            torch.testing.assert_close(
+                dense_mmap.to_torch_layer(layer_id)[0],
+                imp_mmap.to_torch_layer(layer_id)[0],
+            )
+            if layer.has_bias():
+                torch.testing.assert_close(
+                    dense_mmap.to_torch_layer(layer_id)[1],
+                    imp_mmap.to_torch_layer(layer_id)[1],
+                )
 
 
 def test_H_vs_linearization():
