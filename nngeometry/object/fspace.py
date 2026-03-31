@@ -10,7 +10,7 @@ from .vector import FVector, PVector
 class FMatAbstract(ABC):
     @abstractmethod
     def __init__(self, generator):
-        return NotImplementedError
+        pass
 
     def __matmul__(self, other):
         if isinstance(other, FVector):
