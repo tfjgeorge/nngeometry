@@ -794,6 +794,10 @@ def test_jacobian_pimplicit_vs_pdense():
             PMat_implicit.norm()
         with pytest.raises(NotImplementedError):
             PMat_implicit.get_diag()
+        with pytest.raises(NotImplementedError):
+            PMat_implicit.solvePVec(dw, solve="damn")
+
+        assert PMat_implicit.get_device() == "none"
 
     assert solve_tested
 
