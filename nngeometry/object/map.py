@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 
 import torch
 
@@ -64,6 +64,10 @@ class PFMapDense(PFMap):
             generator=self.generator,
             data=x * self.data,
         )
+
+    def __imul__(self, x):
+        self.data *= x
+        return self
 
     def iter_by_layer(self):
         layer_collection = self.layer_collection
