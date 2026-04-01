@@ -162,7 +162,7 @@ class PMatAbstract(ABC):
             layer_collection=x.layer_collection,
         )
 
-    def solve(self, x, regul, solve="default", **kwargs):
+    def solve(self, x, regul=1e-8, solve="default", **kwargs):
         """
         Solves Fx = b in x
 

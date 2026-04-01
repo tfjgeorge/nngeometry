@@ -169,6 +169,9 @@ def test_Hdense_vs_Himplicit():
                         rtol=1e-3,
                     )
 
+        with pytest.raises(NotImplementedError):
+            H_implicit.solve(x, regul=1, solve="damn")
+
 
 def test_H_vs_linearization():
     step = 1e-5
