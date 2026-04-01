@@ -238,6 +238,10 @@ def test_jacobian_fdense_vs_pullback():
 
             with pytest.raises(RuntimeError):
                 FMat_dense.norm("prout")
+            with pytest.raises(TypeError):
+                FMat_dense @ 2
+            with pytest.raises(TypeError):
+                2 @ FMat_dense
 
 
 def test_jacobian_eigendecomposition_fdense():
@@ -787,6 +791,18 @@ def test_jacobian_pimplicit_vs_pdense():
                 rtol=1e-3,
             )  # worse preconditioner
             solve_tested = True
+
+        # unsupported ops
+        with pytest.raises(NotImplementedError):
+            PMat_implicit.to_torch()
+        with pytest.raises(NotImplementedError):
+            PMat_implicit.norm()
+        with pytest.raises(NotImplementedError):
+            PMat_implicit.get_diag()
+        with pytest.raises(NotImplementedError):
+            PMat_implicit.solvePVec(dw, solve="damn")
+
+        assert PMat_implicit.get_device() == "none"
 
     assert solve_tested
 

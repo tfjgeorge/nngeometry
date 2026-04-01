@@ -118,7 +118,7 @@ def test_Hdense_vs_Himplicit():
         with pytest.raises(NotImplementedError):
             H_implicit.trace()
 
-        x = random_pfmap(lc, (10, 3))
+        x = random_pfmap(lc, (10, 10))
         dense_mmap = H_dense.mmap(x)
         imp_mmap = H_implicit.mmap(x)
         for layer_id, layer in lc.layers.items():
@@ -143,6 +143,11 @@ def test_Hdense_vs_Himplicit():
                 rtol=1e-3,
             )
 
+        if x.size(-1) < x.size(0) * x.size(1):
+            # number of systems to solve with block cg should be less than the
+            # number of parameters or put a fallback using normal equations ?
+            continue
+
         dense_solvepfmap = H_dense.solve(x, regul=1)
         for x0 in [None, dense_solvepfmap]:
             imp_solvepfmap = H_implicit.solve(
@@ -163,6 +168,9 @@ def test_Hdense_vs_Himplicit():
                         atol=1e-3,
                         rtol=1e-3,
                     )
+
+        with pytest.raises(NotImplementedError):
+            H_implicit.solve(x, regul=1, solve="damn")
 
 
 def test_Fdense_vs_Fimplicit():

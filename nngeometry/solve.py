@@ -55,11 +55,9 @@ def fmat(j1, j2):
     return FMatDense(j1.layer_collection, j1.generator, data=data)
 
 
-def solve_fmat(f1, f2, regul=0):
+def solve_fmat(f1, f2):
     sf1, sf2 = f1.size(), f2.size()
     f1_torch = f1.to_torch().view(sf1[0] * sf1[1], sf1[2] * sf1[3])
-    if regul > 0:
-        f1_torch += regul * torch.eye(sf1[0] * sf1[1])
     return FMatDense(
         f1.layer_collection,
         generator=f1.generator,
@@ -105,7 +103,7 @@ def block_cg(A, b, regul=1e-8, x0=None, rtol=1e-5, atol=0, max_iter=None, M=None
         if regul > 0:
             Ap = Ap + regul * p
         pTAp = fmat(p, Ap)
-        α = solve_fmat(pTAp, fmat(p, r), regul=0)
+        α = solve_fmat(pTAp, fmat(p, r))
         x = x + p @ α
         r = r - Ap @ α
         z = r if M is None else M.solve(r, regul=regul)
