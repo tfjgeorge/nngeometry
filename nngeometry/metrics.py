@@ -4,8 +4,9 @@ from functools import partial
 import torch
 from torch.distributions.multivariate_normal import MultivariateNormal
 
-from .backend import TorchHooksJacobianBackend
+from .backend import TorchFuncJacobianBackend, TorchHooksJacobianBackend
 from .layercollection import LayerCollection
+from .object.pspace import PMatImplicit
 
 
 def FIM_MonteCarlo(
@@ -94,7 +95,6 @@ def FIM_MonteCarlo(
             return trials**-0.5 * sampled_targets
 
     elif variant == "regression":
-
         if "covariance" in kwargs:
             sigma_2 = kwargs["covariance"]
         else:
@@ -173,19 +173,28 @@ def FIM(
         An optional layer collection
     """
 
-    if function is None:
-
-        def function(*d):
-            return model(d[0].to(device))
-
     if layer_collection is None:
         layer_collection = LayerCollection.from_model(model)
 
-    function_fim = partial(SQRT_VAR[variant], function)
+    if representation == PMatImplicit:
 
-    generator = TorchHooksJacobianBackend(
-        model=model, function=function_fim, verbose=verbose
-    )
+        def function_fim(*d):
+            return SQRT_VAR[variant](lambda predictions, _: predictions, *d)
+
+        generator = TorchFuncJacobianBackend(
+            model=model, function=function_fim, verbose=verbose
+        )
+
+    else:
+        if function is None:
+
+            def function(*d):
+                return model(d[0].to(device))
+
+        function_fim = partial(SQRT_VAR[variant], function)
+        generator = TorchHooksJacobianBackend(
+            model=model, function=function_fim, verbose=verbose
+        )
 
     return representation(
         generator=generator,

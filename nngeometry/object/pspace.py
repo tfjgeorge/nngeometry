@@ -1,5 +1,4 @@
 import math
-import operator
 import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict, defaultdict
@@ -14,10 +13,10 @@ from nngeometry.layercollection import (
     LayerCollection,
     LinearLayer,
 )
-from nngeometry.object.map import PFMap, PFMapDense
-from nngeometry.solve import cg
+from nngeometry.solve import block_cg, cg
 
 from ..maths import kronecker
+from .map import PFMap, PFMapDense
 from .vector import PVector
 
 
@@ -101,7 +100,6 @@ class PMatAbstract(ABC):
     def get_device(self):
         raise NotImplementedError
 
-    @abstractmethod
     def vTMv(self, v):
         """
         Computes the quadratic form defined by M in v,
@@ -110,7 +108,7 @@ class PMatAbstract(ABC):
         :param v: vector :math:`v`
         :type v: :class:`.object.vector.PVector`
         """
-        raise NotImplementedError
+        return v.dot(self.mv(v))
 
     def mapTMmap(self, pfmap, reduction="sum"):
         """
@@ -162,7 +160,7 @@ class PMatAbstract(ABC):
             layer_collection=x.layer_collection,
         )
 
-    def solve(self, x, regul, solve="default", **kwargs):
+    def solve(self, x, regul=1e-8, solve="default", **kwargs):
         """
         Solves Fx = b in x
 
@@ -1344,7 +1342,7 @@ class PMatImplicit(PMatAbstract):
                 v, self.examples, layer_collection=self.layer_collection
             )
         else:
-            return v.dot(self.mv(v))
+            return super().vTMv(v)
 
     def trace(self):
         if hasattr(self.generator, "implicit_trace"):
@@ -1371,6 +1369,12 @@ class PMatImplicit(PMatAbstract):
     def solvePVec(self, x, regul=1e-8, solve="cg", **kwargs):
         if solve in ["default", "cg"]:
             return cg(self, x, regul=regul, **kwargs)
+        else:
+            raise NotImplementedError
+
+    def solvePFMap(self, x, regul=1e-8, solve="cg", **kwargs):
+        if solve in ["default", "cg"]:
+            return block_cg(self, x, regul=regul, **kwargs)
         else:
             raise NotImplementedError
 
