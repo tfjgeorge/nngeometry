@@ -31,7 +31,7 @@ from utils import check_ratio, check_tensors, get_output_vector, update_model
 from nngeometry import Jacobian
 from nngeometry.backend import TorchHooksJacobianBackend
 from nngeometry.object.fspace import FMatDense
-from nngeometry.object.map import PFMapDense, PFMapImplicit
+from nngeometry.object.map import PFMapDense, PFMapImplicit, random_pfmap
 from nngeometry.object.pspace import (
     PMatBlockDiag,
     PMatDense,
@@ -768,6 +768,39 @@ def test_jacobian_pimplicit_vs_pdense():
                 rtol=1e-3,
             )  # worse preconditioner
             solve_tested = True
+
+        x = random_pfmap(lc, (10, 3))
+
+        # Test mmap
+        if "BatchNorm1dLayer" in [
+            l.__class__.__name__ for l in lc.layers.values()
+        ] or "BatchNorm2dLayer" in [l.__class__.__name__ for l in lc.layers.values()]:
+            with pytest.raises(NotImplementedError):
+                PMat_implicit.solvePVec(dw)
+        else:
+            dense_mmap = PMat_dense.mmap(x)
+            imp_mmap = PMat_implicit.mmap(x)
+            for layer_id, layer in lc.layers.items():
+                torch.testing.assert_close(
+                    dense_mmap.to_torch_layer(layer_id)[0],
+                    imp_mmap.to_torch_layer(layer_id)[0],
+                )
+                if layer.has_bias():
+                    torch.testing.assert_close(
+                        dense_mmap.to_torch_layer(layer_id)[1],
+                        imp_mmap.to_torch_layer(layer_id)[1],
+                    )
+
+        # Test mapTMmap
+        if "BatchNorm1dLayer" in [
+            l.__class__.__name__ for l in lc.layers.values()
+        ] or "BatchNorm2dLayer" in [l.__class__.__name__ for l in lc.layers.values()]:
+            with pytest.raises(NotImplementedError):
+                PMat_implicit.solvePVec(dw)
+        else:
+            torch.testing.assert_close(
+                PMat_dense.mapTMmap(x), PMat_implicit.mapTMmap(x)
+            )
 
     assert solve_tested
 
