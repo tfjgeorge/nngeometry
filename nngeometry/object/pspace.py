@@ -1,5 +1,4 @@
 import math
-import operator
 import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict, defaultdict
