@@ -122,6 +122,7 @@ class PMatAbstract(ABC):
         :type reduction: str
         """
         sJ = pfmap.size()
+        print(sJ)
         J_dense = pfmap.to_torch().view(sJ[0] * sJ[1], sJ[2])
 
         norm2 = []

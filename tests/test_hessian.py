@@ -1,3 +1,5 @@
+import math
+
 import pytest
 import torch
 from tasks import (
@@ -9,7 +11,7 @@ from tasks import (
     get_linear_fc_task,
     to_device,
 )
-from utils import check_ratio, check_tensors, update_model
+from utils import update_model
 
 from nngeometry import FIM, Hessian
 from nngeometry.object.map import random_pfmap
@@ -106,8 +108,10 @@ def test_Hdense_vs_Himplicit():
         )
 
         dw = random_pvector(lc)
-        check_tensors(H_dense.mv(dw).to_torch(), H_implicit.mv(dw).to_torch())
-        check_ratio(H_dense.vTMv(dw), H_implicit.vTMv(dw))
+        torch.testing.assert_close(
+            H_dense.mv(dw).to_torch(), H_implicit.mv(dw).to_torch()
+        )
+        torch.testing.assert_close(H_dense.vTMv(dw), H_implicit.vTMv(dw))
 
         with pytest.raises(NotImplementedError):
             H_implicit.trace()
@@ -162,7 +166,6 @@ def test_H_vs_linearization():
 
         delta = H.mv(dw)
 
-        check_tensors(
-            (grad_after - grad_before).to_torch(),
-            delta.to_torch(),
+        torch.testing.assert_close(
+            (grad_after - grad_before).to_torch(), delta.to_torch()
         )
