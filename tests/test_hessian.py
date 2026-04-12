@@ -1,5 +1,3 @@
-import math
-
 import pytest
 import torch
 from tasks import (
