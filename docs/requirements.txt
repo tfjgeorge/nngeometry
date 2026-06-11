@@ -1,4 +1,4 @@
 sphinxcontrib-bibtex
 sphinx_rtd_theme
-torch==2.8.0
+torch==2.12.0
 numpy
