@@ -28,6 +28,7 @@ class LayerCollection:
         "LayerNorm",
         "Embedding",
         "RMSNorm",
+        "NonDynamicallyQuantizableLinear",
     ]
 
     def __init__(self, layers=None):
@@ -92,7 +93,7 @@ class LayerCollection:
 
     def _module_to_layer(mod):
         mod_class = mod.__class__.__name__
-        if mod_class == "Linear":
+        if mod_class in ["Linear", "NonDynamicallyQuantizableLinear"]:
             return LinearLayer(
                 in_features=mod.in_features,
                 out_features=mod.out_features,

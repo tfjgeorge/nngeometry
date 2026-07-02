@@ -45,6 +45,7 @@ class FCNet(nn.Module):
             "weight_norm",
             "cosine",
             "affine",
+            "NonDynamicallyQuantizableLinear",
         ]:
             raise NotImplementedError
         super(FCNet, self).__init__()
@@ -55,6 +56,10 @@ class FCNet(nn.Module):
                 layers.append(WeightNorm1d(s_in, s_out))
             elif normalization == "cosine":
                 layers.append(Cosine1d(s_in, s_out))
+            elif normalization == "NonDynamicallyQuantizableLinear":
+                layers.append(
+                    nn.modules.linear.NonDynamicallyQuantizableLinear(s_in, s_out)
+                )
             else:
                 layers.append(nn.Linear(s_in, s_out, bias=(normalization == "none")))
             if normalization == "batch_norm":
@@ -409,6 +414,10 @@ def get_fullyconnect_wn_task():
 
 def get_fullyconnect_cosine_task():
     return get_fullyconnect_task(normalization="cosine")
+
+
+def get_fullyconnect_NonDynamicallyQuantizableLinear_task():
+    return get_fullyconnect_task(normalization="NonDynamicallyQuantizableLinear")
 
 
 def get_fullyconnect_affine_task():
