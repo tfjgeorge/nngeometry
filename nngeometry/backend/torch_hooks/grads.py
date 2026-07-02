@@ -77,6 +77,20 @@ class LinearJacobianFactory(JacobianFactory):
             buffer[:, w_numel:].add_(gy.sum(dim=1))
 
     @classmethod
+    def shampoo_blocks(cls, left_buffer, right_buffer, mod, layer, x, gy):
+        bs = x.size(0)
+        if gy.ndim == 2:
+            gy = gy[:, None, :]
+            x = x[:, None, :]
+        indiv_gw = torch.bmm(gy.transpose(1, 2), x)
+        G = indiv_gw.view(bs, mod.weight.size(0), -1)
+        if layer.has_bias():
+            indiv_gb = gy.transpose(1, 2)
+            G = torch.cat([G, indiv_gb], dim=2)
+        right_buffer.add_(torch.bmm(G.transpose(1, 2), G).sum(dim=0))
+        left_buffer.add_(torch.bmm(G, G.transpose(1, 2)).sum(dim=0))
+
+    @classmethod
     def diag(cls, buffer, mod, layer, x, gy):
         if gy.ndim > 2:
             return super(LinearJacobianFactory, cls).diag(buffer, mod, layer, x, gy)
@@ -181,6 +195,17 @@ class Conv2dJacobianFactory(JacobianFactory):
         buffer[:, :w_numel].add_(indiv_gw.view(bs, -1))
         if layer.has_bias():
             buffer[:, w_numel:].add_(gy.sum(dim=(2, 3)))
+
+    @classmethod
+    def shampoo_blocks(cls, left_buffer, right_buffer, mod, layer, x, gy):
+        bs = x.size(0)
+        indiv_gw = conv2d_backward(mod, x, gy)
+        G = indiv_gw.view(bs, mod.weight.size(0), -1)
+        if layer.has_bias():
+            indiv_gb = gy.sum(dim=(2, 3)).unsqueeze(2)
+            G = torch.cat([G, indiv_gb], dim=2)
+        right_buffer.add_(torch.bmm(G.transpose(1, 2), G).sum(dim=0))
+        left_buffer.add_(torch.bmm(G, G.transpose(1, 2)).sum(dim=0))
 
     @classmethod
     def Jv(cls, buffer, mod, layer, x, gy, v, v_bias):
@@ -446,6 +471,17 @@ class Conv1dJacobianFactory(JacobianFactory):
             buffer[:, w_numel:].add_(gy.sum(dim=2))
 
     @classmethod
+    def shampoo_blocks(cls, left_buffer, right_buffer, mod, layer, x, gy):
+        bs = x.size(0)
+        indiv_gw = conv1d_backward(mod, x, gy)
+        G = indiv_gw.view(bs, mod.weight.size(0), -1)
+        if layer.has_bias():
+            indiv_gb = gy.sum(dim=2).unsqueeze(2)
+            G = torch.cat([G, indiv_gb], dim=2)
+        left_buffer.add_(torch.bmm(G, G.transpose(1, 2)).sum(dim=0))
+        right_buffer.add_(torch.bmm(G.transpose(1, 2), G).sum(dim=0))
+
+    @classmethod
     def Jv(cls, buffer, mod, layer, x, gy, v, v_bias):
         bs = x.size(0)
         gy2 = F.conv1d(
@@ -526,7 +562,6 @@ def check_embedding_arguments(mod):
 
 
 class EmbeddingJacobianFactory(JacobianFactory):
-
     @classmethod
     def flat_grad(cls, buffer, mod, layer, x, gy):
         check_embedding_arguments(mod)
