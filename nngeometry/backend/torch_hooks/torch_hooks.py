@@ -65,12 +65,12 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self.function = function
 
     @instance_buffer_handles
-    def get_shampoo_blocks(self, examples, layer_collection):
+    def get_onestep_kronecker_blocks(self, examples, layer_collection):
         layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
 
         self._handles += self._add_hooks(
             self._hook_savex,
-            self._hook_compute_shampoo_blocks,
+            self._hook_compute_onestep_kronecker_blocks,
             layerid_to_mod,
             layer_collection,
         )
@@ -892,14 +892,14 @@ class TorchHooksJacobianBackend(AbstractBackend):
         block = self._buffer["blocks"][layer_id]
         FactoryMap[layer.__class__].layer_block(block, mod, layer, x, gy)
 
-    def _hook_compute_shampoo_blocks(self, mod, gy, layer_id, layer_collection):
+    def _hook_compute_onestep_kronecker_blocks(self, mod, gy, layer_id, layer_collection):
         mod_class = mod.__class__.__name__
         x = self._buffer["xs"][mod]
         layer = layer_collection[layer_id]
-        right_buf, left_buf = self._buffer["blocks"][layer_id]
+        right_buffer, left_buffer = self._buffer["blocks"][layer_id]
         if mod_class in ["Linear", "Conv2d", "Conv1d", "Embedding"]:
-            FactoryMap[layer.__class__].shampoo_blocks(
-                left_buf, right_buf, mod, layer, x, gy
+            FactoryMap[layer.__class__].onestep_kronecker_blocks(
+                left_buffer, right_buffer, mod, layer, x, gy
             )
         else:
             raise NotImplementedError

@@ -170,7 +170,7 @@ def test_jacobian_kfac_vs_pblockdiag():
         torch.testing.assert_close(G_blockdiag, G_kfac * mult)
 
 
-def test_jacobian_kfac_vs_shampoo():
+def test_jacobian_onestep_kronecker_vs_pblockdiag():
     """
     Compares blockdiag and kfac representation on datasets/architectures
     where they are the same
@@ -185,20 +185,51 @@ def test_jacobian_kfac_vs_shampoo():
             model=model,
             function=function,
         )
+        M_onestep_kronecker = PMatKFAC(
+            layer_collection=lc,
+            generator=generator,
+            data=generator.get_onestep_kronecker_blocks(loader, lc),
+        )
+        M_blockdiag = PMatBlockDiag(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+
+        G_onestep_kronecker = M_onestep_kronecker.to_torch(split_weight_bias=True)
+        G_blockdiag = M_blockdiag.to_torch()
+        torch.testing.assert_close(G_blockdiag, G_onestep_kronecker)
+
+
+def test_jacobian_kfac_vs_onestep_kronecker():
+    """
+    Check that EKFAC matrix is closer to block diag one in the
+    sense of the Frobenius norm
+    """
+    for get_task in [
+        get_fullyconnect_task,
+        get_embedding_task,
+        get_conv1d_task,
+        get_conv_task,
+    ]:
+        loader, lc, parameters, model, function = get_task()
+        model.train()
+        generator = TorchHooksJacobianBackend(model=model, function=function)
+
         M_kfac = PMatKFAC(generator=generator, examples=loader, layer_collection=lc)
-        M_shampoo = PMatKFAC(
+        M_onestep_kronecker = PMatKFAC(
             layer_collection=lc,
             generator=generator,
             data=TorchHooksJacobianBackend(
                 model=model,
                 function=function,
-            ).get_shampoo_blocks(loader, lc),
+            ).get_onestep_kronecker_blocks(loader, lc),
+        )
+        M_blockdiag = PMatBlockDiag(
+            generator=generator, examples=loader, layer_collection=lc
         )
 
-        G_kfac = M_kfac.to_torch(split_weight_bias=True)
-        G_shampoo = M_shampoo.to_torch(split_weight_bias=True)
-        print(model, G_shampoo, G_kfac * mult)
-        torch.testing.assert_close(G_shampoo, G_kfac * mult)
+        assert torch.norm(M_kfac.to_torch() - M_blockdiag.to_torch()) > torch.norm(
+            M_onestep_kronecker.to_torch() - M_blockdiag.to_torch()
+        )
 
 
 def test_jacobian_kfac():
