@@ -164,7 +164,7 @@ class LinearJacobianFactory(JacobianFactory):
             buffer.add_((per_ex_kfe_grad**2).sum(dim=0).view(-1))
 
     @classmethod
-    def onestep_kronecker_blocks(cls, left_buffer, right_buffer, mod, layer, x, gy):
+    def one_iter_kpsvd_blocks(cls, left_buffer, right_buffer, mod, layer, x, gy):
         bs = x.size(0)
         if gy.ndim == 2:
             gy = gy[:, None, :]
@@ -197,7 +197,7 @@ class Conv2dJacobianFactory(JacobianFactory):
             buffer[:, w_numel:].add_(gy.sum(dim=(2, 3)))
 
     @classmethod
-    def onestep_kronecker_blocks(cls, left_buffer, right_buffer, mod, layer, x, gy):
+    def one_iter_kpsvd_blocks(cls, left_buffer, right_buffer, mod, layer, x, gy):
         bs = x.size(0)
         indiv_gw = conv2d_backward(mod, x, gy)
         G = indiv_gw.view(bs, mod.weight.size(0), -1)
@@ -471,7 +471,7 @@ class Conv1dJacobianFactory(JacobianFactory):
             buffer[:, w_numel:].add_(gy.sum(dim=2))
 
     @classmethod
-    def onestep_kronecker_blocks(cls, left_buffer, right_buffer, mod, layer, x, gy):
+    def one_iter_kpsvd_blocks(cls, left_buffer, right_buffer, mod, layer, x, gy):
         bs = x.size(0)
         indiv_gw = conv1d_backward(mod, x, gy)
         G = indiv_gw.view(bs, mod.weight.size(0), -1)
@@ -610,7 +610,7 @@ class EmbeddingJacobianFactory(JacobianFactory):
         buffer.add_((indiv_gw**2).sum(dim=0).view(-1))
 
     @classmethod
-    def onestep_kronecker_blocks(cls, left_buffer, right_buffer, mod, layer, x, gy):
+    def one_iter_kpsvd_blocks(cls, left_buffer, right_buffer, mod, layer, x, gy):
         check_embedding_arguments(mod)
         bs = x.size(0)
         x = F.one_hot(x, num_classes=layer.num_embeddings).to(gy.dtype)

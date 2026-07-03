@@ -170,7 +170,7 @@ def test_jacobian_kfac_vs_pblockdiag():
         torch.testing.assert_close(G_blockdiag, G_kfac * mult)
 
 
-def test_jacobian_onestep_kronecker_vs_pblockdiag():
+def test_jacobian_one_iter_kpsvd_vs_pblockdiag():
     """
     Compares blockdiag and kfac representation on datasets/architectures
     where they are the same
@@ -185,21 +185,22 @@ def test_jacobian_onestep_kronecker_vs_pblockdiag():
             model=model,
             function=function,
         )
-        M_onestep_kronecker = PMatKFAC(
-            layer_collection=lc,
+        M_one_iter_kpsvd = PMatKFAC(
             generator=generator,
-            data=generator.get_onestep_kronecker_blocks(loader, lc),
+            examples=loader,
+            layer_collection=lc,
+            strategy="one_iter_kpsvd",
         )
         M_blockdiag = PMatBlockDiag(
             generator=generator, examples=loader, layer_collection=lc
         )
 
-        G_onestep_kronecker = M_onestep_kronecker.to_torch(split_weight_bias=True)
+        G_one_iter_kpsvd = M_one_iter_kpsvd.to_torch(split_weight_bias=True)
         G_blockdiag = M_blockdiag.to_torch()
-        torch.testing.assert_close(G_blockdiag, G_onestep_kronecker)
+        torch.testing.assert_close(G_blockdiag, G_one_iter_kpsvd)
 
 
-def test_jacobian_kfac_vs_onestep_kronecker():
+def test_jacobian_kfac_vs_one_iter_kpsvd():
     """
     Check that EKFAC matrix is closer to block diag one in the
     sense of the Frobenius norm
@@ -215,20 +216,18 @@ def test_jacobian_kfac_vs_onestep_kronecker():
         generator = TorchHooksJacobianBackend(model=model, function=function)
 
         M_kfac = PMatKFAC(generator=generator, examples=loader, layer_collection=lc)
-        M_onestep_kronecker = PMatKFAC(
-            layer_collection=lc,
+        M_one_iter_kpsvd = PMatKFAC(
             generator=generator,
-            data=TorchHooksJacobianBackend(
-                model=model,
-                function=function,
-            ).get_onestep_kronecker_blocks(loader, lc),
+            examples=loader,
+            layer_collection=lc,
+            strategy="one_iter_kpsvd",
         )
         M_blockdiag = PMatBlockDiag(
             generator=generator, examples=loader, layer_collection=lc
         )
 
         assert torch.norm(M_kfac.to_torch() - M_blockdiag.to_torch()) > torch.norm(
-            M_onestep_kronecker.to_torch() - M_blockdiag.to_torch()
+            M_one_iter_kpsvd.to_torch() - M_blockdiag.to_torch()
         )
 
 
