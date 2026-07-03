@@ -170,6 +170,37 @@ def test_jacobian_kfac_vs_pblockdiag():
         torch.testing.assert_close(G_blockdiag, G_kfac * mult)
 
 
+def test_jacobian_kfac_vs_shampoo():
+    """
+    Compares blockdiag and kfac representation on datasets/architectures
+    where they are the same
+    """
+    for get_task, mult in zip(
+        [get_conv1dnet_kfc_task, get_convnet_kfc_task, get_fullyconnect_kfac_task],
+        [3.0, 15.0, 1.0],
+    ):
+        loader, lc, parameters, model, function = get_task()
+
+        generator = TorchHooksJacobianBackend(
+            model=model,
+            function=function,
+        )
+        M_kfac = PMatKFAC(generator=generator, examples=loader, layer_collection=lc)
+        M_shampoo = PMatKFAC(
+            layer_collection=lc,
+            generator=generator,
+            data=TorchHooksJacobianBackend(
+                model=model,
+                function=function,
+            ).get_shampoo_blocks(loader, lc),
+        )
+
+        G_kfac = M_kfac.to_torch(split_weight_bias=True)
+        G_shampoo = M_shampoo.to_torch(split_weight_bias=True)
+        print(model, G_shampoo, G_kfac * mult)
+        torch.testing.assert_close(G_shampoo, G_kfac * mult)
+
+
 def test_jacobian_kfac():
     for get_task in [
         get_embedding_task,
