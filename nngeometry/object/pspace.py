@@ -698,17 +698,19 @@ class PMatBlockDiag(PMatAbstract):
 class PMatKFAC(PMatAbstract):
     """
     KFAC representation from
-    (1) Martens and Grosse, Optimizing neural networks with kronecker-factored approximate
-    curvature, ICML 2015
-    (2) Grosse and Martens, A kronecker-factored approximate fisher matrix for convolution
-    layers, ICML 2016
-    (3) Koroko, Anciaux-Sedrakian and Gharbia, Efficient approximations of the fisher matrix
-    in neural networks using kronecker product singular value decomposition, ESAIM 2023
+
+    1. Martens and Grosse, Optimizing neural networks with kronecker-factored
+       approximate curvature, ICML 2015
+    2. Grosse and Martens, A kronecker-factored approximate fisher matrix for
+       convolution layers, ICML 2016
+    3. Koroko, Anciaux-Sedrakian and Gharbia, Efficient approximations of the
+       fisher matrix in neural networks using kronecker product singular value
+       decomposition, ESAIM 2023
 
     :param strategy: How to compute Kronecker factors. "kfac" is the default
-    strategy from the KFAC/KFE papers, "one_iter_kpsvd" is one power iteration
-    as described in (3)
-    :type string:
+        strategy from the KFAC/KFE papers. "one_iter_kpsvd" uses one power
+        iteration as described in (3).
+    :type strategy: str
     """
 
     def __init__(
