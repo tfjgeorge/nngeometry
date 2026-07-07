@@ -710,6 +710,7 @@ class PMatKFAC(PMatAbstract):
     as described in (3)
     :type string:
     """
+
     def __init__(
         self,
         layer_collection,
@@ -1001,6 +1002,7 @@ class PMatEKFAC(PMatAbstract):
         data=None,
         examples=None,
         eigendecomposition=None,
+        strategy="kfac",
         **kwargs,
     ):
         self._check_data_examples(data, examples)
@@ -1015,9 +1017,17 @@ class PMatEKFAC(PMatAbstract):
             evecs = dict()
             diags = dict()
 
-            kfac_blocks = generator.get_kfac_blocks(
-                examples, layer_collection=layer_collection
-            )
+            if strategy == "kfac":
+                kfac_blocks = generator.get_kfac_blocks(
+                    examples, layer_collection=layer_collection
+                )
+            elif strategy == "one_iter_kpsvd":
+                kfac_blocks = generator.get_one_iter_kpsvd_blocks(
+                    examples, layer_collection=layer_collection
+                )
+            else:
+                raise NotImplementedError()
+
             for layer_id, layer in self.layer_collection.layers.items():
                 a, g = kfac_blocks[layer_id]
 

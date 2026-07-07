@@ -192,3 +192,34 @@ def test_pspace_ekfac_vs_direct():
             torch.testing.assert_close(1.23 * M_ekfac_torch, M_mul.to_torch())
 
             M_ekfac.update_diag(loader)
+
+
+def test_ekfac_kfac_vs_one_iter_kpsvd():
+    """
+    Check that EKFAC using KPSVD matrix Kronecker blocks is closer than using KFAC blocks
+    to the BlockDiag one in the sense of the Frobenius norm
+    """
+    for get_task in [
+        get_fullyconnect_task,
+        get_embedding_task,
+        get_conv1d_task,
+        get_conv_task,
+    ]:
+        loader, lc, parameters, model, function = get_task()
+        model.train()
+        generator = TorchHooksJacobianBackend(model=model, function=function)
+
+        M_kfac = PMatEKFAC(generator=generator, examples=loader, layer_collection=lc)
+        M_one_iter_kpsvd = PMatEKFAC(
+            generator=generator,
+            examples=loader,
+            layer_collection=lc,
+            strategy="one_iter_kpsvd",
+        )
+        M_blockdiag = PMatBlockDiag(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+
+        assert torch.norm(M_kfac.to_torch() - M_blockdiag.to_torch()) > torch.norm(
+            M_one_iter_kpsvd.to_torch() - M_blockdiag.to_torch()
+        )
