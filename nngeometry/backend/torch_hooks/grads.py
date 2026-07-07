@@ -614,9 +614,6 @@ class EmbeddingJacobianFactory(JacobianFactory):
         check_embedding_arguments(mod)
         bs = x.size(0)
         x = F.one_hot(x, num_classes=layer.num_embeddings).to(gy.dtype)
-        if gy.ndim == 2:
-            gy = gy[:, None, :]
-            x = x[:, None, :]
         indiv_gw = torch.bmm(x.transpose(1, 2).to(gy.dtype), gy)
         G = indiv_gw.view(bs, mod.weight.size(0), -1)
         left_buffer.add_(torch.bmm(G.transpose(1, 2), G).sum(dim=0))
