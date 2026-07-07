@@ -696,15 +696,46 @@ class PMatBlockDiag(PMatAbstract):
 
 
 class PMatKFAC(PMatAbstract):
-    def __init__(self, layer_collection, generator, data=None, examples=None, **kwargs):
+    """
+    KFAC representation from
+    (1) Martens and Grosse, Optimizing neural networks with kronecker-factored approximate
+    curvature, ICML 2015
+    (2) Grosse and Martens, A kronecker-factored approximate fisher matrix for convolution
+    layers, ICML 2016
+    (3) Koroko, Anciaux-Sedrakian and Gharbia, Efficient approximations of the fisher matrix
+    in neural networks using kronecker product singular value decomposition, ESAIM 2023
+
+    :param strategy: How to compute Kronecker factors. "kfac" is the default
+    strategy from the KFAC/KFE papers, "one_iter_kpsvd" is one power iteration
+    as described in (3)
+    :type string:
+    """
+
+    def __init__(
+        self,
+        layer_collection,
+        generator,
+        data=None,
+        examples=None,
+        strategy="kfac",
+        **kwargs,
+    ):
         self._check_data_examples(data, examples)
 
         self.layer_collection = layer_collection
         self.generator = generator
         if data is None:
-            self.data = generator.get_kfac_blocks(
-                examples, layer_collection=layer_collection
-            )
+            if strategy == "kfac":
+                self.data = generator.get_kfac_blocks(
+                    examples, layer_collection=layer_collection
+                )
+            elif strategy == "one_iter_kpsvd":
+                self.data = generator.get_one_iter_kpsvd_blocks(
+                    examples, layer_collection=layer_collection
+                )
+            else:
+                raise NotImplementedError()
+
         else:
             self.data = data
 
@@ -949,7 +980,7 @@ class PMatKFAC(PMatAbstract):
         """
         prod = dict()
         for layer_id, (a, g) in self.data.items():
-            (a_other, g_other) = other.data[layer_id]
+            a_other, g_other = other.data[layer_id]
             prod[layer_id] = (torch.mm(a, a_other), torch.mm(g, g_other))
         return PMatKFAC(
             generator=self.generator, data=prod, layer_collection=self.layer_collection
@@ -971,6 +1002,7 @@ class PMatEKFAC(PMatAbstract):
         data=None,
         examples=None,
         eigendecomposition=None,
+        strategy="kfac",
         **kwargs,
     ):
         self._check_data_examples(data, examples)
@@ -985,9 +1017,17 @@ class PMatEKFAC(PMatAbstract):
             evecs = dict()
             diags = dict()
 
-            kfac_blocks = generator.get_kfac_blocks(
-                examples, layer_collection=layer_collection
-            )
+            if strategy == "kfac":
+                kfac_blocks = generator.get_kfac_blocks(
+                    examples, layer_collection=layer_collection
+                )
+            elif strategy == "one_iter_kpsvd":
+                kfac_blocks = generator.get_one_iter_kpsvd_blocks(
+                    examples, layer_collection=layer_collection
+                )
+            else:
+                raise NotImplementedError()
+
             for layer_id, layer in self.layer_collection.layers.items():
                 a, g = kfac_blocks[layer_id]
 
@@ -1253,11 +1293,9 @@ class PMatEKFAC(PMatAbstract):
     def _check_diag_updated(self):
         if self._kfac_coefficients:
             warnings.warn(
-                UserWarning(
-                    """It is required that you call .update_diag to obtain
+                UserWarning("""It is required that you call .update_diag to obtain
                           the true EKFAC matrix, otherwise the representation is equivalent
-                          to using KFAC"""
-                )
+                          to using KFAC""")
             )
 
     def _proj_to_kfe(self, v, evecs, layer):

@@ -164,6 +164,20 @@ class LinearJacobianFactory(JacobianFactory):
             buffer.add_((per_ex_kfe_grad**2).sum(dim=0).view(-1))
 
     @classmethod
+    def one_iter_kpsvd_blocks(cls, left_buffer, right_buffer, mod, layer, x, gy):
+        bs = x.size(0)
+        if gy.ndim == 2:
+            gy = gy[:, None, :]
+            x = x[:, None, :]
+        indiv_gw = torch.bmm(gy.transpose(1, 2), x)
+        G = indiv_gw.view(bs, mod.weight.size(0), -1)
+        if layer.has_bias():
+            indiv_gb = gy.transpose(1, 2)
+            G = torch.cat([G, indiv_gb], dim=2)
+        right_buffer.add_(torch.bmm(G.transpose(1, 2), G).sum(dim=0))
+        left_buffer.add_(torch.bmm(G, G.transpose(1, 2)).sum(dim=0))
+
+    @classmethod
     def quasidiag(cls, buffer_diag, buffer_cross, mod, layer, x, gy):
         w_numel = layer.weight.numel()
         buffer_diag[:w_numel].add_(torch.mm(gy.t() ** 2, x**2).view(-1))
@@ -181,6 +195,17 @@ class Conv2dJacobianFactory(JacobianFactory):
         buffer[:, :w_numel].add_(indiv_gw.view(bs, -1))
         if layer.has_bias():
             buffer[:, w_numel:].add_(gy.sum(dim=(2, 3)))
+
+    @classmethod
+    def one_iter_kpsvd_blocks(cls, left_buffer, right_buffer, mod, layer, x, gy):
+        bs = x.size(0)
+        indiv_gw = conv2d_backward(mod, x, gy)
+        G = indiv_gw.view(bs, mod.weight.size(0), -1)
+        if layer.has_bias():
+            indiv_gb = gy.sum(dim=(2, 3)).unsqueeze(2)
+            G = torch.cat([G, indiv_gb], dim=2)
+        right_buffer.add_(torch.bmm(G.transpose(1, 2), G).sum(dim=0))
+        left_buffer.add_(torch.bmm(G, G.transpose(1, 2)).sum(dim=0))
 
     @classmethod
     def Jv(cls, buffer, mod, layer, x, gy, v, v_bias):
@@ -446,6 +471,17 @@ class Conv1dJacobianFactory(JacobianFactory):
             buffer[:, w_numel:].add_(gy.sum(dim=2))
 
     @classmethod
+    def one_iter_kpsvd_blocks(cls, left_buffer, right_buffer, mod, layer, x, gy):
+        bs = x.size(0)
+        indiv_gw = conv1d_backward(mod, x, gy)
+        G = indiv_gw.view(bs, mod.weight.size(0), -1)
+        if layer.has_bias():
+            indiv_gb = gy.sum(dim=2).unsqueeze(2)
+            G = torch.cat([G, indiv_gb], dim=2)
+        left_buffer.add_(torch.bmm(G, G.transpose(1, 2)).sum(dim=0))
+        right_buffer.add_(torch.bmm(G.transpose(1, 2), G).sum(dim=0))
+
+    @classmethod
     def Jv(cls, buffer, mod, layer, x, gy, v, v_bias):
         bs = x.size(0)
         gy2 = F.conv1d(
@@ -519,14 +555,11 @@ class Conv1dJacobianFactory(JacobianFactory):
 def check_embedding_arguments(mod):
     # check that embedding layers are set up with supported arguments
     if mod.max_norm is not None or mod.scale_grad_by_freq or mod.sparse:
-        raise NotImplementedError(
-            """NNGeometry's Torch Hook backend can currently only
-            handle Embedding layers with default arguments"""
-        )
+        raise NotImplementedError("""NNGeometry's Torch Hook backend can currently only
+            handle Embedding layers with default arguments""")
 
 
 class EmbeddingJacobianFactory(JacobianFactory):
-
     @classmethod
     def flat_grad(cls, buffer, mod, layer, x, gy):
         check_embedding_arguments(mod)
@@ -575,6 +608,16 @@ class EmbeddingJacobianFactory(JacobianFactory):
         indiv_gw = torch.bmm(x_kfe.transpose(1, 2), gy_kfe).view(x_s[0], -1)
 
         buffer.add_((indiv_gw**2).sum(dim=0).view(-1))
+
+    @classmethod
+    def one_iter_kpsvd_blocks(cls, left_buffer, right_buffer, mod, layer, x, gy):
+        check_embedding_arguments(mod)
+        bs = x.size(0)
+        x = F.one_hot(x, num_classes=layer.num_embeddings).to(gy.dtype)
+        indiv_gw = torch.bmm(x.transpose(1, 2).to(gy.dtype), gy)
+        G = indiv_gw.view(bs, mod.weight.size(0), -1)
+        left_buffer.add_(torch.bmm(G.transpose(1, 2), G).sum(dim=0))
+        right_buffer.add_(torch.bmm(G, G.transpose(1, 2)).sum(dim=0))
 
 
 FactoryMap = {

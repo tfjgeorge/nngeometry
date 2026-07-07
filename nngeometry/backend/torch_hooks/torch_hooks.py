@@ -65,6 +65,73 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self.function = function
 
     @instance_buffer_handles
+    def get_one_iter_kpsvd_blocks(self, examples, layer_collection):
+        layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
+
+        self._handles += self._add_hooks(
+            self._hook_savex,
+            self._hook_compute_one_iter_kpsvd_blocks,
+            layerid_to_mod,
+            layer_collection,
+        )
+
+        device = self._check_same_device(layerid_to_mod.values())
+        dtype = self._check_same_dtype(layerid_to_mod.values())
+
+        loader = self._get_dataloader(examples)
+        n_examples = len(loader.sampler)
+        self._buffer["blocks"] = dict()
+
+        for layer_id, layer in layer_collection.layers.items():
+            layer_class = layer.__class__.__name__
+            if layer_class == "LinearLayer":
+                sG = layer.out_features
+                sA = layer.in_features
+            elif layer_class == "Conv2dLayer":
+                sG = layer.out_channels
+                sA = layer.in_channels * layer.kernel_size[0] * layer.kernel_size[1]
+            elif layer_class == "Conv1dLayer":
+                sG = layer.out_channels
+                sA = layer.in_channels * layer.kernel_size[0]
+            elif layer_class == "EmbeddingLayer":
+                sG = layer.embedding_dim
+                sA = layer.num_embeddings
+            if layer.has_bias():
+                sA += 1
+
+            self._buffer["blocks"][layer_id] = (
+                torch.zeros((sA, sA), device=device, dtype=dtype),  # Right block
+                torch.zeros((sG, sG), device=device, dtype=dtype),  # Left block
+            )
+
+        for d in self._get_iter_loader(loader):
+            self._buffer["xs"] = dict()
+            inputs = d[0]
+            grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
+
+            bs = inputs.size(0)
+            output = self.function(*d).view(bs, -1).sum(dim=0)
+            n_output = output.size(-1)
+
+            for self._buffer["i_output"] in range(n_output):
+                retain_graph = self._buffer["i_output"] < n_output - 1
+                torch.autograd.grad(
+                    output[self._buffer["i_output"]],
+                    grad_wrt,
+                    retain_graph=retain_graph,
+                    only_inputs=True,
+                )
+
+        for layer_id in layer_collection.layers.keys():
+            self._buffer["blocks"][layer_id][0].div_(n_examples / n_output**0.5)
+            self._buffer["blocks"][layer_id][1].div_(
+                torch.trace(self._buffer["blocks"][layer_id][1])
+            )
+            self._buffer["blocks"][layer_id][1].div_(n_output**0.5)
+
+        return self._buffer["blocks"]
+
+    @instance_buffer_handles
     def get_covariance_matrix(self, examples, layer_collection):
         layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
         # add hooks
@@ -464,9 +531,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
                             :,
                             self._buffer["e_outer"] : self._buffer["e_outer"]
                             + bs_outer,
-                        ].permute(
-                            2, 3, 0, 1
-                        )
+                        ].permute(2, 3, 0, 1)
                     self._buffer["e_inner"] += inputs_inner.size(0)
 
             self._buffer["e_outer"] += inputs_outer.size(0)
@@ -826,6 +891,18 @@ class TorchHooksJacobianBackend(AbstractBackend):
         layer = layer_collection[layer_id]
         block = self._buffer["blocks"][layer_id]
         FactoryMap[layer.__class__].layer_block(block, mod, layer, x, gy)
+
+    def _hook_compute_one_iter_kpsvd_blocks(self, mod, gy, layer_id, layer_collection):
+        mod_class = mod.__class__.__name__
+        x = self._buffer["xs"][mod]
+        layer = layer_collection[layer_id]
+        right_buffer, left_buffer = self._buffer["blocks"][layer_id]
+        if mod_class in ["Linear", "Conv2d", "Conv1d", "Embedding"]:
+            FactoryMap[layer.__class__].one_iter_kpsvd_blocks(
+                left_buffer, right_buffer, mod, layer, x, gy
+            )
+        else:
+            raise NotImplementedError
 
     def _hook_compute_kfac_blocks(self, mod, gy, layer_id, layer_collection):
         mod_class = mod.__class__.__name__

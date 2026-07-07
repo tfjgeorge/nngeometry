@@ -145,7 +145,7 @@ def make_test_deterministic():
     yield
 
 
-def test_jacobian_kfac_vs_pblockdiag():
+def test_torch_hooks_kfac_vs_pblockdiag():
     """
     Compares blockdiag and kfac representation on datasets/architectures
     where they are the same
@@ -170,7 +170,68 @@ def test_jacobian_kfac_vs_pblockdiag():
         torch.testing.assert_close(G_blockdiag, G_kfac * mult)
 
 
-def test_jacobian_kfac():
+def test_one_iter_kpsvd_vs_pblockdiag():
+    """
+    Compares blockdiag and kfac representation on datasets/architectures
+    where they are the same
+    """
+    for get_task, mult in zip(
+        [get_conv1dnet_kfc_task, get_convnet_kfc_task, get_fullyconnect_kfac_task],
+        [3.0, 15.0, 1.0],
+    ):
+        loader, lc, parameters, model, function = get_task()
+
+        generator = TorchHooksJacobianBackend(
+            model=model,
+            function=function,
+        )
+        M_one_iter_kpsvd = PMatKFAC(
+            generator=generator,
+            examples=loader,
+            layer_collection=lc,
+            strategy="one_iter_kpsvd",
+        )
+        M_blockdiag = PMatBlockDiag(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+
+        G_one_iter_kpsvd = M_one_iter_kpsvd.to_torch(split_weight_bias=True)
+        G_blockdiag = M_blockdiag.to_torch()
+        torch.testing.assert_close(G_blockdiag, G_one_iter_kpsvd)
+
+
+def test_kfac_vs_one_iter_kpsvd():
+    """
+    Check that KPSVD matrix is closer than KFAC to the BlockDiag one in the
+    sense of the Frobenius norm
+    """
+    for get_task in [
+        get_fullyconnect_task,
+        get_embedding_task,
+        get_conv1d_task,
+        get_conv_task,
+    ]:
+        loader, lc, parameters, model, function = get_task()
+        model.train()
+        generator = TorchHooksJacobianBackend(model=model, function=function)
+
+        M_kfac = PMatKFAC(generator=generator, examples=loader, layer_collection=lc)
+        M_one_iter_kpsvd = PMatKFAC(
+            generator=generator,
+            examples=loader,
+            layer_collection=lc,
+            strategy="one_iter_kpsvd",
+        )
+        M_blockdiag = PMatBlockDiag(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+
+        assert torch.norm(M_kfac.to_torch() - M_blockdiag.to_torch()) > torch.norm(
+            M_one_iter_kpsvd.to_torch() - M_blockdiag.to_torch()
+        )
+
+
+def test_kfac():
     for get_task in [
         get_embedding_task,
         get_conv1d_task,
@@ -244,6 +305,28 @@ def test_jacobian_kfac():
         )
 
 
+def test_kfac_mm():
+    for get_task in [get_fullyconnect_task, get_conv_task]:
+        loader, lc, parameters, model1, function1 = get_task()
+        _, _, _, model2, function2 = get_task()
+
+        generator1 = TorchHooksJacobianBackend(model=model1, function=function1)
+        generator2 = TorchHooksJacobianBackend(model=model2, function=function1)
+        M_kfac1 = PMatKFAC(generator=generator1, examples=loader, layer_collection=lc)
+        M_kfac2 = PMatKFAC(generator=generator2, examples=loader, layer_collection=lc)
+
+        prod = M_kfac1.mm(M_kfac2)
+
+        M_kfac1_tensor = M_kfac1.to_torch(split_weight_bias=True)
+        M_kfac2_tensor = M_kfac2.to_torch(split_weight_bias=True)
+
+        prod_tensor = prod.to_torch(split_weight_bias=True)
+
+        torch.testing.assert_close(
+            torch.mm(M_kfac1_tensor, M_kfac2_tensor), prod_tensor
+        )
+
+
 def test_pspace_kfac_eigendecomposition():
     """
     Check KFAC eigendecomposition by comparing Mv products with v
@@ -288,25 +371,3 @@ def test_pspace_kfac_eigendecomposition():
                 torch.testing.assert_close(
                     evals[l_id][0][i_a] * evals[l_id][1][i_g], norm_mv
                 )
-
-
-def test_kfac():
-    for get_task in [get_fullyconnect_task, get_conv_task]:
-        loader, lc, parameters, model1, function1 = get_task()
-        _, _, _, model2, function2 = get_task()
-
-        generator1 = TorchHooksJacobianBackend(model=model1, function=function1)
-        generator2 = TorchHooksJacobianBackend(model=model2, function=function1)
-        M_kfac1 = PMatKFAC(generator=generator1, examples=loader, layer_collection=lc)
-        M_kfac2 = PMatKFAC(generator=generator2, examples=loader, layer_collection=lc)
-
-        prod = M_kfac1.mm(M_kfac2)
-
-        M_kfac1_tensor = M_kfac1.to_torch(split_weight_bias=True)
-        M_kfac2_tensor = M_kfac2.to_torch(split_weight_bias=True)
-
-        prod_tensor = prod.to_torch(split_weight_bias=True)
-
-        torch.testing.assert_close(
-            torch.mm(M_kfac1_tensor, M_kfac2_tensor), prod_tensor
-        )
