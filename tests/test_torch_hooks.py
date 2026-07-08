@@ -269,6 +269,21 @@ def test_jacobian_eigendecomposition_pdense():
                 pmat_dense.to_torch(), evecs @ torch.diag_embed(evals) @ evecs.T
             )
 
+            # Test solve
+            # NB: regul is high since the matrix is not full rank
+            regul = 1e-3
+            dw = random_pvector(layer_collection=lc, device=device)
+            Mv_torch = torch.mv(pmat_dense.to_torch(), dw.to_torch())
+            Mv_regul = PVector(
+                layer_collection=lc, vector_repr=Mv_torch + regul * dw.to_torch()
+            )
+
+            torch.testing.assert_close(
+                dw.to_torch(),
+                pmat_dense.solve(Mv_regul, regul=regul, solve="eigendecomposition").to_torch(),
+            )
+
+
         with pytest.raises(NotImplementedError):
             pmat_dense.compute_eigendecomposition(impl="stupid")
 
@@ -397,11 +412,9 @@ def test_jacobian_pdense():
             Mv_regul = PVector(
                 layer_collection=lc, vector_repr=Mv_torch + regul * dw.to_torch()
             )
-            dw_solve = PMat_dense.solve(Mv_regul, regul=regul)
-            check_tensors(
+            torch.testing.assert_close(
                 dw.to_torch(),
-                dw_solve.to_torch(),
-                eps=5e-3,
+                PMat_dense.solve(Mv_regul, regul=regul).to_torch(),
             )
 
             # Test solve with jacobian
