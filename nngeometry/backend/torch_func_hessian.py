@@ -17,13 +17,7 @@ def hvp(func, primals, tangents):
 
 
 def batched_hvp(func, primals, batched_tangents):
-    return torch.vmap(
-        lambda tangents: torch.func.jvp(
-            lambda p: torch.func.grad(func)(p),
-            primals=(primals,),
-            tangents=(tangents,),
-        )[1]
-    )(batched_tangents)
+    return torch.vmap(lambda tangents: hvp(func, primals, tangents))(batched_tangents)
 
 
 class TorchFuncHessianBackend(AbstractBackend):
@@ -41,18 +35,20 @@ class TorchFuncHessianBackend(AbstractBackend):
         n_parameters = layer_collection.numel()
         H = torch.zeros((n_parameters, n_parameters), device=device, dtype=dtype)
 
-        def compute_loss(params, X, y):
-            prediction = torch.func.functional_call(self.model, params, (X,))
-            return self.function(prediction, y)
+        def compute_loss(params, inputs, targets):
+            prediction = torch.func.functional_call(self.model, params, (inputs,))
+            return self.function(prediction, targets)
 
         params_dict = dict(layer_collection.named_parameters(layerid_to_mod))
 
         for d in self._get_iter_loader(loader):
             inputs = d[0].to(device)
+            targets = d[1].to(device)
 
-            H_mb = torch.func.hessian(compute_loss)(
-                params_dict, inputs, d[1].to(device)
-            )
+            with torch.no_grad():
+                H_mb = torch.func.hessian(
+                    partial(compute_loss, inputs=inputs, targets=targets),
+                )(params_dict)
 
             for layer_id_x, layer_x in layer_collection.layers.items():
                 start_x = layer_collection.p_pos[layer_id_x]
@@ -123,6 +119,7 @@ class TorchFuncHessianBackend(AbstractBackend):
             return self.function(prediction, targets)
 
         params_dict = dict(layer_collection.named_parameters(layerid_to_mod))
+
         v_dict = {}  # replace with function in PVector ?
         for key, value in v.to_dict().items():
             if len(value) > 1:
@@ -137,11 +134,12 @@ class TorchFuncHessianBackend(AbstractBackend):
             inputs = d[0].to(device)
             targets = d[1].to(device)
 
-            hvp_mb = hvp(
-                partial(compute_loss, inputs=inputs, targets=targets),
-                params_dict,
-                v_dict,
-            )
+            with torch.no_grad():
+                hvp_mb = hvp(
+                    partial(compute_loss, inputs=inputs, targets=targets),
+                    params_dict,
+                    v_dict,
+                )
 
             for k in hvp_mb:
                 hvp_dict[k] += hvp_mb[k].detach()
@@ -171,6 +169,7 @@ class TorchFuncHessianBackend(AbstractBackend):
         so, sb, *_ = pfmap.size()
 
         params_dict = dict(layer_collection.named_parameters(layerid_to_mod))
+
         pfmap_dict = {}
         for layer_id, layer in layer_collection.layers.items():
             d = pfmap.to_torch_layer(layer_id)
@@ -189,11 +188,12 @@ class TorchFuncHessianBackend(AbstractBackend):
             inputs = d[0].to(device)
             targets = d[1].to(device)
 
-            b_hvp_mb = batched_hvp(
-                partial(compute_loss, inputs=inputs, targets=targets),
-                params_dict,
-                pfmap_dict,
-            )
+            with torch.no_grad():
+                b_hvp_mb = batched_hvp(
+                    partial(compute_loss, inputs=inputs, targets=targets),
+                    params_dict,
+                    pfmap_dict,
+                )
 
             for k in b_hvp_mb:
                 b_hvp_dict[k] += b_hvp_mb[k].detach()

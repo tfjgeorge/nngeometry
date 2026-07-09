@@ -2,3 +2,4 @@ __pycache__
 *.swp
 env
 uv.lock
+settings.json
