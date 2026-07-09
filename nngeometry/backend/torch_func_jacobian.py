@@ -43,7 +43,6 @@ class TorchFuncJacobianBackend(AbstractBackend):
                 return self.function(predictions, targets)
 
         params_dict = dict(layer_collection.named_parameters(layerid_to_mod))
-        params_dict = {k: v.detach() for k, v in params_dict.items()}
 
         v_dict = {}  # replace with function in PVector ?
         for key, value in v.to_dict().items():
@@ -62,9 +61,12 @@ class TorchFuncJacobianBackend(AbstractBackend):
             else:
                 targets = None
 
-            fvp_mb = fvp(
-                partial(function, inputs=inputs, targets=targets), params_dict, v_dict
-            )
+            with torch.no_grad():
+                fvp_mb = fvp(
+                    partial(function, inputs=inputs, targets=targets),
+                    params_dict,
+                    v_dict,
+                )
 
             for k in fvp_mb:
                 fvp_dict[k] += fvp_mb[k].detach()
@@ -101,7 +103,6 @@ class TorchFuncJacobianBackend(AbstractBackend):
         so, sb, *_ = pfmap.size()
 
         params_dict = dict(layer_collection.named_parameters(layerid_to_mod))
-        params_dict = {k: v.detach() for k, v in params_dict.items()}
 
         pfmap_dict = {}
         for layer_id, layer in layer_collection.layers.items():
@@ -124,11 +125,12 @@ class TorchFuncJacobianBackend(AbstractBackend):
             else:
                 targets = None
 
-            b_fvp_mb = batched_fvp(
-                partial(function, inputs=inputs, targets=targets),
-                params_dict,
-                pfmap_dict,
-            )
+            with torch.no_grad():
+                b_fvp_mb = batched_fvp(
+                    partial(function, inputs=inputs, targets=targets),
+                    params_dict,
+                    pfmap_dict,
+                )
 
             for k in b_fvp_mb:
                 b_fvp_dict[k] += b_fvp_mb[k].detach()
