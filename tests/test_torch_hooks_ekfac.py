@@ -28,11 +28,11 @@ def test_pspace_ekfac_vs_kfac():
     sense of the Frobenius norm
     """
     for get_task in [
+        get_conv_task,
         get_linear_3d_task,
         get_embedding_task,
         get_conv1d_task,
         get_fullyconnect_task,
-        get_conv_task,
     ]:
         loader, lc, parameters, model, function = get_task()
         model.train()
@@ -53,6 +53,7 @@ def test_pspace_ekfac_vs_kfac():
 
         # now we compute the exact diagonal:
         M_ekfac.update_diag(loader)
+
         assert torch.norm(M_kfac.to_torch() - M_blockdiag.to_torch()) > torch.norm(
             M_ekfac.to_torch() - M_blockdiag.to_torch()
         )

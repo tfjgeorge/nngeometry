@@ -863,7 +863,11 @@ class PMatKFAC(PMatAbstract):
         to the bias are mixed between coefficients of the weight matrix
         """
         s = self.layer_collection.numel()
-        M = torch.zeros((s, s), device=self.get_device())
+        M = torch.zeros(
+            (s, s),
+            device=self.get_device(),
+            dtype=next(iter(self.data.values()))[0].dtype,
+        )
         for layer_id, layer in self.layer_collection.layers.items():
             a, g = self.data[layer_id]
             start = self.layer_collection.p_pos[layer_id]

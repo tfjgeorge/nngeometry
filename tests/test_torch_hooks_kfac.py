@@ -9,7 +9,7 @@ from tasks import (
     get_embedding_task,
     get_fullyconnect_task,
     get_linear_3d_task,
-    get_mnist,
+    get_mnist1d_interpol,
     to_device_model,
 )
 from torch.utils.data import DataLoader, Subset
@@ -20,10 +20,6 @@ from nngeometry.layercollection import LayerCollection
 from nngeometry.maths import kronecker
 from nngeometry.object.pspace import PMatBlockDiag, PMatKFAC
 from nngeometry.object.vector import PVector, random_pvector
-
-default_datapath = "tmp"
-if "SLURM_TMPDIR" in os.environ:
-    default_datapath = os.path.join(os.environ["SLURM_TMPDIR"], "data")
 
 if torch.cuda.is_available():
     device = "cuda"
@@ -61,8 +57,7 @@ class Net(nn.Module):
 
 
 def get_fullyconnect_kfac_task(bs=300):
-    train_set = get_mnist()
-    train_set = Subset(train_set, range(1000))
+    train_set = get_mnist1d_interpol(subset=1000, img_size=28)
     train_set = to_onexdataset(train_set, device)
     train_loader = DataLoader(dataset=train_set, batch_size=bs, shuffle=False)
 
@@ -154,6 +149,7 @@ def test_torch_hooks_kfac_vs_pblockdiag():
         [get_conv1dnet_kfc_task, get_convnet_kfc_task, get_fullyconnect_kfac_task],
         [3.0, 15.0, 1.0],
     ):
+        print(get_task)
         loader, lc, parameters, model, function = get_task()
 
         generator = TorchHooksJacobianBackend(
