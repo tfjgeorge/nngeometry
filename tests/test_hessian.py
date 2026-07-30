@@ -83,7 +83,6 @@ def test_hessian_vs_FIM(representation):
 
 def test_Hdense_vs_Himplicit():
     for get_task in linear_tasks + nonlinear_tasks:
-        print(get_task)
         loader, lc, parameters, model, function = get_task()
         model.train()
 
