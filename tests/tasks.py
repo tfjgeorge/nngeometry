@@ -1,5 +1,6 @@
 import os
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as tF
@@ -9,12 +10,6 @@ from torchvision import datasets, transforms
 
 from nngeometry.layercollection import LayerCollection
 from nngeometry.layers import Affine1d, Cosine1d, WeightNorm1d, WeightNorm2d
-
-default_datapath = "/tmp/.mnist"
-if "SLURM_TMPDIR" in os.environ:
-    default_datapath = os.path.join(os.environ["SLURM_TMPDIR"], "data")
-elif "TMPDIR" in os.environ:
-    default_datapath = os.path.join(os.environ["TMPDIR"], "data")
 
 if torch.cuda.is_available():
     device = "cuda"
@@ -38,7 +33,7 @@ else:
 
 
 class FCNet(nn.Module):
-    def __init__(self, out_size=10, normalization="none"):
+    def __init__(self, in_size=12 * 12, out_size=10, normalization="none"):
         if normalization not in [
             "none",
             "batch_norm",
@@ -50,7 +45,7 @@ class FCNet(nn.Module):
             raise NotImplementedError
         super(FCNet, self).__init__()
         layers = []
-        sizes = [18 * 18, 10, 10, out_size]
+        sizes = [in_size, 10, 10, out_size]
         for i, (s_in, s_out) in enumerate(zip(sizes[:-1], sizes[1:])):
             if normalization == "weight_norm":
                 layers.append(WeightNorm1d(s_in, s_out))
@@ -72,7 +67,6 @@ class FCNet(nn.Module):
         self.net = nn.Sequential(*layers)
 
     def forward(self, x):
-        x = x[:, :, 5:-5, 5:-5].contiguous()
         x = x.view(x.size(0), -1)
         return self.net(x)
 
@@ -82,7 +76,7 @@ class FCNetSegmentation(nn.Module):
         super(FCNetSegmentation, self).__init__()
         layers = []
         self.out_size = out_size
-        sizes = [18 * 18, 10, 10, 4 * 4 * out_size]
+        sizes = [12 * 12, 10, 10, 4 * 4 * out_size]
         for s_in, s_out in zip(sizes[:-1], sizes[1:]):
             layers.append(nn.Linear(s_in, s_out))
             layers.append(nn.ReLU())
@@ -91,7 +85,6 @@ class FCNetSegmentation(nn.Module):
         self.net = nn.Sequential(*layers)
 
     def forward(self, x):
-        x = x[:, :, 5:-5, 5:-5].contiguous()
         x = x.view(x.size(0), -1)
         return self.net(x).view(-1, self.out_size, 4, 4)
 
@@ -174,8 +167,8 @@ class SmallConvNet(nn.Module):
 class LinearFCNet(nn.Module):
     def __init__(self):
         super(LinearFCNet, self).__init__()
-        self.fc1 = nn.Linear(28 * 28, 3)
-        self.fc2 = nn.Linear(28 * 28, 7, bias=False)
+        self.fc1 = nn.Linear(12 * 12, 3)
+        self.fc2 = nn.Linear(12 * 12, 7, bias=False)
 
     def forward(self, x):
         fc1_out = self.fc1(x.view(x.size(0), -1))
@@ -185,7 +178,7 @@ class LinearFCNet(nn.Module):
 
 
 def get_linear_fc_task():
-    train_set = get_mnist(n_classes=2, subset=70)
+    train_set = get_mnist1d_interpol(n_classes=2, subset=70)
     train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
     net = LinearFCNet()
     to_device_model(net)
@@ -240,7 +233,7 @@ class LinearConvNet(nn.Module):
 
 
 def get_linear_conv_task():
-    train_set = get_mnist(n_classes=2, subset=70)
+    train_set = get_mnist1d_interpol(n_classes=2, subset=70)
     train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
     net = LinearConvNet()
     to_device_model(net)
@@ -256,7 +249,7 @@ def get_linear_conv_task():
 class BatchNormFCLinearNet(nn.Module):
     def __init__(self):
         super(BatchNormFCLinearNet, self).__init__()
-        self.fc0 = nn.Linear(28 * 28, 100)
+        self.fc0 = nn.Linear(12 * 12, 100)
         self.bn1 = nn.BatchNorm1d(100)
         self.bn2 = nn.BatchNorm1d(100)
 
@@ -269,7 +262,7 @@ class BatchNormFCLinearNet(nn.Module):
 
 
 def get_batchnorm_fc_linear_task():
-    train_set = get_mnist(subset=70)
+    train_set = get_mnist1d_interpol(subset=70)
     train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
     net = BatchNormFCLinearNet()
     to_device_model(net)
@@ -306,7 +299,7 @@ class BatchNormConvLinearNet(nn.Module):
 
 
 def get_batchnorm_conv_linear_task():
-    train_set = get_mnist(subset=70)
+    train_set = get_mnist1d_interpol(subset=70)
     train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
     net = BatchNormConvLinearNet()
     to_device_model(net)
@@ -336,14 +329,12 @@ class BatchNormConv1dLinearNet(nn.Module):
         conv0_out = self.conv0(x.view(x.size(0), 1, -1))
         bn1_out = self.bn1(conv0_out)
         bn2_out = self.bn2(-conv0_out)
-        output = torch.stack(
-            [bn1_out.sum(dim=(1, 2)), bn2_out.sum(dim=(1, 2))], dim=1
-        )
+        output = torch.stack([bn1_out.sum(dim=(1, 2)), bn2_out.sum(dim=(1, 2))], dim=1)
         return output
 
 
 def get_batchnorm_conv1d_linear_task():
-    train_set = get_mnist(subset=70)
+    train_set = get_mnist1d_interpol(subset=70)
     train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
     net = BatchNormConv1dLinearNet()
     to_device_model(net)
@@ -374,7 +365,7 @@ class BatchNormNonLinearNet(nn.Module):
     def __init__(self):
         super(BatchNormNonLinearNet, self).__init__()
         self.bnconv = nn.BatchNorm2d(2)
-        self.bnfc = nn.BatchNorm1d(28 * 28)
+        self.bnfc = nn.BatchNorm1d(12 * 12)
         self.fc = nn.Linear(2352, 5)
 
     def forward(self, x):
@@ -390,7 +381,7 @@ class BatchNormNonLinearNet(nn.Module):
 
 
 def get_batchnorm_nonlinear_task():
-    train_set = get_mnist(subset=70)
+    train_set = get_mnist1d_interpol(subset=70)
     train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
     net = BatchNormNonLinearNet()
     to_device_model(net)
@@ -403,29 +394,40 @@ def get_batchnorm_nonlinear_task():
     return (train_loader, layer_collection, net.parameters(), net, output_fn)
 
 
-def get_mnist(n_classes=None, subset=None):
-    transform = transforms.Compose(
-        [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
-    )
-    mnist = datasets.MNIST(
-        root=default_datapath,
-        train=True,
-        download=True,
-        transform=transform,
-    )
+def get_mnist1d_interpol(n_classes=None, subset=55, img_size=12):
+    from mnist1d.data import get_dataset_args, make_dataset
 
-    if subset is None:
-        subset = len(mnist)
-    loader = DataLoader(mnist, subset)
-    x, y = next(iter(loader))
+    args = get_dataset_args()
+    args.num_samples = subset * 2
+    args.train_split = 1
+    args.padding = [2, 3]
+    args.max_translation = 3
+    args.final_seq_length = img_size
+    data = make_dataset(args)
+
+    # interpolate between each digit and the next one to get 2d images
+    data["x"] = data["x"].reshape(subset, 2, -1)
+    lspace = np.linspace(0, 1, img_size)
+    x_interpolated = (
+        lspace[None, None, :] * data["x"][:, 0, :, None]
+        + (1 - lspace[None, None, :]) * data["x"][:, 1, :, None]
+    )[:, None, :, :]
+    y_interpolated_random = data["y"].reshape(subset, 2)[
+        np.arange(subset), np.random.randint(2, size=subset)
+    ]
+
+    X, y = (
+        torch.from_numpy(x_interpolated),
+        torch.tensor(y_interpolated_random),
+    )
 
     if n_classes is not None:
         y = y % n_classes
-    return TensorDataset(to_device(x), y.to(device))
+    return TensorDataset(to_device(X), y.to(device))
 
 
 def get_fullyconnect_task(normalization="none", binary=False):
-    train_set = get_mnist(subset=70, n_classes=3)
+    train_set = get_mnist1d_interpol(subset=70, n_classes=3)
     train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
     if binary:
         net = FCNet(out_size=1, normalization=normalization)
@@ -478,7 +480,9 @@ def get_conv_cosine_task():
 
 
 def get_conv_task(normalization="none", small=False, binary=False):
-    train_set = get_mnist(subset=70, n_classes=2 if binary else 3)
+    train_set = get_mnist1d_interpol(
+        subset=70, n_classes=2 if binary else 3, img_size=16 if small else 28
+    )
     train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
     if small:
         net = SmallConvNet(normalization=normalization, binary=binary)
@@ -513,7 +517,7 @@ def get_fullyconnect_onlylast_task():
 
 
 def get_fullyconnect_segm_task():
-    train_set = get_mnist(subset=70)
+    train_set = get_mnist1d_interpol(subset=70)
     train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
     net = FCNetSegmentation(out_size=3)
     to_device_model(net)
@@ -544,7 +548,7 @@ class ConvNetWithSkipConnection(nn.Module):
 
 
 def get_conv_skip_task():
-    train_set = get_mnist(subset=70)
+    train_set = get_mnist1d_interpol(subset=70)
     train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
     net = ConvNetWithSkipConnection()
     to_device_model(net)
@@ -579,7 +583,7 @@ class Conv1dNet(nn.Module):
 
 
 def get_conv1d_task(normalization="none"):
-    train_set = get_mnist(subset=70)
+    train_set = get_mnist1d_interpol(subset=70, img_size=28)
     train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
     net = Conv1dNet(normalization=normalization)
     to_device_model(net)
@@ -596,7 +600,7 @@ class LayerNormNet(nn.Module):
     def __init__(self, out_size, bias, rms_norm):
         super(LayerNormNet, self).__init__()
 
-        self.linear1 = nn.Linear(18 * 18, out_size)
+        self.linear1 = nn.Linear(12 * 12, out_size)
         if rms_norm:
             assert bias is False
             self.layer_norm1 = nn.RMSNorm((out_size,))
@@ -606,13 +610,12 @@ class LayerNormNet(nn.Module):
         self.net = nn.Sequential(self.linear1, self.layer_norm1)
 
     def forward(self, x):
-        x = x[:, :, 5:-5, 5:-5].contiguous()
         x = x.view(x.size(0), -1)
         return self.net(x)
 
 
 def get_layernorm_task(bias=True, rms_norm=False):
-    train_set = get_mnist(subset=70)
+    train_set = get_mnist1d_interpol(subset=70)
     train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
     net = LayerNormNet(out_size=3, bias=bias, rms_norm=rms_norm)
     to_device_model(net)
@@ -643,7 +646,7 @@ class LayerNormConvNet(nn.Module):
 
 
 def get_layernorm_conv_task(bias=True, rms_norm=False):
-    train_set = get_mnist(subset=70)
+    train_set = get_mnist1d_interpol(subset=70, img_size=28)
     train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
     net = LayerNormConvNet(bias=bias, rms_norm=rms_norm)
     to_device_model(net)
@@ -672,6 +675,7 @@ def get_linear_3d_task():
     )
     train_loader = DataLoader(dataset=train_set, batch_size=7, shuffle=False)
     model = Linear3D()
+    to_device_model(model)
 
     def output_fn(input, target):
         return model(to_device(input))

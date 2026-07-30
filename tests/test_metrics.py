@@ -73,7 +73,7 @@ def test_FIM_MC_vs_linearization():
 
 
 def test_FIM_vs_linearization_classif_logits():
-    step = 1e-2
+    step = 1e-3
 
     for get_task in nonlinear_tasks:
         quots = []
