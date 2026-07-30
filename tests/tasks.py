@@ -325,6 +325,43 @@ def get_batchnorm_conv_linear_task():
     return (train_loader, layer_collection, parameters, net, output_fn)
 
 
+class BatchNormConv1dLinearNet(nn.Module):
+    def __init__(self):
+        super(BatchNormConv1dLinearNet, self).__init__()
+        self.conv0 = nn.Conv1d(1, 5, 3, 3)
+        self.bn1 = nn.BatchNorm1d(5)
+        self.bn2 = nn.BatchNorm1d(5)
+
+    def forward(self, x):
+        conv0_out = self.conv0(x.view(x.size(0), 1, -1))
+        bn1_out = self.bn1(conv0_out)
+        bn2_out = self.bn2(-conv0_out)
+        output = torch.stack(
+            [bn1_out.sum(dim=(1, 2)), bn2_out.sum(dim=(1, 2))], dim=1
+        )
+        return output
+
+
+def get_batchnorm_conv1d_linear_task():
+    train_set = get_mnist(subset=70)
+    train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
+    net = BatchNormConv1dLinearNet()
+    to_device_model(net)
+    net.eval()
+
+    def output_fn(input, target):
+        return net(to_device(input))
+
+    lc_full = LayerCollection.from_model(net)
+    layer_collection = LayerCollection()
+    # only keep fc1 and fc2
+    layer_collection.add_layer(*lc_full.layers.popitem())
+    layer_collection.add_layer(*lc_full.layers.popitem())
+    parameters = list(net.bn2.parameters()) + list(net.bn1.parameters())
+
+    return (train_loader, layer_collection, parameters, net, output_fn)
+
+
 class BatchNormNonLinearNet(nn.Module):
     """
     BN Layer followed by a Linear Layer

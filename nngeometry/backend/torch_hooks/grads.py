@@ -325,9 +325,10 @@ class BatchNorm1dJacobianFactory(JacobianFactory):
         x_normalized = F.batch_norm(
             x, mod.running_mean, mod.running_var, None, None, mod.training, momentum=0.0
         )
-        buffer[:, :w_numel].add_(gy * x_normalized)
+        bs = x.size(0)
+        buffer[:, :w_numel].add_((gy * x_normalized).view(bs, w_numel, -1).sum(dim=-1))
         if layer.has_bias():
-            buffer[:, w_numel:].add_(gy)
+            buffer[:, w_numel:].add_(gy.view(bs, w_numel, -1).sum(dim=-1))
 
 
 class BatchNorm2dJacobianFactory(JacobianFactory):
