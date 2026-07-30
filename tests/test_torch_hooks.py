@@ -4,6 +4,7 @@ import pytest
 import torch
 from tasks import (
     device,
+    get_batchnorm_conv1d_linear_task,
     get_batchnorm_conv_linear_task,
     get_batchnorm_fc_linear_task,
     get_conv1d_task,
@@ -52,6 +53,7 @@ linear_tasks = [
     get_batchnorm_fc_linear_task,
     get_batchnorm_conv_linear_task,
     get_fullyconnect_onlylast_task,
+    get_batchnorm_conv1d_linear_task,
 ]
 
 nonlinear_tasks = [
