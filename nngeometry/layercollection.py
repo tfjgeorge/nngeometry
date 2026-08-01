@@ -28,7 +28,6 @@ class LayerCollection:
         "LayerNorm",
         "Embedding",
         "RMSNorm",
-        "NonDynamicallyQuantizableLinear",
     ]
 
     def __init__(self, layers=None):

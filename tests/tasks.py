@@ -659,9 +659,6 @@ def get_layernorm_conv_task(bias=True, rms_norm=False):
     return (train_loader, layer_collection, net.parameters(), net, output_fn)
 
 
-import torch.nn.functional as F
-
-
 class Attention(nn.Module):
     def __init__(self, hidden_size):
         super().__init__()
@@ -673,10 +670,10 @@ class Attention(nn.Module):
 
     def forward(self, q, k, v):
         q, k, v = self.q_proj(q), self.k_proj(k), self.v_proj(v)
-        attention_weights = F.softmax(
+        attn_weights = tF.softmax(
             q @ k.transpose(1, 2) / (self.hidden_size**0.5), dim=-1
         )
-        return self.out_proj(attention_weights @ v), attention_weights
+        return self.out_proj(attn_weights @ v), attn_weights
 
 
 class ViT(nn.Module):
@@ -720,22 +717,33 @@ class ViT(nn.Module):
         attention, _ = self.attention(seq, seq, seq)
 
         res = seq + attention
-        res = res + F.relu(self.ffn(res))
+        res = res + tF.relu(self.ffn(res))
         return self.head(res[:, 0])
 
 
 def get_vit_task(torch_attention=False):
     train_set = get_mnist1d_interpol(subset=70, img_size=12)
     train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
-    net = ViT(image_size=12, torch_attention=torch_attention)
+    net = ViT(image_size=12, torch_attention=torch_attention, outputs=10)
     to_device_model(net)
     net.eval()
 
     def output_fn(input, target):
         return net(to_device(input))
 
-    layer_collection = LayerCollection.from_model(net)
-    return (train_loader, layer_collection, net.parameters(), net, output_fn)
+    layer_collection = LayerCollection.from_model(net, ignore_unsupported_layers=True)
+
+    to_remove = ["cls_token", "position_embeddings"]  # nn.Parameter
+    if torch_attention:
+        to_remove += ["attention"]
+
+    parameters = [
+        p
+        for n, p in net.named_parameters()
+        if not any([n.startswith(ln) for ln in to_remove])
+    ]
+
+    return (train_loader, layer_collection, parameters, net, output_fn)
 
 
 class Linear3D(nn.Module):

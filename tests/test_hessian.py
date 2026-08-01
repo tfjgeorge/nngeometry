@@ -1,3 +1,5 @@
+from functools import partial
+
 import pytest
 import torch
 from tasks import (
@@ -7,6 +9,7 @@ from tasks import (
     get_fullyconnect_task,
     get_linear_conv_task,
     get_linear_fc_task,
+    get_vit_task,
     to_device,
 )
 from utils import update_model
@@ -22,7 +25,12 @@ linear_tasks = [
     get_linear_conv_task,
     get_fullyconnect_onlylast_task,
 ]
-nonlinear_tasks = [get_fullyconnect_task, get_conv_task]
+nonlinear_tasks = [
+    get_fullyconnect_task,
+    get_conv_task,
+    get_vit_task,
+    partial(get_vit_task, torch_attention=True),
+]
 
 
 @pytest.fixture(autouse=True)
@@ -150,7 +158,7 @@ def test_H_vs_linearization():
         X, y = loader.dataset.tensors
         loss = torch.nn.functional.cross_entropy(model(X), y, reduction="sum")
 
-        params = PVector.from_model(model=model)
+        params = PVector.from_model(model=model, layer_collection=lc)
 
         grad_before = grad(loss, params)
 
