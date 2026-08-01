@@ -209,11 +209,10 @@ class Conv2dJacobianFactory(JacobianFactory):
 
     @classmethod
     def Jv(cls, buffer, mod, layer, x, gy, v, v_bias):
-        bs = x.size(0)
         gy2 = F.conv2d(
             x, v, stride=mod.stride, padding=mod.padding, dilation=mod.dilation
         )
-        buffer.add_((gy * gy2).view(bs, -1).sum(dim=1))
+        buffer.add_((gy * gy2).sum(dim=(1, 2, 3)))
         if layer.has_bias():
             buffer.add_(torch.mv(gy.sum(dim=(2, 3)), v_bias))
 
@@ -484,11 +483,10 @@ class Conv1dJacobianFactory(JacobianFactory):
 
     @classmethod
     def Jv(cls, buffer, mod, layer, x, gy, v, v_bias):
-        bs = x.size(0)
         gy2 = F.conv1d(
             x, v, stride=mod.stride, padding=mod.padding, dilation=mod.dilation
         )
-        buffer.add_((gy * gy2).view(bs, -1).sum(dim=1))
+        buffer.add_((gy * gy2).sum(dim=(1, 2)))
         if layer.has_bias():
             buffer.add_(torch.mv(gy.sum(dim=2), v_bias))
 

@@ -659,6 +659,85 @@ def get_layernorm_conv_task(bias=True, rms_norm=False):
     return (train_loader, layer_collection, net.parameters(), net, output_fn)
 
 
+import torch.nn.functional as F
+
+
+class Attention(nn.Module):
+    def __init__(self, hidden_size):
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.q_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.k_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.v_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.out_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+
+    def forward(self, q, k, v):
+        q, k, v = self.q_proj(q), self.k_proj(k), self.v_proj(v)
+        attention_weights = F.softmax(
+            q @ k.transpose(1, 2) / (self.hidden_size**0.5), dim=-1
+        )
+        return self.out_proj(attention_weights @ v), attention_weights
+
+
+class ViT(nn.Module):
+    def __init__(
+        self,
+        image_size=32,
+        patch_size=4,
+        in_channels=1,
+        hidden_size=8,
+        outputs=10,
+        torch_attention=False,
+    ):
+        super().__init__()
+        self.hidden_size = hidden_size
+        num_patches = (image_size // patch_size) ** 2
+
+        self.patch_embeddings = nn.Conv2d(
+            in_channels, hidden_size, kernel_size=patch_size, stride=patch_size
+        )
+        self.position_embeddings = nn.Parameter(
+            torch.randn(1, num_patches + 1, hidden_size)
+        )
+        self.cls_token = nn.Parameter(torch.randn(1, 1, hidden_size))
+
+        if torch_attention:
+            self.attention = nn.MultiheadAttention(
+                embed_dim=hidden_size, num_heads=1, batch_first=True, bias=False
+            )
+        else:
+            self.attention = Attention(hidden_size=hidden_size)
+
+        self.ffn = nn.Linear(hidden_size, hidden_size)
+        self.head = nn.Linear(hidden_size, outputs)
+
+    def forward(self, x):
+
+        patches = self.patch_embeddings(x).flatten(2).transpose(1, 2)
+        cls_token = self.cls_token.expand(x.size(0), -1, -1)
+        seq = torch.cat([cls_token, patches], dim=1) + self.position_embeddings
+
+        attention, _ = self.attention(seq, seq, seq)
+
+        res = seq + attention
+        res = res + F.relu(self.ffn(res))
+        return self.head(res[:, 0])
+
+
+def get_vit_task(torch_attention=False):
+    train_set = get_mnist1d_interpol(subset=70, img_size=12)
+    train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
+    net = ViT(image_size=12, torch_attention=torch_attention)
+    to_device_model(net)
+    net.eval()
+
+    def output_fn(input, target):
+        return net(to_device(input))
+
+    layer_collection = LayerCollection.from_model(net)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn)
+
+
 class Linear3D(nn.Module):
     def __init__(self):
         super(Linear3D, self).__init__()
