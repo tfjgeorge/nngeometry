@@ -37,31 +37,33 @@ def make_test_deterministic():
     yield
 
 
-@pytest.mark.parametrize("task", linear_tasks + nonlinear_tasks)
-def test_torch_hooks_vs_torch_func_fim(task):
-    loader, lc, parameters, model, function = task()
-    model.train()
+def test_torch_hooks_vs_torch_func_fim():
+    for get_task in linear_tasks + nonlinear_tasks:
+        loader, lc, parameters, model, function = get_task()
+        model.train()
 
-    F_hook = PMatImplicit(
-        generator=TorchHooksJacobianBackend(
-            model=model, function=lambda inputs, _: model(inputs)
-        ),
-        examples=loader,
-        layer_collection=lc,
-    )
+        F_hook = PMatImplicit(
+            generator=TorchHooksJacobianBackend(
+                model=model, function=lambda inputs, _: model(inputs)
+            ),
+            examples=loader,
+            layer_collection=lc,
+        )
 
-    F_func = PMatImplicit(
-        generator=TorchFuncJacobianBackend(
-            model=model, function=lambda predictions, _: predictions
-        ),
-        examples=loader,
-        layer_collection=lc,
-    )
+        F_func = PMatImplicit(
+            generator=TorchFuncJacobianBackend(
+                model=model, function=lambda predictions, _: predictions
+            ),
+            examples=loader,
+            layer_collection=lc,
+        )
 
-    dw = random_pvector(lc)
-    torch.testing.assert_close(F_hook.mv(dw).to_torch(), F_func.mv(dw).to_torch())
-    assert math.isclose(F_hook.vTMv(dw).item(), F_func.vTMv(dw).item(), abs_tol=1e-9)
+        dw = random_pvector(lc)
+        torch.testing.assert_close(F_hook.mv(dw).to_torch(), F_func.mv(dw).to_torch())
+        assert math.isclose(
+            F_hook.vTMv(dw).item(), F_func.vTMv(dw).item(), abs_tol=1e-9
+        )
 
-    x = random_pfmap(lc, (10, 3))
-    torch.testing.assert_close(F_hook.mmap(x).to_torch(), F_func.mmap(x).to_torch())
-    torch.testing.assert_close(F_hook.mapTMmap(x), F_func.mapTMmap(x))
+        x = random_pfmap(lc, (10, 3))
+        torch.testing.assert_close(F_hook.mmap(x).to_torch(), F_func.mmap(x).to_torch())
+        torch.testing.assert_close(F_hook.mapTMmap(x), F_func.mapTMmap(x))
