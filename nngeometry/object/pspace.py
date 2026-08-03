@@ -13,11 +13,10 @@ from nngeometry.layercollection import (
     LayerCollection,
     LinearLayer,
 )
+from nngeometry.maths import kronecker
 from nngeometry.object.map import PFMap, PFMapDense
+from nngeometry.object.vector import PVector
 from nngeometry.solve import cg
-
-from ..maths import kronecker
-from .vector import PVector
 
 
 class PMatAbstract(ABC):

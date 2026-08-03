@@ -4,36 +4,33 @@ from typing import Generic, TypeVar
 import torch
 
 from nngeometry.backend.dummy import DummyGenerator
-from nngeometry.object.fspace import FMatDense
-
-from .pspace import PMatDense
-from .vector import FVector, PVector, random_pvector
+from nngeometry.object.vector import FVector, PVector, random_pvector
 
 
 class PFMap(ABC):
     # a class for objects that link the parameter space
     # to the function space, i.e. PullBack or PushForward
     # or equivalently jacobian matrices
-    def mv(self, v: PVector) -> FVector:
+    def mv(self, v):
         return self.jvp(v)
 
-    def mm(self, map: "PFMapAdjoint[PFMapDense]") -> PMatDense:
+    def mm(self, map):
         return self.batched_jvp(map)
 
     @abstractmethod
-    def jvp(self, v: PVector) -> FVector:
+    def jvp(self, v):
         pass
 
     @abstractmethod
-    def vjp(self, v: FVector) -> PVector:
+    def vjp(self, v):
         pass
 
     @abstractmethod
-    def batched_jvp(self, map: "PFMapDense") -> FMatDense:
+    def batched_jvp(self, map):
         pass
 
     @abstractmethod
-    def batched_vjp(self, map: "PFMapDense") -> PMatDense:
+    def batched_vjp(self, map):
         pass
 
     def adjoint(self):
@@ -47,10 +44,10 @@ class PFMapAdjoint(Generic[T]):
     def __init__(self, pfmap):
         self._pfmap = pfmap
 
-    def mv(self, v: FVector) -> PVector:
+    def mv(self, v):
         return self._pfmap.vjp(v)
 
-    def mm(self, map: "PFMapDense") -> PMatDense:
+    def mm(self, map):
         return self._pfmap.batched_vjp(map)
 
     def adjoint(self) -> T:
@@ -90,6 +87,8 @@ class PFMapDense(PFMap):
         return PVector(self.layer_collection, vector_repr=v_flat)
 
     def batched_jvp(self, other):
+        from nngeometry.object.fspace import FMatDense
+
         gram = torch.mm(
             self.data.view(-1, self.data.size(-1)),
             other.data.view(-1, self.other.size(-1)).t(),
@@ -100,11 +99,13 @@ class PFMapDense(PFMap):
         return FMatDense(self.layer_collection, DummyGenerator(), data=gram)
 
     def batched_vjp(self, other):
+        from nngeometry.object.fspace import PMatDense
+
         cov = torch.mm(
             self.data.view(-1, self.data.size(-1)).t(),
             other.data.view(-1, self.other.size(-1)),
         )
-        return PMatDense(self.layer_collection, vector_repr=cov)
+        return PMatDense(self.layer_collection, DummyGenerator(), data=cov)
 
     def __add__(self, other):
         return PFMapDense(
