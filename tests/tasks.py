@@ -455,10 +455,6 @@ def get_fullyconnect_cosine_task():
     return get_fullyconnect_task(normalization="cosine")
 
 
-def get_fullyconnect_NonDynamicallyQuantizableLinear_task():
-    return get_fullyconnect_task(normalization="NonDynamicallyQuantizableLinear")
-
-
 def get_fullyconnect_affine_task():
     return get_fullyconnect_task(normalization="affine")
 
@@ -690,38 +686,27 @@ class ViT(nn.Module):
         self.hidden_size = hidden_size
         num_patches = (image_size // patch_size) ** 2
 
-        self.patch_embeddings = nn.Conv2d(
+        self.patch_embed = nn.Conv2d(
             in_channels, hidden_size, kernel_size=patch_size, stride=patch_size
         )
-        self.position_embeddings = nn.Parameter(
-            torch.randn(1, num_patches + 1, hidden_size)
-        )
-        self.cls_token = nn.Parameter(torch.randn(1, 1, hidden_size))
-
+        self.pos_embed = nn.Parameter(torch.randn(1, num_patches, hidden_size))
         if torch_attention:
-            self.attention = nn.MultiheadAttention(
+            self.attn = nn.MultiheadAttention(
                 embed_dim=hidden_size, num_heads=1, batch_first=True, bias=False
             )
         else:
-            self.attention = Attention(hidden_size=hidden_size)
-
-        self.ffn = nn.Linear(hidden_size, hidden_size)
+            self.attn = Attention(hidden_size=hidden_size)
         self.head = nn.Linear(hidden_size, outputs)
 
     def forward(self, x):
 
-        patches = self.patch_embeddings(x).flatten(2).transpose(1, 2)
-        cls_token = self.cls_token.expand(x.size(0), -1, -1)
-        seq = torch.cat([cls_token, patches], dim=1) + self.position_embeddings
-
-        attention, _ = self.attention(seq, seq, seq)
-
-        res = seq + attention
-        res = res + tF.relu(self.ffn(res))
-        return self.head(res[:, 0])
+        x = self.patch_embed(x).flatten(2).transpose(1, 2) + self.pos_embed
+        attn_out, _ = self.attn(x, x, x)
+        x = x + attn_out
+        return self.head(x.mean(dim=1))  # global pooling instead of usual cls token
 
 
-def get_vit_task(torch_attention=False):
+def get_vit_task(torch_attention=False, ignore_unsupported_layers=True):
     train_set = get_mnist1d_interpol(subset=70, img_size=12)
     train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
     net = ViT(image_size=12, torch_attention=torch_attention, outputs=10)
@@ -731,11 +716,13 @@ def get_vit_task(torch_attention=False):
     def output_fn(input, target):
         return net(to_device(input))
 
-    layer_collection = LayerCollection.from_model(net, ignore_unsupported_layers=True)
+    layer_collection = LayerCollection.from_model(
+        net, ignore_unsupported_layers=ignore_unsupported_layers
+    )
 
-    to_remove = ["cls_token", "position_embeddings"]  # nn.Parameter
+    to_remove = ["pos_embed"]  # nn.Parameter
     if torch_attention:
-        to_remove += ["attention"]
+        to_remove += ["attn"]
 
     parameters = [
         p

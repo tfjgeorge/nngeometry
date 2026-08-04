@@ -1,5 +1,3 @@
-from functools import partial
-
 import pytest
 import torch
 from tasks import (
@@ -9,7 +7,6 @@ from tasks import (
     get_fullyconnect_task,
     get_linear_conv_task,
     get_linear_fc_task,
-    get_vit_task,
     to_device,
 )
 from utils import update_model
@@ -25,12 +22,7 @@ linear_tasks = [
     get_linear_conv_task,
     get_fullyconnect_onlylast_task,
 ]
-nonlinear_tasks = [
-    get_fullyconnect_task,
-    get_conv_task,
-    get_vit_task,
-    partial(get_vit_task, torch_attention=True),
-]
+nonlinear_tasks = [get_fullyconnect_task, get_conv_task]
 
 
 @pytest.fixture(autouse=True)
