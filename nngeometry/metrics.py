@@ -196,6 +196,68 @@ def FIM(
     )
 
 
+def GradientSecondMoment(
+    model,
+    loader,
+    representation,
+    device="cpu",
+    function=None,
+    layer_collection=None,
+    centering=False,
+    verbose=False,
+    **kwargs,
+):
+    """
+    The second moment of gradients (when centering=False), or variance-covariance
+    matrix of the gradients (when centering=True), is also sometimes called the
+    empirical Fisher.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        The model that contains all parameters of the function
+    loader : torch.utils.data.DataLoader
+        DataLoader for computing expectation over the input space
+    representation : class
+        The parameter matrix representation that will be used to store
+        the matrix
+    device : string, optional (default='cpu')
+        Target device for the returned matrix
+    function : function, optional (default=None)
+        An optional function if different from `model(input)`. If
+        it is different from None, it will override the device
+        parameter.
+    layer_collection : layercollection.LayerCollection, optional
+            (default=None)
+        An optional layer collection
+    centering : bool
+        Compute the uncentered second moment, or the centered covariance
+        matrix
+    """
+
+    if function is None:
+
+        def function(*d):
+            return model(d[0].to(device))
+
+    if layer_collection is None:
+        layer_collection = LayerCollection.from_model(model)
+
+    def function_ef(*d):
+        return function(model(d[0].to(device)), d[1].to(device))
+
+    generator = TorchHooksJacobianBackend(
+        model=model, function=function_ef, verbose=verbose, centering=centering
+    )
+
+    return representation(
+        generator=generator,
+        examples=loader,
+        layer_collection=layer_collection,
+        **kwargs,
+    )
+
+
 class FIM_Types(StrEnum):
     CLASSIF_LOGITS = "classif_logits"
     CLASSIF_BINARY_LOGITS = "classif_binary_logits"
@@ -249,31 +311,3 @@ SQRT_VAR = {
     FIM_Types.CLASSIF_BINARY_LOGITS: sqrt_var_classif_binary_logits,
     FIM_Types.REGRESSION: sqrt_var_regression,
 }
-
-
-def EF(
-    model,
-    loader,
-    representation,
-    function,
-    layer_collection=None,
-    verbose=False,
-    device="cpu",
-    **kwargs,
-):
-    if layer_collection is None:
-        layer_collection = LayerCollection.from_model(model)
-
-    def function_ef(*d):
-        return function(model(d[0].to(device)), d[1].to(device))
-
-    generator = TorchHooksJacobianBackend(
-        model=model, function=function_ef, verbose=verbose
-    )
-
-    return representation(
-        generator=generator,
-        examples=loader,
-        layer_collection=layer_collection,
-        **kwargs,
-    )

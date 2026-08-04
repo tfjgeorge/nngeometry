@@ -12,7 +12,7 @@ from tasks import (
 from utils import get_output_vector, update_model
 
 from nngeometry.metrics import (
-    EF,
+    GradientSecondMoment,
     FIM,
     FIM_MonteCarlo,
     sqrt_var_classif_binary_logits,
@@ -272,7 +272,7 @@ def test_FIM_MC_vs_linearization_segmentation():
         assert mean_quotient > 1 - 5e-2 and mean_quotient < 1 + 5e-2
 
 
-def test_FIM_vs_EF_with_sqrt_var():
+def test_FIM_vs_GradientSecondMoment_with_sqrt_var():
 
     for get_task in nonlinear_tasks:
         for binary in [True, False]:
@@ -292,7 +292,7 @@ def test_FIM_vs_EF_with_sqrt_var():
             else:
                 ll_fn = lambda outputs, targets: sqrt_var_classif_logits(outputs)
 
-            Ft = EF(
+            Ft = GradientSecondMoment(
                 layer_collection=lc,
                 model=model,
                 loader=loader,
