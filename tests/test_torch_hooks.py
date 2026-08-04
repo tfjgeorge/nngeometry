@@ -96,7 +96,7 @@ def test_jacobian_pushforward_dense_linear():
         )
         dw = random_pvector(layer_collection=lc, device=device)
 
-        doutput_lin = push_forward.mv(dw)
+        doutput_lin = push_forward.jvp(dw)
 
         output_before = get_output_vector(loader, function)
         update_model(parameters, dw.to_torch())
@@ -118,7 +118,7 @@ def test_jacobian_pushforward_dense_nonlinear():
         dw = random_pvector(layer_collection=lc, device=device)
         dw = 1e-5 / dw.norm() * dw
 
-        doutput_lin = push_forward.mv(dw)
+        doutput_lin = push_forward.jvp(dw)
 
         output_before = get_output_vector(loader, function)
         update_model(parameters, dw.to_torch())
@@ -148,8 +148,8 @@ def test_jacobian_pushforward_implicit():
         )
         dw = random_pvector(layer_collection=lc, device=device)
 
-        doutput_lin_dense = dense_push_forward.mv(dw)
-        doutput_lin_implicit = implicit_push_forward.mv(dw)
+        doutput_lin_dense = dense_push_forward.jvp(dw)
+        doutput_lin_implicit = implicit_push_forward.jvp(dw)
 
         check_tensors(
             doutput_lin_dense.to_torch(),
@@ -172,8 +172,8 @@ def test_jacobian_pullback_dense():
         )
         dw = random_pvector(layer_collection=lc, device=device)
 
-        doutput_lin = push_forward.mv(dw)
-        dinput_lin = pull_back.adjoint().mv(doutput_lin)
+        doutput_lin = push_forward.jvp(dw)
+        dinput_lin = pull_back.vjp(doutput_lin)
         check_ratio(
             torch.dot(dw.to_torch(), dinput_lin.to_torch()),
             torch.norm(doutput_lin.to_torch()) ** 2,
@@ -213,7 +213,7 @@ def test_jacobian_fdense_vs_pullback():
 
             # Test vTMv
             vTMv_FMat = FMat_dense.vTMv(df)
-            Jv_pullback = pull_back.adjoint().mv(df).to_torch()
+            Jv_pullback = pull_back.vjp(df).to_torch()
             vTMv_pullforward = torch.dot(Jv_pullback, Jv_pullback)
             check_ratio(vTMv_pullforward, vTMv_FMat)
 
@@ -336,7 +336,7 @@ def test_jacobian_pdense_vs_pushforward():
 
             # Test vTMv
             vTMv_PMat = PMat_dense.vTMv(dw)
-            Jv_pushforward = push_forward.mv(dw)
+            Jv_pushforward = push_forward.jvp(dw)
             Jv_pushforward_flat = Jv_pushforward.to_torch()
             vTMv_pushforward = (
                 torch.dot(Jv_pushforward_flat.view(-1), Jv_pushforward_flat.view(-1))
@@ -346,7 +346,7 @@ def test_jacobian_pdense_vs_pushforward():
 
             # Test Mv
             Mv_PMat = PMat_dense.mv(dw)
-            Mv_pf_pb = pull_back.adjoint().mv(Jv_pushforward)
+            Mv_pf_pb = pull_back.vjp(Jv_pushforward)
             check_tensors(
                 Mv_pf_pb.to_torch() / n,
                 Mv_PMat.to_torch(),

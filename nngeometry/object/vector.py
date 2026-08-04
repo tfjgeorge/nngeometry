@@ -387,7 +387,10 @@ class PVector:
             return dot_
 
     def __matmul__(self, other):
-        return self.dot(other)
+        if isinstance(other, PVector):
+            return self.dot(other)
+        else:
+            return NotImplemented
 
     def size(self):
         """

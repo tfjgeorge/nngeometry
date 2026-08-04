@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
 
 import torch
 
@@ -8,53 +7,59 @@ from nngeometry.object.vector import FVector, PVector, random_pvector
 
 
 class PFMap(ABC):
-    # a class for objects that link the parameter space
-    # to the function space, i.e. PullBack or PushForward
-    # or equivalently jacobian matrices
-    def mv(self, v):
-        return self.jvp(v)
+    def __matmul__(self, other):
+        if isinstance(other, PVector):
+            return self.jvp(other)
+        elif isinstance(other, PFMapAdjoint):
+            return self.batched_jvp(other.adjoint())
+        else:
+            return NotImplemented
 
-    def mm(self, map):
-        return self.batched_jvp(map)
+    def __rmatmul__(self, other):
+        return self.adjoint() @ other
 
     @abstractmethod
     def jvp(self, v):
         pass
 
     @abstractmethod
+    def batched_jvp(self, pfmap):
+        pass
+
+
+class AdjointMixin:
+    @abstractmethod
     def vjp(self, v):
         pass
 
     @abstractmethod
-    def batched_jvp(self, map):
-        pass
-
-    @abstractmethod
-    def batched_vjp(self, map):
+    def batched_vjp(self, pfmap):
         pass
 
     def adjoint(self):
         return PFMapAdjoint(self)
 
 
-T = TypeVar("T", bound=PFMap)
-
-
-class PFMapAdjoint(Generic[T]):
+class PFMapAdjoint:
     def __init__(self, pfmap):
-        self._pfmap = pfmap
+        self.pfmap = pfmap
 
-    def mv(self, v):
-        return self._pfmap.vjp(v)
+    def __matmul__(self, other):
+        if isinstance(other, FVector):
+            return self.pfmap.vjp(other)
+        elif isinstance(other, PFMap):
+            return self.pfmap.batched_vjp(other)
+        else:
+            return NotImplemented
 
-    def mm(self, map):
-        return self._pfmap.batched_vjp(map)
+    def __rmatmul__(self, other):
+        return self.adjoint() @ other
 
-    def adjoint(self) -> T:
-        return self._pfmap
+    def adjoint(self):
+        return self.pfmap
 
 
-class PFMapDense(PFMap):
+class PFMapDense(PFMap, AdjointMixin):
     def __init__(self, layer_collection, generator=None, data=None, examples=None):
         self.generator = generator
         self.layer_collection = layer_collection
@@ -86,26 +91,36 @@ class PFMapDense(PFMap):
         )
         return PVector(self.layer_collection, vector_repr=v_flat)
 
-    def batched_jvp(self, other):
+    def batched_jvp(self, pfmap):
         from nngeometry.object.fspace import FMatDense
 
+        pfmap = pfmap.to_torch()
         gram = torch.mm(
             self.data.view(-1, self.data.size(-1)),
-            other.data.view(-1, self.other.size(-1)).t(),
+            pfmap.view(-1, pfmap.size(-1)).t(),
         )
         gram = gram.view(
-            self.data.size(0), self.data.size(1), self.other.size(0), self.other.size(1)
+            self.data.size(0), self.data.size(1), pfmap.size(0), pfmap.size(1)
         )
-        return FMatDense(self.layer_collection, DummyGenerator(), data=gram)
+        return FMatDense(
+            self.layer_collection,
+            DummyGenerator(self.data.device),
+            data=gram,
+        )
 
-    def batched_vjp(self, other):
-        from nngeometry.object.fspace import PMatDense
+    def batched_vjp(self, pfmap):
+        from nngeometry.object.pspace import PMatDense
 
+        pfmap = pfmap.to_torch()
         cov = torch.mm(
             self.data.view(-1, self.data.size(-1)).t(),
-            other.data.view(-1, self.other.size(-1)),
+            pfmap.view(-1, pfmap.size(-1)),
         )
-        return PMatDense(self.layer_collection, DummyGenerator(), data=cov)
+        return PMatDense(
+            self.layer_collection,
+            DummyGenerator(self.data.device),
+            data=cov,
+        )
 
     def __add__(self, other):
         return PFMapDense(
@@ -178,6 +193,9 @@ class PFMapImplicit(PFMap):
 
     def jvp(self, v):
         return self.generator.implicit_Jv(v, self.examples, self.layer_collection)
+
+    def batched_jvp(self, pfmap):
+        raise NotImplementedError()
 
 
 def random_pfmap(layer_collection, output_size, device=None, dtype=torch.float64):
