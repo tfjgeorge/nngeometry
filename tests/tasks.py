@@ -40,7 +40,6 @@ class FCNet(nn.Module):
             "weight_norm",
             "cosine",
             "affine",
-            "NonDynamicallyQuantizableLinear",
         ]:
             raise NotImplementedError
         super(FCNet, self).__init__()
@@ -51,10 +50,6 @@ class FCNet(nn.Module):
                 layers.append(WeightNorm1d(s_in, s_out))
             elif normalization == "cosine":
                 layers.append(Cosine1d(s_in, s_out))
-            elif normalization == "NonDynamicallyQuantizableLinear":
-                layers.append(
-                    nn.modules.linear.NonDynamicallyQuantizableLinear(s_in, s_out)
-                )
             else:
                 layers.append(nn.Linear(s_in, s_out, bias=(normalization == "none")))
             if normalization == "batch_norm":
@@ -672,7 +667,7 @@ class Attention(nn.Module):
         return self.out_proj(attn_weights @ v), attn_weights
 
 
-class ViT(nn.Module):
+class Simplified_ViT(nn.Module):
     def __init__(
         self,
         image_size=32,
@@ -684,12 +679,10 @@ class ViT(nn.Module):
     ):
         super().__init__()
         self.hidden_size = hidden_size
-        num_patches = (image_size // patch_size) ** 2
 
         self.patch_embed = nn.Conv2d(
             in_channels, hidden_size, kernel_size=patch_size, stride=patch_size
         )
-        self.pos_embed = nn.Parameter(torch.randn(1, num_patches, hidden_size))
         if torch_attention:
             self.attn = nn.MultiheadAttention(
                 embed_dim=hidden_size, num_heads=1, batch_first=True, bias=False
@@ -700,7 +693,7 @@ class ViT(nn.Module):
 
     def forward(self, x):
 
-        x = self.patch_embed(x).flatten(2).transpose(1, 2) + self.pos_embed
+        x = self.patch_embed(x).flatten(2).transpose(1, 2)
         attn_out, _ = self.attn(x, x, x)
         x = x + attn_out
         return self.head(x.mean(dim=1))  # global pooling instead of usual cls token
@@ -709,7 +702,7 @@ class ViT(nn.Module):
 def get_vit_task(torch_attention=False, ignore_unsupported_layers=True):
     train_set = get_mnist1d_interpol(subset=70, img_size=12)
     train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
-    net = ViT(image_size=12, torch_attention=torch_attention, outputs=10)
+    net = Simplified_ViT(image_size=12, torch_attention=torch_attention, outputs=10)
     to_device_model(net)
     net.eval()
 
@@ -720,17 +713,7 @@ def get_vit_task(torch_attention=False, ignore_unsupported_layers=True):
         net, ignore_unsupported_layers=ignore_unsupported_layers
     )
 
-    to_remove = ["pos_embed"]  # nn.Parameter
-    if torch_attention:
-        to_remove += ["attn"]
-
-    parameters = [
-        p
-        for n, p in net.named_parameters()
-        if not any([n.startswith(ln) for ln in to_remove])
-    ]
-
-    return (train_loader, layer_collection, parameters, net, output_fn)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn)
 
 
 class Linear3D(nn.Module):
