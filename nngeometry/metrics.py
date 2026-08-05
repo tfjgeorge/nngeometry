@@ -210,7 +210,8 @@ def GradientSecondMoment(
     """
     The second moment of gradients (when centering=False), or variance-covariance
     matrix of the gradients (when centering=True), is also sometimes called the
-    empirical Fisher.
+    empirical Fisher. These are the gradients of the function parameter, w.r.t.
+    parameters of the layer_collection parameter.
 
     Parameters
     ----------
@@ -243,11 +244,8 @@ def GradientSecondMoment(
     if layer_collection is None:
         layer_collection = LayerCollection.from_model(model)
 
-    def function_ef(*d):
-        return function(model(d[0].to(device)), d[1].to(device))
-
     generator = TorchHooksJacobianBackend(
-        model=model, function=function_ef, verbose=verbose, centering=centering
+        model=model, function=function, verbose=verbose, centering=centering
     )
 
     return representation(

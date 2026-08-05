@@ -12,9 +12,9 @@ from tasks import (
 from utils import get_output_vector, update_model
 
 from nngeometry.metrics import (
-    GradientSecondMoment,
     FIM,
     FIM_MonteCarlo,
+    GradientSecondMoment,
     sqrt_var_classif_binary_logits,
     sqrt_var_classif_logits,
 )
@@ -288,9 +288,11 @@ def test_FIM_vs_GradientSecondMoment_with_sqrt_var():
             )
 
             if binary:
-                ll_fn = lambda outputs, targets: sqrt_var_classif_binary_logits(outputs)
+                ll_fn = lambda outputs, targets: sqrt_var_classif_binary_logits(
+                    model(outputs)
+                )
             else:
-                ll_fn = lambda outputs, targets: sqrt_var_classif_logits(outputs)
+                ll_fn = lambda outputs, targets: sqrt_var_classif_logits(model(outputs))
 
             Ft = GradientSecondMoment(
                 layer_collection=lc,
@@ -302,3 +304,11 @@ def test_FIM_vs_GradientSecondMoment_with_sqrt_var():
             )
 
             torch.testing.assert_close(F.to_torch(), Ft.to_torch())
+
+    # Test function and LayerCollection are None
+    GradientSecondMoment(
+        model=model,
+        loader=loader,
+        representation=PMatDense,
+        device=device,
+    )
