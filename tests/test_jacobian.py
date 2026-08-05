@@ -1,3 +1,4 @@
+import pytest
 import torch
 from tasks import get_conv_gn_task, get_conv_task, get_fullyconnect_task
 
@@ -45,3 +46,12 @@ def test_jacobian():
         torch.testing.assert_close(
             (df @ jacobian).to_torch(), (jacobian.adjoint() @ df).to_torch()
         )
+
+        with pytest.raises(TypeError):
+            jacobian.adjoint() @ jacobian.adjoint()
+        with pytest.raises(TypeError):
+            jacobian @ jacobian
+        with pytest.raises(TypeError):
+            jacobian.adjoint() @ dw
+        with pytest.raises(TypeError):
+            df @ jacobian.adjoint()
