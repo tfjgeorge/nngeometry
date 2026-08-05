@@ -62,6 +62,12 @@ dev=[
 [tool.coverage.run]
 omit = ["tests/*"]
 
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "@abstractmethod"
+]
+
 [tool.ruff]
 line-length = 88
 exclude = ["docs"]
