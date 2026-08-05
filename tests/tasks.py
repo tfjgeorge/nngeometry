@@ -40,7 +40,6 @@ class FCNet(nn.Module):
             "weight_norm",
             "cosine",
             "affine",
-            "NonDynamicallyQuantizableLinear",
         ]:
             raise NotImplementedError
         super(FCNet, self).__init__()
@@ -51,10 +50,6 @@ class FCNet(nn.Module):
                 layers.append(WeightNorm1d(s_in, s_out))
             elif normalization == "cosine":
                 layers.append(Cosine1d(s_in, s_out))
-            elif normalization == "NonDynamicallyQuantizableLinear":
-                layers.append(
-                    nn.modules.linear.NonDynamicallyQuantizableLinear(s_in, s_out)
-                )
             else:
                 layers.append(nn.Linear(s_in, s_out, bias=(normalization == "none")))
             if normalization == "batch_norm":
@@ -455,10 +450,6 @@ def get_fullyconnect_cosine_task():
     return get_fullyconnect_task(normalization="cosine")
 
 
-def get_fullyconnect_NonDynamicallyQuantizableLinear_task():
-    return get_fullyconnect_task(normalization="NonDynamicallyQuantizableLinear")
-
-
 def get_fullyconnect_affine_task():
     return get_fullyconnect_task(normalization="affine")
 
@@ -656,6 +647,72 @@ def get_layernorm_conv_task(bias=True, rms_norm=False):
         return net(to_device(input))
 
     layer_collection = LayerCollection.from_model(net)
+    return (train_loader, layer_collection, net.parameters(), net, output_fn)
+
+
+class Attention(nn.Module):
+    def __init__(self, hidden_size):
+        super().__init__()
+        self.hidden_size = hidden_size
+        self.q_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.k_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.v_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.out_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+
+    def forward(self, q, k, v):
+        q, k, v = self.q_proj(q), self.k_proj(k), self.v_proj(v)
+        attn_weights = tF.softmax(
+            q @ k.transpose(1, 2) / (self.hidden_size**0.5), dim=-1
+        )
+        return self.out_proj(attn_weights @ v), attn_weights
+
+
+class Simplified_ViT(nn.Module):
+    def __init__(
+        self,
+        image_size=32,
+        patch_size=4,
+        in_channels=1,
+        hidden_size=8,
+        outputs=10,
+        torch_attention=False,
+    ):
+        super().__init__()
+        self.hidden_size = hidden_size
+
+        self.patch_embed = nn.Conv2d(
+            in_channels, hidden_size, kernel_size=patch_size, stride=patch_size
+        )
+        if torch_attention:
+            self.attn = nn.MultiheadAttention(
+                embed_dim=hidden_size, num_heads=1, batch_first=True, bias=False
+            )
+        else:
+            self.attn = Attention(hidden_size=hidden_size)
+        self.head = nn.Linear(hidden_size, outputs)
+
+    def forward(self, x):
+
+        x = self.patch_embed(x).flatten(2).transpose(1, 2)
+        attn_out, _ = self.attn(x, x, x)
+        x = x + attn_out
+        return self.head(x.mean(dim=1))  # global pooling instead of usual cls token
+
+
+def get_vit_task(torch_attention=False, ignore_unsupported_layers=True):
+    train_set = get_mnist1d_interpol(subset=70, img_size=12)
+    train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
+    net = Simplified_ViT(image_size=12, torch_attention=torch_attention, outputs=10)
+    to_device_model(net)
+    net.eval()
+
+    def output_fn(input, target):
+        return net(to_device(input))
+
+    layer_collection = LayerCollection.from_model(
+        net, ignore_unsupported_layers=ignore_unsupported_layers
+    )
+
     return (train_loader, layer_collection, net.parameters(), net, output_fn)
 
 

@@ -150,7 +150,7 @@ def test_H_vs_linearization():
         X, y = loader.dataset.tensors
         loss = torch.nn.functional.cross_entropy(model(X), y, reduction="sum")
 
-        params = PVector.from_model(model=model)
+        params = PVector.from_model(model=model, layer_collection=lc)
 
         grad_before = grad(loss, params)
 

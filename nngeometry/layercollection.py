@@ -28,7 +28,6 @@ class LayerCollection:
         "LayerNorm",
         "Embedding",
         "RMSNorm",
-        "NonDynamicallyQuantizableLinear",
     ]
 
     def __init__(self, layers=None):
@@ -60,7 +59,7 @@ class LayerCollection:
             if mod_class in LayerCollection._known_modules:
                 lc.add_layer(layer, LayerCollection._module_to_layer(mod))
             elif not ignore_unsupported_layers:
-                if len(list(mod.children())) == 0 and len(list(mod.parameters())) > 0:
+                if len(mod._parameters) > 0:  # mod has its own parameters?
                     raise Exception("I do not know what to do with layer " + str(mod))
 
         return lc
