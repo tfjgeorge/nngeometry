@@ -7,6 +7,10 @@ from nngeometry.object.vector import FVector, PVector, random_pvector
 
 
 class PFMap(ABC):
+    # PFMaps are objects that link the parameter space
+    # to the function space, i.e. PullBack or PushForward
+    # (practically speaking, jacobian matrices)
+
     def __matmul__(self, other):
         if isinstance(other, PVector):
             return self.jvp(other)
