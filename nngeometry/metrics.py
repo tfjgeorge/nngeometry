@@ -213,6 +213,9 @@ def GradientSecondMoment(
     empirical Fisher. These are the gradients of the function parameter, w.r.t.
     parameters of the layer_collection parameter.
 
+    see e.g. Thomas et al., 2020, On the interplay between noise and curvature
+    and its effect on optimization and generalization
+
     Parameters
     ----------
     model : torch.nn.Module
