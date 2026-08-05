@@ -20,6 +20,7 @@ from tasks import (
     get_layernorm_3d_task,
     get_layernorm_conv_task,
     get_layernorm_task,
+    get_lazy_fullyconnect_task,
     get_linear_3d_task,
     get_linear_conv_task,
     get_linear_fc_task,
@@ -32,6 +33,7 @@ from utils import check_ratio, check_tensors, get_output_vector, update_model
 
 from nngeometry import Jacobian
 from nngeometry.backend import TorchHooksJacobianBackend
+from nngeometry.layercollection import LayerCollection
 from nngeometry.object.fspace import FMatDense
 from nngeometry.object.map import PFMapDense, PFMapImplicit, random_pfmap
 from nngeometry.object.pspace import (
@@ -74,7 +76,7 @@ nonlinear_tasks = [
     get_small_conv_wn_task,
     get_conv_gn_task,
     get_fullyconnect_task,
-    get_vit_task
+    get_vit_task,
 ]
 
 
@@ -131,6 +133,39 @@ def test_jacobian_pushforward_dense_nonlinear():
             doutput_lin.to_torch().t(),
             eps=5e-3,
         )
+
+
+def test_jacobian_pushforward_dense_lazy():
+
+    loader, _, parameters, model, function = get_lazy_fullyconnect_task()
+
+    with pytest.raises(Exception, match="do with layer LazyLinear"):
+        LayerCollection.from_model(model)
+
+    model(next(iter(loader))[0])
+    lc = LayerCollection.from_model(model)
+
+    generator = TorchHooksJacobianBackend(
+        model=model,
+        function=function,
+    )
+    push_forward = PFMapDense(generator=generator, examples=loader, layer_collection=lc)
+    dw = random_pvector(layer_collection=lc, device=device)
+    dw = 1e-5 / dw.norm() * dw
+
+    doutput_lin = push_forward.jvp(dw)
+
+    output_before = get_output_vector(loader, function)
+    update_model(parameters, dw.to_torch())
+    output_after = get_output_vector(loader, function)
+
+    # This is non linear, so we don't expect the finite difference
+    # estimate to be very accurate. We use a larger eps value
+    check_tensors(
+        output_after - output_before,
+        doutput_lin.to_torch().t(),
+        eps=5e-3,
+    )
 
 
 def test_jacobian_pushforward_implicit():
