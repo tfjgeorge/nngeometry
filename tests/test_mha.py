@@ -14,9 +14,12 @@ def make_test_deterministic():
     yield
 
 
-def test_torch_hooks_vs_torch_func_fim():
+def test_nn_mha_not_supported():
     with pytest.raises(Exception, match="do with layer MultiheadAttention"):
         get_vit_task(torch_attention=True, ignore_unsupported_layers=False)
+
+
+def test_mha_hooks_vs_func():
     for torch_attention in [True, False]:
         loader, lc, parameters, model, function = get_vit_task(
             torch_attention=torch_attention

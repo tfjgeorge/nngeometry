@@ -25,6 +25,7 @@ from tasks import (
     get_linear_fc_task,
     get_small_conv_transpose_task,
     get_small_conv_wn_task,
+    get_vit_task,
 )
 from torch import nn
 from utils import check_ratio, check_tensors, get_output_vector, update_model
@@ -73,6 +74,7 @@ nonlinear_tasks = [
     get_small_conv_wn_task,
     get_conv_gn_task,
     get_fullyconnect_task,
+    get_vit_task
 ]
 
 
