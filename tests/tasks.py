@@ -40,6 +40,7 @@ class FCNet(nn.Module):
             "weight_norm",
             "cosine",
             "affine",
+            "lazy",
         ]:
             raise NotImplementedError
         super(FCNet, self).__init__()
@@ -50,6 +51,8 @@ class FCNet(nn.Module):
                 layers.append(WeightNorm1d(s_in, s_out))
             elif normalization == "cosine":
                 layers.append(Cosine1d(s_in, s_out))
+            elif normalization == "lazy":
+                layers.append(nn.LazyLinear(s_out))
             else:
                 layers.append(nn.Linear(s_in, s_out, bias=(normalization == "none")))
             if normalization == "batch_norm":
@@ -436,6 +439,19 @@ def get_fullyconnect_task(normalization="none", binary=False):
 
     layer_collection = LayerCollection.from_model(net)
     return (train_loader, layer_collection, net.parameters(), net, output_fn)
+
+
+def get_lazy_fullyconnect_task():
+    train_set = get_mnist1d_interpol(subset=70, n_classes=3)
+    train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
+    net = FCNet(out_size=3, normalization="lazy")
+    to_device_model(net)
+    net.eval()
+
+    def output_fn(input, target):
+        return net(to_device(input))
+
+    return (train_loader, None, net.parameters(), net, output_fn)
 
 
 def get_fullyconnect_bn_task():
