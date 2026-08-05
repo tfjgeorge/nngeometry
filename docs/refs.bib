@@ -1,37 +1,53 @@
 @article{george2018fast,
-  title={Fast Approximate Natural Gradient Descent in a Kronecker Factored Eigenbasis},
-  author={George, Thomas and Laurent, C{\'e}sar and Bouthillier, Xavier and Ballas, Nicolas and Vincent, Pascal},
-  journal={Advances in Neural Information Processing Systems},
-  volume={31},
-  pages={9550--9560},
-  year={2018}
+  title   = {Fast Approximate Natural Gradient Descent in a Kronecker Factored Eigenbasis},
+  author  = {George, Thomas and Laurent, C{\'e}sar and Bouthillier, Xavier and Ballas, Nicolas and Vincent, Pascal},
+  journal = {Advances in Neural Information Processing Systems},
+  volume  = {31},
+  pages   = {9550--9560},
+  year    = {2018}
 }
 
 @inproceedings{grosse2016kronecker,
-  title={A kronecker-factored approximate fisher matrix for convolution layers},
-  author={Grosse, Roger and Martens, James},
-  booktitle={International Conference on Machine Learning},
-  pages={573--582},
-  year={2016},
-  organization={PMLR}
+  title        = {A kronecker-factored approximate fisher matrix for convolution layers},
+  author       = {Grosse, Roger and Martens, James},
+  booktitle    = {International Conference on Machine Learning},
+  pages        = {573--582},
+  year         = {2016},
+  organization = {PMLR}
 }
 
 @inproceedings{martens2015optimizing,
-  title={Optimizing neural networks with kronecker-factored approximate curvature},
-  author={Martens, James and Grosse, Roger},
-  booktitle={International conference on machine learning},
-  pages={2408--2417},
-  year={2015},
-  organization={PMLR}
+  title        = {Optimizing neural networks with kronecker-factored approximate curvature},
+  author       = {Martens, James and Grosse, Roger},
+  booktitle    = {International conference on machine learning},
+  pages        = {2408--2417},
+  year         = {2015},
+  organization = {PMLR}
 }
 
 @article{ollivier2015riemannian,
-  title={Riemannian metrics for neural networks I: feedforward networks},
-  author={Ollivier, Yann},
-  journal={Information and Inference: A Journal of the IMA},
-  volume={4},
-  number={2},
-  pages={108--153},
-  year={2015},
-  publisher={Oxford University Press}
+  title     = {Riemannian metrics for neural networks I: feedforward networks},
+  author    = {Ollivier, Yann},
+  journal   = {Information and Inference: A Journal of the IMA},
+  volume    = {4},
+  number    = {2},
+  pages     = {108--153},
+  year      = {2015},
+  publisher = {Oxford University Press}
+}
+
+@inproceedings{pmlr-v108-thomas20a,
+  title     = {On the interplay between noise and curvature and its effect on optimization and generalization},
+  author    = {Thomas, Valentin and Pedregosa, Fabian and van Merri\"enboer, Bart and Manzagol, Pierre-Antoine and Bengio, Yoshua and Roux, Nicolas Le},
+  booktitle = {Proceedings of the Twenty Third International Conference on Artificial Intelligence and Statistics},
+  pages     = {3503--3513},
+  year      = {2020},
+  editor    = {Chiappa, Silvia and Calandra, Roberto},
+  volume    = {108},
+  series    = {Proceedings of Machine Learning Research},
+  month     = {26--28 Aug},
+  publisher = {PMLR},
+  pdf       = {http://proceedings.mlr.press/v108/thomas20a/thomas20a.pdf},
+  url       = {https://proceedings.mlr.press/v108/thomas20a.html},
+  abstract  = { The speed at which one can minimize an expected loss using stochastic methods depends on two properties: the curvature of the loss and the variance of the gradients. While most previous works focus on one or the other of these properties, we explore how their interaction affects optimization speed. Further, as the ultimate goal is good generalization performance, we clarify how both curvature and noise are relevant to properly estimate the generalization gap. Realizing that the limitations of some existing works stems from a confusion between these matrices, we also clarify the distinction between the Fisher matrix, the Hessian, and the covariance matrix of the gradients.}
 }

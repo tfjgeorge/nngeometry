@@ -11,7 +11,13 @@ from tasks import (
 )
 from utils import get_output_vector, update_model
 
-from nngeometry.metrics import FIM, FIM_MonteCarlo
+from nngeometry.metrics import (
+    FIM,
+    FIM_MonteCarlo,
+    GradientSecondMoment,
+    sqrt_var_classif_binary_logits,
+    sqrt_var_classif_logits,
+)
 from nngeometry.object.pspace import PMatDense
 from nngeometry.object.vector import random_pvector
 
@@ -264,3 +270,45 @@ def test_FIM_MC_vs_linearization_segmentation():
 
         mean_quotient = sum(quots) / len(quots)
         assert mean_quotient > 1 - 5e-2 and mean_quotient < 1 + 5e-2
+
+
+def test_FIM_vs_GradientSecondMoment_with_sqrt_var():
+
+    for get_task in nonlinear_tasks:
+        for binary in [True, False]:
+            loader, lc, parameters, model, function = get_task(binary=binary)
+            model.train()
+            F = FIM(
+                layer_collection=lc,
+                model=model,
+                loader=loader,
+                variant="classif_binary_logits" if binary else "classif_logits",
+                representation=PMatDense,
+                device=device,
+            )
+
+            if binary:
+                ll_fn = lambda outputs, targets: sqrt_var_classif_binary_logits(
+                    model(outputs)
+                )
+            else:
+                ll_fn = lambda outputs, targets: sqrt_var_classif_logits(model(outputs))
+
+            Ft = GradientSecondMoment(
+                layer_collection=lc,
+                model=model,
+                loader=loader,
+                function=ll_fn,
+                representation=PMatDense,
+                device=device,
+            )
+
+            torch.testing.assert_close(F.to_torch(), Ft.to_torch())
+
+    # Test function and LayerCollection are None
+    GradientSecondMoment(
+        model=model,
+        loader=loader,
+        representation=PMatDense,
+        device=device,
+    )

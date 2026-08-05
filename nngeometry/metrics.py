@@ -181,10 +181,74 @@ def FIM(
     if layer_collection is None:
         layer_collection = LayerCollection.from_model(model)
 
-    function_fim = partial(SQRT_VAR[variant], function)
+    def function_fim(*d):
+        return SQRT_VAR[variant](function(*d))
 
     generator = TorchHooksJacobianBackend(
         model=model, function=function_fim, verbose=verbose
+    )
+
+    return representation(
+        generator=generator,
+        examples=loader,
+        layer_collection=layer_collection,
+        **kwargs,
+    )
+
+
+def GradientSecondMoment(
+    model,
+    loader,
+    representation,
+    device="cpu",
+    function=None,
+    layer_collection=None,
+    centering=False,
+    verbose=False,
+    **kwargs,
+):
+    """
+    The second moment of gradients (when centering=False), or variance-covariance
+    matrix of the gradients (when centering=True), is also sometimes called the
+    empirical Fisher. These are the gradients of the function parameter, w.r.t.
+    parameters of the layer_collection parameter.
+
+    see e.g. Thomas et al., 2020, On the interplay between noise and curvature
+    and its effect on optimization and generalization
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        The model that contains all parameters of the function
+    loader : torch.utils.data.DataLoader
+        DataLoader for computing expectation over the input space
+    representation : class
+        The parameter matrix representation that will be used to store
+        the matrix
+    device : string, optional (default='cpu')
+        Target device for the returned matrix
+    function : function, optional (default=None)
+        An optional function if different from `model(input)`. If
+        it is different from None, it will override the device
+        parameter.
+    layer_collection : layercollection.LayerCollection, optional
+            (default=None)
+        An optional layer collection
+    centering : bool
+        Compute the uncentered second moment, or the centered covariance
+        matrix
+    """
+
+    if function is None:
+
+        def function(*d):
+            return model(d[0].to(device))
+
+    if layer_collection is None:
+        layer_collection = LayerCollection.from_model(model)
+
+    generator = TorchHooksJacobianBackend(
+        model=model, function=function, verbose=verbose, centering=centering
     )
 
     return representation(
@@ -201,28 +265,27 @@ class FIM_Types(StrEnum):
     REGRESSION = "regression"
 
 
-def _proj_to_L_multinomial(x, p, q):
-    # n -> n-1
-    eps = torch.finfo(p.dtype).eps
-    pixi = p * x
-    pixi = pixi.sum(dim=1, keepdim=True) - pixi.cumsum(dim=1)
-    return x[:, :-1] - pixi[:, :-1] / torch.clip(q[:, :-1], eps, 1)
-
-
-def _diag_var_multinomial(p, q):
-    eps = torch.finfo(p.dtype).eps
-    return p[:, :-1] * q[:, :-1] / torch.clip(p[:, :-1] + q[:, :-1], eps, 1)
-
-
-def _sqrt_var_classif_logits(function, *d):
+def sqrt_var_classif_logits(logits):
     # This uses the symbolic expression from:
     # An Exact Cholesky Decomposition and the Generalized Inverse of
     # the Variance-Covariance  Matrix of the Multinomial Distribution,
     # with Applications
     # Kunio Tanabe and Masahiko Sagae 1992
 
-    x = function(*d)  # logits
-    p = torch.softmax(x, dim=1).detach()
+    x = logits  # match notation paper
+
+    def _proj_to_L_multinomial(x, p, q):
+        # n -> n-1
+        eps = torch.finfo(p.dtype).eps
+        pixi = p * x
+        pixi = pixi.sum(dim=1, keepdim=True) - pixi.cumsum(dim=1)
+        return x[:, :-1] - pixi[:, :-1] / torch.clip(q[:, :-1], eps, 1)
+
+    def _diag_var_multinomial(p, q):
+        eps = torch.finfo(p.dtype).eps
+        return p[:, :-1] * q[:, :-1] / torch.clip(p[:, :-1] + q[:, :-1], eps, 1)
+
+    p = torch.softmax(logits, dim=1).detach()
     q = 1 - p.cumsum(dim=1)
 
     # Multiply by L
@@ -231,24 +294,21 @@ def _sqrt_var_classif_logits(function, *d):
     # get diagonal
     d = _diag_var_multinomial(p, q)
 
-    x_L = x_L * torch.clip(d, 0, 1) ** 0.5
-    return x_L
+    return x_L * torch.clip(d, 0, 1) ** 0.5
 
 
-def _sqrt_var_classif_binary_logits(function, *d):
-    logit = function(*d)
-    probs = torch.nn.functional.sigmoid(logit).detach()
+def sqrt_var_classif_binary_logits(logits):
+    probs = torch.nn.functional.sigmoid(logits).detach()
     coef = torch.sqrt(probs * (1 - probs))
-    return logit * coef
+    return logits * coef
 
 
-def _sqrt_var_regression(function, *d):
-    estimates = function(*d)
+def sqrt_var_regression(estimates):
     return estimates
 
 
 SQRT_VAR = {
-    FIM_Types.CLASSIF_LOGITS: _sqrt_var_classif_logits,
-    FIM_Types.CLASSIF_BINARY_LOGITS: _sqrt_var_classif_binary_logits,
-    FIM_Types.REGRESSION: _sqrt_var_regression,
+    FIM_Types.CLASSIF_LOGITS: sqrt_var_classif_logits,
+    FIM_Types.CLASSIF_BINARY_LOGITS: sqrt_var_classif_binary_logits,
+    FIM_Types.REGRESSION: sqrt_var_regression,
 }

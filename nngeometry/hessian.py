@@ -7,7 +7,7 @@ def Hessian(
     model,
     loader,
     representation,
-    function=None,
+    function,
     layer_collection=None,
     verbose=False,
 ):
