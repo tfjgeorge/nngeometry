@@ -255,7 +255,7 @@ class PMatDense(PMatAbstract):
         if impl == "eigh":
             self.evals, self.evecs = torch.linalg.eigh(self.data)
         elif impl == "svd":
-            _, self.evals, self.evecs = torch.linalg.svd(self.data, full_matrices=True)
+            _, self.evals, self.evecs = torch.svd(self.data, some=False)
         else:
             raise NotImplementedError
 
