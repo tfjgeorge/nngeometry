@@ -896,6 +896,11 @@ def test_jacobian_plowrank():
             PMat_lowrank.mapTMmap(J, reduction="diag"),
         )
 
+        torch.testing.assert_close(
+            (mmap_direct * J.to_torch()).sum(dim=(0, 2)),
+            PMat_lowrank.mapTMmap(J, reduction="sum"),
+        )
+
         # Test solve
         # We will try to recover mv, which is in the span of the
         # low rank matrix
@@ -907,6 +912,11 @@ def test_jacobian_plowrank():
             mmap_using_inv.to_torch(),
             eps=1e-2,
         )
+
+        with pytest.raises(RuntimeError):
+            PMat_lowrank.solve(mmap, 1e-8, solve="prout")
+        with pytest.raises(RuntimeError):
+            PMat_lowrank.solve(dw, 1e-8, solve="prout")
 
         # Test inv TODO
 
