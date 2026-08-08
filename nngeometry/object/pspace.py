@@ -2,7 +2,7 @@ import math
 import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict, defaultdict
-from functools import cache, cached_property
+from functools import cache
 
 import torch
 
