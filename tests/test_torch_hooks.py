@@ -287,7 +287,8 @@ def test_jacobian_eigendecomposition_plowrank():
             pmat_lowrank = PMatLowRank(
                 generator=generator, examples=loader, layer_collection=lc
             )
-            evals, evecs = pmat_lowrank.get_eigendecomposition(impl=impl)
+            pmat_lowrank.compute_eigendecomposition(impl=impl)
+            evals, evecs = pmat_lowrank.get_eigendecomposition()
 
             assert not evals.isnan().any()
             assert not evecs.isnan().any()
