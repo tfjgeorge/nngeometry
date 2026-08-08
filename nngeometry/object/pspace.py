@@ -2,6 +2,7 @@ import math
 import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict, defaultdict
+from functools import cache, cached_property
 
 import torch
 
@@ -254,7 +255,7 @@ class PMatDense(PMatAbstract):
         if impl == "eigh":
             self.evals, self.evecs = torch.linalg.eigh(self.data)
         elif impl == "svd":
-            _, self.evals, self.evecs = torch.svd(self.data, some=False)
+            _, self.evals, self.evecs = torch.linalg.svd(self.data, full_matrices=True)
         else:
             raise NotImplementedError
 
@@ -1443,6 +1444,18 @@ class PMatLowRank(PMatAbstract):
         Av = torch.mv(data_mat, v.to_torch())
         return torch.dot(Av, Av)
 
+    def mapTMmap(self, pfmap, reduction="sum"):
+        data_mat = self.data.view(-1, self.data.size(-1))
+        pfmap_mat = pfmap.to_torch().view(-1, self.data.size(-1))
+        Amap = torch.mm(data_mat, pfmap_mat.t())
+        norm2 = (Amap**2).sum(dim=0).view(pfmap.size(0), pfmap.size(1))
+        if reduction == "sum":
+            return norm2.sum(dim=0)
+        elif reduction == "diag":
+            return norm2
+        else:
+            raise NotImplementedError
+
     def to_torch(self):
         # you probably don't want to do that: you are
         # loosing the benefit of having a low rank representation
@@ -1458,16 +1471,29 @@ class PMatLowRank(PMatAbstract):
         v_flat = torch.mv(data_mat.t(), torch.mv(data_mat, v.to_torch()))
         return PVector(v.layer_collection, vector_repr=v_flat)
 
-    def compute_eigendecomposition(self, impl="svd"):
+    def mmap(self, pfmap):
         data_mat = self.data.view(-1, self.data.size(-1))
+        pfmap_mat = pfmap.to_torch().view(-1, self.data.size(-1))
+        Amap = (
+            torch.mm(data_mat.t(), torch.mm(data_mat, pfmap_mat.t()))
+            .t()
+            .view(*pfmap.size())
+        )
+        return PFMapDense(self.layer_collection, generator=self.generator, data=Amap)
+
+    def compute_eigendecomposition(self):
+        pass
+
+    @cache
+    def get_eigendecomposition(self, impl="svd"):
         if impl == "svd":
-            _, sqrt_evals, self.evecs = torch.svd(data_mat, some=True)
-            self.evals = sqrt_evals**2
+            _, S, Vh = torch.linalg.svd(
+                self.data.view(-1, self.data.size(-1)), full_matrices=False
+            )
+            evals, evecs = S.flip(0) ** 2, Vh.flip(0).t()
+            return evals, evecs
         else:
             raise NotImplementedError
-
-    def get_eigendecomposition(self):
-        return self.evals, self.evecs
 
     def trace(self):
         A = torch.mm(
@@ -1487,9 +1513,26 @@ class PMatLowRank(PMatAbstract):
         if solve not in ["svd", "default"]:
             raise NotImplementedError
 
-        u, s, v = torch.svd(self.data.view(-1, self.data.size(-1)))
-        d = torch.mv(v, torch.mv(v.t(), x.to_torch()) / (s**2 + regul))
-        return PVector(x.layer_collection, vector_repr=d)
+        evals, evecs = self.get_eigendecomposition(impl="svd")
+        solution = torch.mv(evecs, torch.mv(evecs.t(), x.to_torch()) / (evals + regul))
+        return PVector(x.layer_collection, vector_repr=solution)
+
+    def solvePFMap(self, pfmap, regul=1e-8, solve="svd", **kwargs):
+        if solve not in ["svd", "default"]:
+            raise NotImplementedError
+
+        evals, evecs = self.get_eigendecomposition(impl="svd")
+
+        solution = (
+            torch.mm(
+                evecs,
+                torch.mm(evecs.t(), pfmap.to_torch().view(-1, pfmap.size(-1)).t())
+                / (evals[:, None] + regul),
+            )
+            .t()
+            .view(*pfmap.size())
+        )
+        return PFMapDense(pfmap.layer_collection, pfmap.generator, data=solution)
 
     def get_diag(self):
         return (self.data**2).sum(dim=(0, 1))

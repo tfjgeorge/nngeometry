@@ -287,8 +287,7 @@ def test_jacobian_eigendecomposition_plowrank():
             pmat_lowrank = PMatLowRank(
                 generator=generator, examples=loader, layer_collection=lc
             )
-            pmat_lowrank.compute_eigendecomposition(impl=impl)
-            evals, evecs = pmat_lowrank.get_eigendecomposition()
+            evals, evecs = pmat_lowrank.get_eigendecomposition(impl=impl)
 
             assert not evals.isnan().any()
             assert not evecs.isnan().any()
@@ -865,7 +864,7 @@ def test_jacobian_plowrank():
         mv = PMat_lowrank.mv(dw)
         check_tensors(mv_direct, mv.to_torch())
 
-        # Test vTMV
+        # Test vTMv
         check_ratio(torch.dot(mv_direct, dw.to_torch()), PMat_lowrank.vTMv(dw))
 
         # Test solve
@@ -877,6 +876,34 @@ def test_jacobian_plowrank():
         check_tensors(
             mv.to_torch(),
             mv_using_inv.to_torch(),
+            eps=1e-2,
+        )
+
+        # Test mmap
+        J = random_pfmap(layer_collection=lc, output_size=(3, 2), device=device)
+        mmap_direct = (
+            torch.mm(dense_tensor, J.to_torch().view(-1, J.to_torch().size(-1)).t())
+            .t()
+            .view(J.to_torch().shape)
+        )
+        mmap = PMat_lowrank.mmap(J)
+        check_tensors(mmap_direct, mmap.to_torch())
+
+        # Test mapTMmap
+        torch.testing.assert_close(
+            (mmap_direct * J.to_torch()).sum(dim=-1),
+            PMat_lowrank.mapTMmap(J, reduction="diag"),
+        )
+
+        # Test solve
+        # We will try to recover mv, which is in the span of the
+        # low rank matrix
+        regul = 1e-3
+        mmmap = PMat_lowrank.mmap(mmap)
+        mmap_using_inv = PMat_lowrank.solve(mmmap + regul * mmap, regul=regul)
+        check_tensors(
+            mmap.to_torch(),
+            mmap_using_inv.to_torch(),
             eps=1e-2,
         )
 
