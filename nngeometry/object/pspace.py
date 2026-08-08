@@ -1481,8 +1481,8 @@ class PMatLowRank(PMatAbstract):
         )
         return PFMapDense(self.layer_collection, generator=self.generator, data=Amap)
 
-    def compute_eigendecomposition(self):
-        pass
+    def compute_eigendecomposition(self, impl="svd"):
+        self.get_eigendecomposition(impl=impl)
 
     @cache
     def get_eigendecomposition(self, impl="svd"):
