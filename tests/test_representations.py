@@ -67,7 +67,7 @@ def test_dense():
         pfmap = random_pfmap(layer_collection=lc, output_size=(3, 4))
         torch.testing.assert_close(
             torch.mm(pfmap.to_torch().view(3 * 4, -1), M_dense1_tensor).view(3, 4, -1),
-            (M_dense1 @ pfmap).to_torch(),
+            (M_dense1 @ pfmap.adjoint()).adjoint().to_torch(),
         )
 
         ## matmul with pvector
