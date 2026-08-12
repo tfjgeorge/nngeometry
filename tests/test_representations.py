@@ -73,6 +73,11 @@ def test_dense():
             (pfmap @ M_dense1).to_torch(),
         )
 
+        with pytest.raises(TypeError):
+            M_dense1 @ pfmap
+        with pytest.raises(TypeError):
+            pfmap.adjoint() @ M_dense1
+
         ## matmul with pvector
         v = random_pvector(layer_collection=lc)
         torch.testing.assert_close(

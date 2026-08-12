@@ -409,10 +409,7 @@ class FVector:
         self.vector_repr = vector_repr
 
     def to_torch(self):
-        if self.vector_repr is not None:
-            return self.vector_repr
-        else:
-            return NotImplementedError
+        return self.vector_repr
 
     def dot(self, other):
         return torch.dot(self.to_torch().view(-1), other.to_torch().view(-1))
