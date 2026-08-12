@@ -4,7 +4,8 @@ from functools import cache
 
 import torch
 
-from .vector import FVector, PVector
+from nngeometry.object.map import PFMap, PFMapDense
+from nngeometry.object.vector import FVector
 
 
 class FMatAbstract(ABC):
@@ -15,8 +16,10 @@ class FMatAbstract(ABC):
     def __matmul__(self, other):
         if isinstance(other, FVector):
             return self.mv(other)
-        elif isinstance(other, FMatAbstract):
+        elif isinstance(other, type(self)):
             return self.mm(other)
+        elif isinstance(other, PFMap):
+            return self.mmap(other)
         else:
             return NotImplemented
 
@@ -78,6 +81,17 @@ class FMatDense(FMatAbstract):
             self.layer_collection,
             self.generator,
             data=torch.mm(M, N).view(sM[0], sM[1], sN[2], sN[3]),
+        )
+
+    def mmap(self, pfmap):
+        sM = self.data.size()
+        M = self.data.view(-1, sM[2] * sM[3])
+        sJ = pfmap.size()
+        J = pfmap.to_torch().view(sJ[0] * sJ[1], -1)
+        return PFMapDense(
+            self.layer_collection,
+            self.generator,
+            data=torch.mm(M, J).view(sM[0], sM[1], sJ[2]),
         )
 
     def frobenius_norm(self):

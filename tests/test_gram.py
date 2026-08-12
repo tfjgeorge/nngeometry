@@ -44,6 +44,10 @@ def test_gram_vs_jacobian():
 
         # __op__
         torch.testing.assert_close((gram @ gram).to_torch(), (gram**2).to_torch())
+        torch.testing.assert_close(
+            (gram @ jacobian @ jacobian.adjoint()).to_torch(),
+            (gram @ (jacobian @ jacobian.adjoint())).to_torch(),
+        )
         torch.testing.assert_close((gram + gram).to_torch(), (2 * gram).to_torch())
         torch.testing.assert_close((gram - gram + gram).to_torch(), gram.to_torch())
         with pytest.raises(TypeError):

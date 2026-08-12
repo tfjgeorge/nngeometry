@@ -51,6 +51,7 @@ def test_dense():
         generator2 = TorchHooksJacobianBackend(model=model2, function=function1)
         M_dense1 = PMatDense(generator=generator1, examples=loader, layer_collection=lc)
         M_dense2 = PMatDense(generator=generator2, examples=loader, layer_collection=lc)
+        M_diag = PMatDiag(generator=generator1, examples=loader, layer_collection=lc)
 
         # mm between 2 PMapDense
         prod = M_dense1.mm(M_dense2)
@@ -84,6 +85,15 @@ def test_dense():
             torch.mv(M_dense1_tensor, v.to_torch()), (M_dense1 @ v).to_torch()
         )
         torch.testing.assert_close((M_dense1 @ v).to_torch(), (v @ M_dense1).to_torch())
+
+        ## matmul with pmat
+        torch.testing.assert_close(
+            M_dense1_tensor @ M_dense1_tensor,
+            (M_dense1 @ M_dense1).to_torch(),
+        )
+
+        with pytest.raises(TypeError):
+            M_dense1 @ M_diag
 
 
 def test_blockdiag():
