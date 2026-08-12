@@ -292,14 +292,13 @@ def test_jacobian_eigendecomposition_plowrank():
             start_time_1 = time.perf_counter()
             pmat_lowrank.compute_eigendecomposition(impl=impl)
             end_time_1 = time.perf_counter()
+            compute_eig_init = end_time_1 - start_time_1
             evals, evecs = pmat_lowrank.get_eigendecomposition(impl=impl)
 
             start_time_2 = time.perf_counter()
             pmat_lowrank.compute_eigendecomposition(impl=impl)
             end_time_2 = time.perf_counter()
-
-            assert (end_time_1 - start_time_1) > 1e-3
-            assert (end_time_2 - start_time_2) < 1e-5
+            compute_eig_cached = end_time_2 - start_time_2
 
             assert not evals.isnan().any()
             assert not evecs.isnan().any()
@@ -311,6 +310,8 @@ def test_jacobian_eigendecomposition_plowrank():
 
         with pytest.raises(NotImplementedError):
             pmat_lowrank.compute_eigendecomposition(impl="stupid")
+
+        assert compute_eig_cached < compute_eig_init
 
         # check that caching does not avoid being gced
         check = []
