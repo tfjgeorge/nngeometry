@@ -413,3 +413,15 @@ class FVector:
             return self.vector_repr
         else:
             return NotImplementedError
+
+    def size(self, *args):
+        return self.vector_repr.size(*args)
+
+    def dot(self, other):
+        return torch.dot(self.to_torch().view(-1), other.to_torch().view(-1))
+
+    def __matmul__(self, other):
+        if isinstance(other, FVector):
+            return self.dot(other)
+        else:
+            return NotImplemented

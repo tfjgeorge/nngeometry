@@ -20,6 +20,7 @@ class FMatAbstract(ABC):
         else:
             return NotImplemented
 
+    # assumes symetric self FMat by default
     def __rmatmul__(self, other):
         if isinstance(other, FVector):
             return self.mv(other)
@@ -64,20 +65,6 @@ class FMatDense(FMatAbstract):
         else:
             self.data = generator.get_gram_matrix(examples, layer_collection)
 
-    def compute_eigendecomposition(self, impl="eigh"):
-        s = self.data.size()
-        M = self.data.view(s[0] * s[1], s[2] * s[3])
-        if impl == "eigh":
-            self.evals, self.evecs = torch.linalg.eigh(M)
-        elif impl == "svd":
-            _, S, Vh = torch.linalg.svd(M, full_matrices=True)
-            self.evals, self.evecs = S.flip(0), Vh.flip(0).t()
-        else:
-            raise NotImplementedError
-
-    def get_eigendecomposition(self):
-        return self.evals, self.evecs
-
     def mv(self, v):
         s = self.data.size()
         M = self.data.view(s[0] * s[1], s[2] * s[3])
@@ -95,11 +82,6 @@ class FMatDense(FMatAbstract):
             data=torch.mm(M, N).view(sM[0], sM[1], sN[2], sN[3]),
         )
 
-    def vTMv(self, v):
-        s = self.data.size()
-        v_flat = v.to_torch().view(-1)
-        return torch.dot(v_flat, torch.mv(self.data.view(-1, s[2] * s[3]), v_flat))
-
     def frobenius_norm(self):
         warnings.warn(
             """Use norm(ord="fro") instead""", DeprecationWarning, stacklevel=2
@@ -112,23 +94,8 @@ class FMatDense(FMatAbstract):
         else:  # what should we do for 4D tensor ?
             raise RuntimeError(f"Order {ord} not supported.")
 
-    def project_to_diag(self, v):
-        # TODO: test
-        return PVector(
-            model=v.model,
-            vector_repr=torch.mv(self.evecs.t(), v.to_torch()),
-        )
-
-    def project_from_diag(self, v):
-        # TODO: test
-        return PVector(model=v.model, vector_repr=torch.mv(self.evecs, v.to_torch()))
-
     def size(self, *args):
         return self.data.size(*args)
-
-    def trace(self):
-        s = self.data.size()
-        return torch.trace(self.data.view(s[0] * s[1], s[2] * s[3]))
 
     def to_torch(self):
         return self.data
@@ -153,6 +120,41 @@ class FMatDense(FMatAbstract):
             generator=self.generator,
             data=other * self.data,
         )
+
+    def adjoint(self):
+        return FMatDense(
+            self.layer_collection,
+            self.generator,
+            data=self.data.permute(2, 3, 0, 1),
+        )
+
+    # assumes not symetric (only for FVector)
+    def __rmatmul__(self, other):
+        return self.adjoint() @ other
+
+    def vTMv(self, v):
+        return v @ self.mv(v)
+
+    def mTMm(self, fmat):
+        return fmat.adjoint() @ self.mm(fmat)
+
+    def compute_eigendecomposition(self, impl="eigh"):
+        s = self.data.size()
+        M = self.data.view(s[0] * s[1], s[2] * s[3])
+        if impl == "eigh":
+            self.evals, self.evecs = torch.linalg.eigh(M)
+        elif impl == "svd":
+            _, S, Vh = torch.linalg.svd(M, full_matrices=True)
+            self.evals, self.evecs = S.flip(0), Vh.flip(0).t()
+        else:
+            raise NotImplementedError
+
+    def get_eigendecomposition(self):
+        return self.evals, self.evecs
+
+    def trace(self):
+        s = self.data.size()
+        return torch.trace(self.data.view(s[0] * s[1], s[2] * s[3]))
 
     def __pow__(self, other):
         s = self.data.size()
@@ -197,6 +199,8 @@ class FMatDense(FMatAbstract):
         v_flat = v.to_torch().view(-1, 1)
         if solve in ["default", "solve"]:
             solution = torch.cholesky_solve(v_flat, self._cholesky(regul))
+        else:
+            raise NotImplementedError
 
         return FVector(
             layer_collection=self.layer_collection,
@@ -210,6 +214,8 @@ class FMatDense(FMatAbstract):
         K = fmat.to_torch().view(sK[0] * sK[1], -1)
         if solve in ["default", "solve"]:
             solution = torch.cholesky_solve(K, self._cholesky(regul))
+        else:
+            raise NotImplementedError
 
         return FMatDense(
             layer_collection=self.layer_collection,
