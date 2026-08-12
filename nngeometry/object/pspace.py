@@ -92,8 +92,6 @@ class PMatAbstract(ABC):
             return self.mv(other)
         elif isinstance(other, PFMapAdjoint):
             return self.mmap(other.adjoint()).adjoint()
-        elif isinstance(other, PMatAbstract):
-            return self.mm(other)
         else:
             return NotImplemented
 
@@ -102,8 +100,6 @@ class PMatAbstract(ABC):
             return self.mv(other)
         elif isinstance(other, PFMap):
             return self.mmap(other)
-        elif isinstance(other, PMatAbstract):
-            return other.mm(self)
         else:
             return NotImplemented
 
