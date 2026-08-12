@@ -42,19 +42,29 @@ def test_gram_vs_jacobian():
 
         check_ratio(gram.norm(), torch.linalg.norm(gram.to_torch()))
 
-        # __matmul__ API
+        # __op__
         torch.testing.assert_close((gram @ gram).to_torch(), (gram**2).to_torch())
         torch.testing.assert_close((gram + gram).to_torch(), (2 * gram).to_torch())
         torch.testing.assert_close((gram - gram + gram).to_torch(), gram.to_torch())
-        torch.testing.assert_close(
-            (gram.solve(gram, 1e-3)).to_torch(), (gram.inv(1e-3) @ gram).to_torch()
-        )
         with pytest.raises(TypeError):
             gram @ 2
         with pytest.raises(TypeError):
             2 @ gram
 
+        # solve
         df1 = random_fvector(jacobian.size(1), jacobian.size(0))
+        torch.testing.assert_close(
+            (gram.solve(gram, 1e-3)).to_torch(), (gram.inv(1e-3) @ gram).to_torch()
+        )
+        torch.testing.assert_close(
+            (gram.solve(df1, 1e-3)).to_torch(), (gram.inv(1e-3) @ df1).to_torch()
+        )
+        with pytest.raises(NotImplementedError):
+            gram.solve(gram, solve="prout")
+        with pytest.raises(NotImplementedError):
+            gram.solve(df1, solve="prout")
+
+        # non symetric
         df2 = random_fvector(25, 10)
         asym_gram = FMatDense(
             lc, gram.generator, data=torch.rand(gram.size(0), gram.size(1), 25, 10)

@@ -51,7 +51,7 @@ class FMatAbstract(ABC):
         elif isinstance(x, FMatDense):
             return self.solveFMat(x, regul=regul, solve=solve, **kwargs)
         else:
-            raise NotImplementedError("`x` should be an instance of PVector or PFMap")
+            raise NotImplementedError("`x` should be an instance of FVector or FMat")
 
 
 class FMatDense(FMatAbstract):
@@ -196,11 +196,7 @@ class FMatDense(FMatAbstract):
         else:
             raise NotImplementedError
 
-        return FVector(
-            layer_collection=self.layer_collection,
-            generator=self.generator,
-            data=solution.view(s[0], s[1]),
-        )
+        return FVector(vector_repr=solution.view(s[0], s[1]))
 
     def solveFMat(self, fmat, regul=1e-8, solve="default"):
         s = self.data.size()

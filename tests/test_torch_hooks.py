@@ -257,6 +257,13 @@ def test_jacobian_fdense_vs_pullback():
             frob_direct = (FMat_dense.to_torch() ** 2).sum() ** 0.5
             check_ratio(frob_direct, frob_FMat)
 
+            # Test trace
+            trace_FMat = FMat_dense.trace()
+            FMat_dense.compute_eigendecomposition()
+            evals, evecs = FMat_dense.get_eigendecomposition()
+            trace_eigh = evals.sum()
+            check_ratio(trace_FMat, trace_eigh)
+
             with pytest.raises(RuntimeError):
                 FMat_dense.norm("prout")
 
