@@ -1,3 +1,5 @@
+import gc
+import time
 from functools import partial
 
 import pytest
@@ -266,6 +268,25 @@ def test_jacobian_fdense_vs_pullback():
 
             with pytest.raises(RuntimeError):
                 FMat_dense.norm("prout")
+
+            start_time_1 = time.perf_counter()
+            FMat_dense.solve(df, regul=1)
+            end_time_1 = time.perf_counter()
+            solve_time_init = end_time_1 - start_time_1
+
+            start_time_2 = time.perf_counter()
+            FMat_dense.solve(df, regul=1)
+            end_time_2 = time.perf_counter()
+            solve_time_cached = end_time_2 - start_time_2
+
+            assert solve_time_cached < solve_time_init
+
+            check = []
+            FMatDense.__del__ = lambda self: check.append("deleted")
+            FMat_dense = None
+            gc.collect()
+
+            assert len(check) > 0
 
 
 def test_jacobian_eigendecomposition_fdense():

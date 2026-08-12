@@ -1,6 +1,6 @@
 import warnings
 from abc import ABC, abstractmethod
-from functools import cache
+from functools import lru_cache
 
 import torch
 
@@ -65,6 +65,8 @@ class FMatDense(FMatAbstract):
             self.data = data
         else:
             self.data = generator.get_gram_matrix(examples, layer_collection)
+
+        self._cholesky = lru_cache(maxsize=1)(self._cholesky)
 
     def mv(self, v):
         s = self.data.size()
@@ -191,7 +193,6 @@ class FMatDense(FMatAbstract):
             ).view(*s),
         )
 
-    @cache
     def _cholesky(self, regul=1e-8):
         s = self.data.size()
         return torch.linalg.cholesky(
