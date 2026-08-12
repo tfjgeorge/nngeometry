@@ -414,9 +414,6 @@ class FVector:
         else:
             return NotImplementedError
 
-    def size(self, *args):
-        return self.vector_repr.size(*args)
-
     def dot(self, other):
         return torch.dot(self.to_torch().view(-1), other.to_torch().view(-1))
 

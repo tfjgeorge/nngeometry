@@ -20,7 +20,7 @@ class PFMap(ABC):
             return NotImplemented
 
     def __rmatmul__(self, other):
-        if hasattr(self, "adjoint"):
+        if isinstance(self, AdjointMixin):
             return self.adjoint() @ other
         else:
             return NotImplemented

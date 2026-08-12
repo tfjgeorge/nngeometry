@@ -20,14 +20,12 @@ class FMatAbstract(ABC):
         else:
             return NotImplemented
 
-    # assumes symetric self FMat by default
+    # assumes symetric by default
+    def adjoint(self):
+        return self
+
     def __rmatmul__(self, other):
-        if isinstance(other, FVector):
-            return self.mv(other)
-        elif isinstance(other, FMatAbstract):
-            return other.mm(self)
-        else:
-            return NotImplemented
+        return self.adjoint() @ other
 
     @abstractmethod
     def solveFVec(self, x, regul, solve, **kwargs):
@@ -127,10 +125,6 @@ class FMatDense(FMatAbstract):
             self.generator,
             data=self.data.permute(2, 3, 0, 1),
         )
-
-    # assumes not symetric (only for FVector)
-    def __rmatmul__(self, other):
-        return self.adjoint() @ other
 
     def vTMv(self, v):
         return v @ self.mv(v)
