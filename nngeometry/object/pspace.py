@@ -2,7 +2,7 @@ import math
 import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict, defaultdict
-from functools import cache
+from functools import lru_cache
 
 import torch
 
@@ -1439,6 +1439,8 @@ class PMatLowRank(PMatAbstract):
             )
             self.data /= self.data.size(1) ** 0.5
 
+        self.get_eigendecomposition = lru_cache(maxsize=1)(self.get_eigendecomposition)
+
     def vTMv(self, v):
         data_mat = self.data.view(-1, self.data.size(-1))
         Av = torch.mv(data_mat, v.to_torch())
@@ -1484,7 +1486,6 @@ class PMatLowRank(PMatAbstract):
     def compute_eigendecomposition(self, impl="svd"):
         self.get_eigendecomposition(impl=impl)
 
-    @cache
     def get_eigendecomposition(self, impl="svd"):
         if impl == "svd":
             _, S, Vh = torch.linalg.svd(

@@ -1,3 +1,5 @@
+import gc
+import time
 from functools import partial
 
 import pytest
@@ -287,8 +289,17 @@ def test_jacobian_eigendecomposition_plowrank():
             pmat_lowrank = PMatLowRank(
                 generator=generator, examples=loader, layer_collection=lc
             )
+            start_time_1 = time.perf_counter()
             pmat_lowrank.compute_eigendecomposition(impl=impl)
-            evals, evecs = pmat_lowrank.get_eigendecomposition()
+            end_time_1 = time.perf_counter()
+            evals, evecs = pmat_lowrank.get_eigendecomposition(impl=impl)
+
+            start_time_2 = time.perf_counter()
+            pmat_lowrank.compute_eigendecomposition(impl=impl)
+            end_time_2 = time.perf_counter()
+
+            assert (end_time_1 - start_time_1) > 1e-3
+            assert (end_time_2 - start_time_2) < 1e-5
 
             assert not evals.isnan().any()
             assert not evecs.isnan().any()
@@ -300,6 +311,14 @@ def test_jacobian_eigendecomposition_plowrank():
 
         with pytest.raises(NotImplementedError):
             pmat_lowrank.compute_eigendecomposition(impl="stupid")
+
+        # check that caching does not avoid being gced
+        check = []
+        PMatLowRank.__del__ = lambda self: check.append("deleted")
+        pmat_lowrank = None
+        gc.collect()
+
+        assert len(check) > 0
 
 
 def test_jacobian_pdense_vs_pushforward():
