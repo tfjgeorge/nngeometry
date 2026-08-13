@@ -90,4 +90,4 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [project.optional-dependencies]
-cpu = ["torch", "torchvision<0.24"]
+cpu = ["torch", "torchvision"]
