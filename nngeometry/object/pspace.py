@@ -270,6 +270,9 @@ class PMatDense(PMatAbstract):
             v_eigenbasis = self.project_to_diag(x)
             inv_v_eigenbasis = v_eigenbasis / (self.evals + regul)
             return self.project_from_diag(inv_v_eigenbasis)
+        elif solve == "lstsq":
+            inv_v,_,_,_ = torch.linalg.lstsq(x.to_torch().view(1, -1), regul=regul)
+            return PVector(x.layer_collection, vector_repr=inv_v[0, :])
         else:
             raise NotImplementedError
 
@@ -449,9 +452,12 @@ class PMatDiag(PMatAbstract):
         solves v = Ax in x
         """
         # TODO: test
-        if solve != "default":
+        if solve in ["default", "solve"]:
+            solution = x.to_torch() / (self.data + regul)
+        elif solve == "lstsq":
+            solution = torch.where(self.data <= regul, 0, x.to_torch() / self.data)
+        else:
             raise NotImplementedError
-        solution = x.to_torch() / (self.data + regul)
         return PVector(layer_collection=x.layer_collection, vector_repr=solution)
 
     def __add__(self, other):
@@ -815,9 +821,9 @@ class PMatKFAC(PMatAbstract):
             a_reg = a + regul**0.5 * pi * torch.eye(a.size(0), device=self.get_device())
             g_reg = g + regul**0.5 / pi * torch.eye(g.size(0), device=self.get_device())
 
-            solve_g, _, _, _ = torch.linalg.lstsq(g_reg, v)
-            solve_a, _, _, _ = torch.linalg.lstsq(a_reg, solve_g.t())
-            solve_a = solve_a.t()
+            solve_g = torch.linalg.solve(g_reg, v)
+            solve_a = torch.linalg.solve(a_reg, solve_g.t()).t()
+
             if layer.has_bias():
                 solve_tuple = (
                     solve_a[:, :-1].contiguous().view(*sw),
