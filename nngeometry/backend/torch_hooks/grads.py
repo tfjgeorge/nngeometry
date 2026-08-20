@@ -21,19 +21,21 @@ from nngeometry.layercollection import (
 from .grads_conv import conv1d_backward, conv2d_backward, convtranspose2d_backward
 
 
-def _acc_one_iter_kpsvd_blocks(right_buffer, left_buffer, A, S):
-    spatial_locations, ps = A.size(1), A.size(2)
-    os = S.size(2)
+def _compute_kpsvd_blocks(A, S):
+    spatial_locations, ps, os = A.size(1), A.size(2), S.size(2)
 
+    # GGt = StAAtS, GtG = AtSStA
     if spatial_locations**2 <= ps * os:
         SSt = torch.bmm(S, S.transpose(1, 2))
-        right_buffer.add_(torch.bmm(A.transpose(1, 2), torch.bmm(SSt, A)).sum(0))
+        right_block = torch.bmm(A.transpose(1, 2), torch.bmm(SSt, A)).sum(0)
         AAt = torch.bmm(A, A.transpose(1, 2))
-        left_buffer.add_(torch.bmm(S.transpose(1, 2), torch.bmm(AAt, S)).sum(0))
+        left_block = torch.bmm(S.transpose(1, 2), torch.bmm(AAt, S)).sum(0)
     else:
         G = torch.bmm(S.transpose(1, 2), A)
-        right_buffer.add_(torch.bmm(G.transpose(1, 2), G).sum(0))
-        left_buffer.add_(torch.bmm(G, G.transpose(1, 2)).sum(0))
+        right_block = torch.bmm(G.transpose(1, 2), G).sum(0)
+        left_block = torch.bmm(G, G.transpose(1, 2)).sum(0)
+
+    return right_block, left_block
 
 
 class JacobianFactory:
@@ -188,7 +190,9 @@ class LinearJacobianFactory(JacobianFactory):
         if layer.has_bias():
             A = torch.cat([A, torch.ones_like(A[:, :, :1])], dim=2)
 
-        _acc_one_iter_kpsvd_blocks(right_buffer, left_buffer, A, S)
+        R, L = _compute_kpsvd_blocks(A, S)
+        right_buffer.add_(R)
+        left_buffer.add_(L)
 
     @classmethod
     def quasidiag(cls, buffer_diag, buffer_cross, mod, layer, x, gy):
@@ -292,7 +296,10 @@ class Conv2dJacobianFactory(JacobianFactory):
             A = torch.cat([A, torch.ones_like(A[:, :, :1])], dim=2)
 
         S = gy.flatten(2).transpose(1, 2)
-        _acc_one_iter_kpsvd_blocks(right_buffer, left_buffer, A, S)
+
+        R, L = _compute_kpsvd_blocks(A, S)
+        right_buffer.add_(R)
+        left_buffer.add_(L)
 
     @classmethod
     def quasidiag(cls, buffer_diag, buffer_cross, mod, layer, x, gy):
@@ -572,7 +579,9 @@ class Conv1dJacobianFactory(JacobianFactory):
 
         S = gy.flatten(2).transpose(1, 2)
 
-        _acc_one_iter_kpsvd_blocks(right_buffer, left_buffer, A, S)
+        R, L = _compute_kpsvd_blocks(A, S)
+        right_buffer.add_(R)
+        left_buffer.add_(L)
 
 
 def check_embedding_arguments(mod):
@@ -645,7 +654,9 @@ class EmbeddingJacobianFactory(JacobianFactory):
 
         S = gy.view(bs, -1, os)
 
-        _acc_one_iter_kpsvd_blocks(right_buffer, left_buffer, A, S)
+        R, L = _compute_kpsvd_blocks(A, S)
+        right_buffer.add_(R)
+        left_buffer.add_(L)
 
 
 FactoryMap = {
