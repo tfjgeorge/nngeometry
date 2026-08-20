@@ -618,6 +618,12 @@ class EmbeddingJacobianFactory(JacobianFactory):
         left_buffer.add_(torch.bmm(G.transpose(1, 2), G).sum(dim=0))
         right_buffer.add_(torch.bmm(G, G.transpose(1, 2)).sum(dim=0))
 
+    @classmethod
+    def Jv(cls, buffer, mod, layer, x, gy, v, v_bias):
+        bs = x.size(0)
+        gy2 = F.embedding(x, v)
+        buffer.add_((gy * gy2).view(bs, -1).sum(dim=1))
+
 
 FactoryMap = {
     LinearLayer: LinearJacobianFactory,
