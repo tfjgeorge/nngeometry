@@ -325,14 +325,17 @@ class TorchHooksJacobianBackend(AbstractBackend):
                     only_inputs=True,
                 )
         for layer_id in layer_collection.layers.keys():
-            self._buffer["blocks"][layer_id][0].div_(n_examples / n_output**0.5)
+            self._buffer["blocks"][layer_id][0].div_(n_examples)
+            self._buffer["blocks"][layer_id][1].div_(n_examples)
 
-            if strategy == "one_iter_kpsvd":
-                self._buffer["blocks"][layer_id][1].div_(
-                    torch.trace(self._buffer["blocks"][layer_id][1]) / n_examples
-                )
+            if strategy == "kfac":
+                self._buffer["blocks"][layer_id][0].mul_(n_output**0.5)
+                self._buffer["blocks"][layer_id][1].div_(n_output**0.5)
 
-            self._buffer["blocks"][layer_id][1].div_(n_output**0.5 * n_examples)
+            elif strategy == "one_iter_kpsvd":
+                tr = torch.trace(self._buffer["blocks"][layer_id][1])
+                self._buffer["blocks"][layer_id][0].div_(tr**0.5)
+                self._buffer["blocks"][layer_id][1].div_(tr**0.5)
 
         return self._buffer["blocks"]
 
