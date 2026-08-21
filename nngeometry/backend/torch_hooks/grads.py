@@ -26,14 +26,14 @@ def _compute_kpsvd_blocks(A, S):
 
     # GGt = StAAtS, GtG = AtSStA
     if spatial_locations**2 <= ps * os:
-        SSt = torch.bmm(S, S.transpose(1, 2))
-        right_block = torch.bmm(A.transpose(1, 2), torch.bmm(SSt, A)).sum(0)
-        AAt = torch.bmm(A, A.transpose(1, 2))
-        left_block = torch.bmm(S.transpose(1, 2), torch.bmm(AAt, S)).sum(0)
+        SStA = torch.bmm(torch.bmm(S, S.transpose(1, 2)), A)
+        right_block = torch.mm(A.reshape(-1, ps).t(), SStA.reshape(-1, ps))
+        AAtS = torch.bmm(torch.bmm(A, A.transpose(1, 2)), S)
+        left_block = torch.mm(S.reshape(-1, os).t(), AAtS.reshape(-1, os))
     else:
-        G = torch.bmm(S.transpose(1, 2), A)
-        right_block = torch.bmm(G.transpose(1, 2), G).sum(0)
-        left_block = torch.bmm(G, G.transpose(1, 2)).sum(0)
+        G = torch.bmm(S.transpose(1, 2), A).permute(1, 0, 2).contiguous()
+        right_block = torch.mm(G.view(-1, ps).t(), G.view(-1, ps))
+        left_block = torch.mm(G.view(os, -1), G.view(os, -1).t())
 
     return right_block, left_block
 
