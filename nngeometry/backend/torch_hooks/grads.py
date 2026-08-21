@@ -649,9 +649,6 @@ class EmbeddingJacobianFactory(JacobianFactory):
         os = gy.size(-1)
         A = F.one_hot(x.view(bs, -1), num_classes=layer.num_embeddings).to(gy.dtype)
 
-        if hasattr(layer, "has_bias") and layer.has_bias():
-            A = torch.cat([A, torch.ones_like(A[:, :, :1])], dim=2)
-
         S = gy.view(bs, -1, os)
 
         R, L = _compute_kpsvd_blocks(A, S)
