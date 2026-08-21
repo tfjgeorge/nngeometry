@@ -725,17 +725,9 @@ class PMatKFAC(PMatAbstract):
         self.layer_collection = layer_collection
         self.generator = generator
         if data is None:
-            if strategy == "kfac":
-                self.data = generator.get_kfac_blocks(
-                    examples, layer_collection=layer_collection
-                )
-            elif strategy == "one_iter_kpsvd":
-                self.data = generator.get_one_iter_kpsvd_blocks(
-                    examples, layer_collection=layer_collection
-                )
-            else:
-                raise NotImplementedError()
-
+            self.data = generator.get_kfac_blocks(
+                examples, layer_collection=layer_collection, strategy=strategy
+            )
         else:
             self.data = data
 
@@ -1021,16 +1013,9 @@ class PMatEKFAC(PMatAbstract):
             evecs = dict()
             diags = dict()
 
-            if strategy == "kfac":
-                kfac_blocks = generator.get_kfac_blocks(
-                    examples, layer_collection=layer_collection
-                )
-            elif strategy == "one_iter_kpsvd":
-                kfac_blocks = generator.get_one_iter_kpsvd_blocks(
-                    examples, layer_collection=layer_collection
-                )
-            else:
-                raise NotImplementedError()
+            kfac_blocks = generator.get_kfac_blocks(
+                examples, layer_collection=layer_collection, strategy=strategy
+            )
 
             for layer_id, layer in self.layer_collection.layers.items():
                 a, g = kfac_blocks[layer_id]
