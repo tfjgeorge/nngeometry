@@ -66,8 +66,6 @@ class FMatDense(FMatAbstract):
         else:
             self.data = generator.get_gram_matrix(examples, layer_collection)
 
-        self._cholesky = lru_cache(maxsize=1)(self._cholesky)
-
     def mv(self, v):
         s = self.data.size()
         M = self.data.view(s[0] * s[1], s[2] * s[3])
@@ -178,30 +176,31 @@ class FMatDense(FMatAbstract):
 
     def inv(self, regul=1e-8):
         s = self.data.size()
+        Minv = torch.cholesky_inverse(self._cholesky(regul))
+
         return FMatDense(
             layer_collection=self.layer_collection,
             generator=self.generator,
-            data=torch.linalg.inv(
-                self.data.view(s[0] * s[1], s[2] * s[3])
-                + (regul * s[1])
-                * torch.eye(
-                    s[0] * s[1],
-                    s[2] * s[3],
-                    dtype=self.data.dtype,
-                    device=self.data.device,
-                )
-            ).view(*s),
+            data=Minv.view(*s),
         )
 
     def _cholesky(self, regul=1e-8):
-        s = self.data.size()
-        return torch.linalg.cholesky(
-            self.data.view(s[0] * s[1], s[2] * s[3])
-            + (regul * s[1])
-            * torch.eye(
-                s[0] * s[1], s[2] * s[3], device=self.data.device, dtype=self.data.dtype
+        try:
+            assert self._cholesky_regul == regul
+            L = self._cholesky_factor
+        except (AttributeError, AssertionError):
+            s = self.data.size()
+
+            L = torch.linalg.cholesky(
+                self.data.view(s[0] * s[1], s[2] * s[3])
+                + (regul * s[1])
+                * torch.eye(s[0] * s[1], device=self.data.device, dtype=self.data.dtype)
             )
-        )
+
+            self._cholesky_regul = regul
+            self._cholesky_factor = L
+
+        return L
 
     def solveFVec(self, v, regul=1e-8, solve="default"):
         s = self.data.size()

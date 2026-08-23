@@ -5,7 +5,7 @@ from tasks import (
     get_conv_task,
     get_fullyconnect_task,
 )
-from utils import check_ratio, check_tensors
+from utils import check_ratio
 
 from nngeometry import GramMatrix, Jacobian
 from nngeometry.object.fspace import FMatDense
@@ -82,6 +82,9 @@ def test_gram_vs_jacobian():
         )
         torch.testing.assert_close(
             (asym_gram.adjoint() @ df1).to_torch(), (df1 @ asym_gram).to_torch()
+        )
+        torch.testing.assert_close(
+            asym_gram.adjoint().adjoint().to_torch(), asym_gram.to_torch()
         )
 
         # unsupported operations on asymetric gram matrices
