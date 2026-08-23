@@ -66,6 +66,20 @@ class FMatDense(FMatAbstract):
         else:
             self.data = generator.get_gram_matrix(examples, layer_collection)
 
+    def compute_eigendecomposition(self, impl="eigh"):
+        s = self.data.size()
+        M = self.data.view(s[0] * s[1], s[2] * s[3])
+        if impl == "eigh":
+            self.evals, self.evecs = torch.linalg.eigh(M)
+        elif impl == "svd":
+            _, S, Vh = torch.linalg.svd(M, full_matrices=True)
+            self.evals, self.evecs = S.flip(0), Vh.flip(0).t()
+        else:
+            raise NotImplementedError
+
+    def get_eigendecomposition(self):
+        return self.evals, self.evecs
+
     def mv(self, v):
         s = self.data.size()
         M = self.data.view(s[0] * s[1], s[2] * s[3])
@@ -94,6 +108,12 @@ class FMatDense(FMatAbstract):
             data=torch.mm(M, J).view(sM[0], sM[1], sJ[2]),
         )
 
+    def vTMv(self, v):
+        return v @ self.mv(v)
+
+    def mTMm(self, fmat):
+        return fmat.adjoint() @ self.mm(fmat)
+
     def frobenius_norm(self):
         warnings.warn(
             """Use norm(ord="fro") instead""", DeprecationWarning, stacklevel=2
@@ -109,8 +129,19 @@ class FMatDense(FMatAbstract):
     def size(self, *args):
         return self.data.size(*args)
 
+    def trace(self):
+        s = self.data.size()
+        return torch.trace(self.data.view(s[0] * s[1], s[2] * s[3]))
+
     def to_torch(self):
         return self.data
+
+    def adjoint(self):
+        return FMatDense(
+            self.layer_collection,
+            self.generator,
+            data=self.data.permute(2, 3, 0, 1),
+        )
 
     def __add__(self, other):
         return FMatDense(
@@ -133,37 +164,6 @@ class FMatDense(FMatAbstract):
             data=other * self.data,
         )
 
-    def adjoint(self):
-        return FMatDense(
-            self.layer_collection,
-            self.generator,
-            data=self.data.permute(2, 3, 0, 1),
-        )
-
-    def vTMv(self, v):
-        return v @ self.mv(v)
-
-    def mTMm(self, fmat):
-        return fmat.adjoint() @ self.mm(fmat)
-
-    def compute_eigendecomposition(self, impl="eigh"):
-        s = self.data.size()
-        M = self.data.view(s[0] * s[1], s[2] * s[3])
-        if impl == "eigh":
-            self.evals, self.evecs = torch.linalg.eigh(M)
-        elif impl == "svd":
-            _, S, Vh = torch.linalg.svd(M, full_matrices=True)
-            self.evals, self.evecs = S.flip(0), Vh.flip(0).t()
-        else:
-            raise NotImplementedError
-
-    def get_eigendecomposition(self):
-        return self.evals, self.evecs
-
-    def trace(self):
-        s = self.data.size()
-        return torch.trace(self.data.view(s[0] * s[1], s[2] * s[3]))
-
     def __pow__(self, other):
         s = self.data.size()
         return FMatDense(
@@ -172,16 +172,6 @@ class FMatDense(FMatAbstract):
             data=torch.linalg.matrix_power(
                 self.data.view(s[0] * s[1], s[2] * s[3]), other
             ).view(*s),
-        )
-
-    def inv(self, regul=1e-8):
-        s = self.data.size()
-        Minv = torch.cholesky_inverse(self._cholesky(regul))
-
-        return FMatDense(
-            layer_collection=self.layer_collection,
-            generator=self.generator,
-            data=Minv.view(*s),
         )
 
     def _cholesky(self, regul=1e-8):
@@ -201,6 +191,16 @@ class FMatDense(FMatAbstract):
             self._cholesky_factor = L
 
         return L
+
+    def inv(self, regul=1e-8):
+        s = self.data.size()
+        Minv = torch.cholesky_inverse(self._cholesky(regul))
+
+        return FMatDense(
+            layer_collection=self.layer_collection,
+            generator=self.generator,
+            data=Minv.view(*s),
+        )
 
     def solveFVec(self, v, regul=1e-8, solve="default"):
         s = self.data.size()
