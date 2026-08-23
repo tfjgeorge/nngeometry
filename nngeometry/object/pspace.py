@@ -1439,8 +1439,6 @@ class PMatLowRank(PMatAbstract):
             )
             self.data /= self.data.size(1) ** 0.5
 
-        self.get_eigendecomposition = lru_cache(maxsize=1)(self.get_eigendecomposition)
-
     def vTMv(self, v):
         data_mat = self.data.view(-1, self.data.size(-1))
         Av = torch.mv(data_mat, v.to_torch())
@@ -1484,24 +1482,31 @@ class PMatLowRank(PMatAbstract):
         return PFMapDense(self.layer_collection, generator=self.generator, data=Amap)
 
     def compute_eigendecomposition(self, impl="svd"):
-        self.get_eigendecomposition(impl=impl)
-
-    def get_eigendecomposition(self, impl="svd"):
         if impl == "svd":
             _, S, Vh = torch.linalg.svd(
                 self.data.view(-1, self.data.size(-1)), full_matrices=False
             )
-            evals, evecs = S.flip(0) ** 2, Vh.flip(0).t()
-            return evals, evecs
+            self.evals, self.evecs = S.flip(0) ** 2, Vh.flip(0).t()
+        elif impl == "gram_eigh":
+            L, Q = torch.linalg.eigh(
+                torch.mm(
+                    self.data.view(-1, self.data.size(-1)),
+                    self.data.view(-1, self.data.size(-1)).t(),
+                )
+            )
+            L, Q = L[L > 0], Q[:, L > 0]
+            self.evals, self.evecs = (
+                L,
+                (self.data.view(-1, self.data.size(-1)).t() @ Q) / (L[None, :] ** 0.5),
+            )
         else:
             raise NotImplementedError
 
+    def get_eigendecomposition(self):
+        return self.evals, self.evecs
+
     def trace(self):
-        A = torch.mm(
-            self.data.view(-1, self.data.size(-1)),
-            self.data.view(-1, self.data.size(-1)).t(),
-        )
-        return torch.trace(A)
+        return (self.data.view(-1, self.data.size(-1)) ** 2).sum()
 
     def norm(self, ord=None):
         A = torch.mm(
@@ -1510,37 +1515,55 @@ class PMatLowRank(PMatAbstract):
         )
         return torch.linalg.norm(A, ord=ord)
 
-    def solvePVec(self, x, regul=1e-8, solve="svd"):
-        if solve not in ["svd", "default"]:
-            raise NotImplementedError
-
-        evals, evecs = self.get_eigendecomposition(impl="svd")
-        solution = torch.mv(evecs, torch.mv(evecs.t(), x.to_torch()) / (evals + regul))
-        return PVector(x.layer_collection, vector_repr=solution)
-
-    def solvePFMap(self, pfmap, regul=1e-8, solve="svd", **kwargs):
-        if solve not in ["svd", "default"]:
-            raise NotImplementedError
-
-        evals, evecs = self.get_eigendecomposition(impl="svd")
-
-        solution = (
-            torch.mm(
-                evecs,
-                torch.mm(evecs.t(), pfmap.to_torch().view(-1, pfmap.size(-1)).t())
-                / (evals[:, None] + regul),
+    def _gram_cholesky(self, regul=1e-8):
+        try:
+            assert self._cholesky_gram_regul == regul
+            return self._cholesky_gram_factor
+        except (AttributeError, AssertionError):
+            A = torch.mm(
+                self.data.view(-1, self.data.size(-1)),
+                self.data.view(-1, self.data.size(-1)).t(),
             )
-            .t()
-            .view(*pfmap.size())
+            A.diagonal().add_(regul)
+
+            L = torch.linalg.cholesky(A)
+
+            self._cholesky_gram_regul = regul
+            self._cholesky_gram_factor = L
+            return L
+
+    def _gram_solve(self, x, regul):
+        data_mat = self.data.view(-1, self.data.size(-1))
+        L = self._gram_cholesky(regul)
+        gram_solution = torch.cholesky_solve(torch.mm(data_mat, x), L)
+        return (x - torch.mm(data_mat.t(), gram_solution)) / regul
+
+    def solvePVec(self, v, regul=1e-8, solve="default"):
+        if solve not in ["default", "solve"]:
+            raise NotImplementedError
+
+        dw = v.to_torch()
+        solution = self._gram_solve(dw.view(-1, 1), regul=regul).view(-1)
+
+        return PVector(layer_collection=v.layer_collection, vector_repr=solution)
+
+    def solvePFMap(self, pfmap, regul=1e-8, solve="default"):
+        if solve not in ["default", "solve"]:
+            raise NotImplementedError
+
+        J = pfmap.to_torch()
+        sJ = pfmap.size()
+
+        solution = self._gram_solve(J.view(-1, sJ[-1]).t(), regul=regul).t().view(*sJ)
+
+        return PFMapDense(
+            layer_collection=pfmap.layer_collection,
+            generator=pfmap.generator,
+            data=solution,
         )
-        return PFMapDense(pfmap.layer_collection, pfmap.generator, data=solution)
 
     def get_diag(self):
-        A = torch.mm(
-            self.data.view(-1, self.data.size(-1)),
-            self.data.view(-1, self.data.size(-1)).t(),
-        )
-        return torch.diag(A)
+        return (self.data.view(-1, self.data.size(-1)) ** 2).sum(dim=0)
 
     def __rmul__(self, x):
         return PMatLowRank(

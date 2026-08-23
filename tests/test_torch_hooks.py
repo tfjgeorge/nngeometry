@@ -1,5 +1,3 @@
-import gc
-import time
 from functools import partial
 
 import pytest
@@ -279,7 +277,7 @@ def test_jacobian_eigendecomposition_pdense():
 
 def test_jacobian_eigendecomposition_plowrank():
     for get_task in [get_conv_task]:
-        for impl in ["svd"]:
+        for impl in ["svd", "gram_eigh"]:
             loader, lc, parameters, model, function = get_task()
             generator = TorchHooksJacobianBackend(
                 model=model,
@@ -289,16 +287,8 @@ def test_jacobian_eigendecomposition_plowrank():
             pmat_lowrank = PMatLowRank(
                 generator=generator, examples=loader, layer_collection=lc
             )
-            start_time_1 = time.perf_counter()
             pmat_lowrank.compute_eigendecomposition(impl=impl)
-            end_time_1 = time.perf_counter()
-            compute_eig_init = end_time_1 - start_time_1
-            evals, evecs = pmat_lowrank.get_eigendecomposition(impl=impl)
-
-            start_time_2 = time.perf_counter()
-            pmat_lowrank.compute_eigendecomposition(impl=impl)
-            end_time_2 = time.perf_counter()
-            compute_eig_cached = end_time_2 - start_time_2
+            evals, evecs = pmat_lowrank.get_eigendecomposition()
 
             assert not evals.isnan().any()
             assert not evecs.isnan().any()
@@ -310,16 +300,6 @@ def test_jacobian_eigendecomposition_plowrank():
 
         with pytest.raises(NotImplementedError):
             pmat_lowrank.compute_eigendecomposition(impl="stupid")
-
-        assert compute_eig_cached < compute_eig_init
-
-        # check that caching does not avoid being gced
-        check = []
-        PMatLowRank.__del__ = lambda self: check.append("deleted")
-        pmat_lowrank = None
-        gc.collect()
-
-        assert len(check) > 0
 
 
 def test_jacobian_pdense_vs_pushforward():
