@@ -14,7 +14,7 @@ from nngeometry.layercollection import (
     LinearLayer,
 )
 from nngeometry.maths import kronecker
-from nngeometry.object.map import PFMap, PFMapDense
+from nngeometry.object.map import PFMap, PFMapAdjoint, PFMapDense
 from nngeometry.object.vector import PVector
 from nngeometry.solve import cg
 
@@ -87,13 +87,23 @@ class PMatAbstract(ABC):
             layer_collection=pfmap.layer_collection,
         )
 
-    def __matmul__(self, x):
-        if isinstance(x, PVector):
-            return self.mv(x)
-        elif isinstance(x, PFMap):
-            return self.mmap(x)
+    def __matmul__(self, other):
+        if isinstance(other, PVector):
+            return self.mv(other)
+        elif isinstance(other, PFMapAdjoint):
+            return self.mmap(other.adjoint()).adjoint()
+        elif isinstance(other, type(self)):
+            return self.mm(other)
         else:
-            raise NotImplementedError("`x` should be an instance of PVector or PFMap")
+            return NotImplemented
+
+    def __rmatmul__(self, other):
+        if isinstance(other, PVector):
+            return self.mv(other)
+        elif isinstance(other, PFMap):
+            return self.mmap(other)
+        else:
+            return NotImplemented
 
     @abstractmethod
     def get_device(self):

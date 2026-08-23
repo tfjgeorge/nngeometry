@@ -1,11 +1,10 @@
 import pytest
 import torch
-from nngeometry.object.map import PFMapDense
 from tasks import get_conv_gn_task, get_conv_task, get_fullyconnect_task
 from utils import check_tensors
 
 from nngeometry.backend import TorchHooksJacobianBackend
-from nngeometry.object.map import random_pfmap
+from nngeometry.object.map import PFMapDense, random_pfmap
 from nngeometry.object.pspace import PMatBlockDiag, PMatDense, PMatDiag
 from nngeometry.object.vector import random_pvector
 
@@ -52,6 +51,7 @@ def test_dense():
         generator2 = TorchHooksJacobianBackend(model=model2, function=function1)
         M_dense1 = PMatDense(generator=generator1, examples=loader, layer_collection=lc)
         M_dense2 = PMatDense(generator=generator2, examples=loader, layer_collection=lc)
+        M_diag = PMatDiag(generator=generator1, examples=loader, layer_collection=lc)
 
         # mm between 2 PMapDense
         prod = M_dense1.mm(M_dense2)
@@ -67,15 +67,33 @@ def test_dense():
         pfmap = random_pfmap(layer_collection=lc, output_size=(3, 4))
         torch.testing.assert_close(
             torch.mm(pfmap.to_torch().view(3 * 4, -1), M_dense1_tensor).view(3, 4, -1),
-            (M_dense1 @ pfmap).to_torch(),
+            (M_dense1 @ pfmap.adjoint()).adjoint().to_torch(),
         )
+        torch.testing.assert_close(
+            (M_dense1 @ pfmap.adjoint()).adjoint().to_torch(),
+            (pfmap @ M_dense1).to_torch(),
+        )
+
+        with pytest.raises(TypeError):
+            M_dense1 @ pfmap
+        with pytest.raises(TypeError):
+            pfmap.adjoint() @ M_dense1
 
         ## matmul with pvector
         v = random_pvector(layer_collection=lc)
         torch.testing.assert_close(
-            torch.mv(M_dense1_tensor, v.to_torch()),
-            (M_dense1 @ v).to_torch(),
+            torch.mv(M_dense1_tensor, v.to_torch()), (M_dense1 @ v).to_torch()
         )
+        torch.testing.assert_close((M_dense1 @ v).to_torch(), (v @ M_dense1).to_torch())
+
+        ## matmul with pmat
+        torch.testing.assert_close(
+            M_dense1_tensor @ M_dense1_tensor,
+            (M_dense1 @ M_dense1).to_torch(),
+        )
+
+        with pytest.raises(TypeError):
+            M_dense1 @ M_diag
 
 
 def test_blockdiag():

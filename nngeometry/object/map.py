@@ -20,7 +20,10 @@ class PFMap(ABC):
             return NotImplemented
 
     def __rmatmul__(self, other):
-        return self.adjoint() @ other
+        if isinstance(self, AdjointMixin):
+            return self.adjoint() @ other
+        else:
+            return NotImplemented
 
     @abstractmethod
     def jvp(self, v):
