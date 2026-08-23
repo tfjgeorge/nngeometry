@@ -1536,7 +1536,11 @@ class PMatLowRank(PMatAbstract):
         return PFMapDense(pfmap.layer_collection, pfmap.generator, data=solution)
 
     def get_diag(self):
-        return (self.data**2).sum(dim=(0, 1))
+        A = torch.mm(
+            self.data.view(-1, self.data.size(-1)),
+            self.data.view(-1, self.data.size(-1)).t(),
+        )
+        return torch.diag(A)
 
     def __rmul__(self, x):
         return PMatLowRank(
