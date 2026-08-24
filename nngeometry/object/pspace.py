@@ -1564,7 +1564,7 @@ class PMatLowRank(PMatAbstract):
                     )
                 ) / regul
             else:
-                mask = evals > (evals.max() * rcond)
+                mask = evals > (evals.max() * rcond**2)
                 solution = torch.mv(
                     evecs[:, mask],
                     torch.mv(evecs[:, mask].t(), dw) / (evals[mask] + regul),
@@ -1605,7 +1605,7 @@ class PMatLowRank(PMatAbstract):
                     ).t()
                 ) / regul
             else:
-                mask = evals > (evals.max() * rcond)
+                mask = evals > (evals.max() * rcond**2)
                 solutions = torch.mm(
                     evecs[:, mask],
                     torch.mm(evecs[:, mask].t(), J.t()) / (evals[mask, None] + regul),
