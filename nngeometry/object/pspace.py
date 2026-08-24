@@ -1506,7 +1506,11 @@ class PMatLowRank(PMatAbstract):
         return self.evals, self.evecs
 
     def trace(self):
-        return (self.data.view(-1, self.data.size(-1)) ** 2).sum()
+        A = torch.mm(
+            self.data.view(-1, self.data.size(-1)),
+            self.data.view(-1, self.data.size(-1)).t(),
+        )
+        return torch.trace(A)
 
     def norm(self, ord=None):
         A = torch.mm(
