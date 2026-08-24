@@ -873,12 +873,37 @@ def test_jacobian_plowrank():
         # low rank matrix
         regul = 1e-3
         mmv = PMat_lowrank.mv(mv)
-        mv_using_inv = PMat_lowrank.solve(mmv + regul * mv, regul=regul)
-        check_tensors(
-            mv.to_torch(),
-            mv_using_inv.to_torch(),
-            eps=1e-2,
+        for solve in ["svd"]:
+            if solve != "default":
+                PMat_lowrank.compute_eigendecomposition(impl=solve)
+                solve = "eigendecomposition"
+            mv_using_inv = PMat_lowrank.solve(
+                mmv + regul * mv, regul=regul, solve=solve, rcond=0
+            )
+            torch.testing.assert_close(
+                mv.to_torch(), mv_using_inv.to_torch(), atol=1e-2, rtol=1e-2
+            )
+
+        # Test solve against PMat_dense with rcond=None
+        dw = random_pvector(lc)
+        regul = 1e-2
+        solve_dense = (
+            PMatDense(lc, generator, data=dense_tensor)
+            .solve(dw, regul=regul)
+            .to_torch()
         )
+
+        for solve in ["default", "svd", "gram_eigh"]:
+            if solve != "default":
+                PMat_lowrank.compute_eigendecomposition(impl=solve)
+                solve = "eigendecomposition"
+            solve_lowrank = PMat_lowrank.solve(
+                dw, regul=regul, solve=solve, rcond=None
+            ).to_torch()
+            torch.testing.assert_close(
+                solve_lowrank,
+                solve_dense,
+            )
 
         # Test mmap
         J = random_pfmap(layer_collection=lc, output_size=(3, 2), device=device)
@@ -906,15 +931,39 @@ def test_jacobian_plowrank():
         # low rank matrix
         regul = 1e-3
         mmmap = PMat_lowrank.mmap(mmap)
-        mmap_using_inv = PMat_lowrank.solve(mmmap + regul * mmap, regul=regul)
-        check_tensors(
-            mmap.to_torch(),
-            mmap_using_inv.to_torch(),
-            eps=1e-2,
+        for solve in ["svd"]:
+            if solve != "default":
+                PMat_lowrank.compute_eigendecomposition(impl=solve)
+                solve = "eigendecomposition"
+            mmap_using_inv = PMat_lowrank.solve(
+                mmmap + regul * mmap, regul=regul, solve=solve, rcond=0
+            )
+            torch.testing.assert_close(
+                mmap.to_torch(), mmap_using_inv.to_torch(), atol=1e-2, rtol=1e-2
+            )
+
+        # Test solve against PMat_dense with rcond=None
+        regul = 1e-2
+        solve_dense = (
+            PMatDense(lc, generator, data=dense_tensor)
+            .solve(J, regul=regul)
+            .to_torch()
         )
 
+        for solve in ["default", "svd", "gram_eigh"]:
+            if solve != "default":
+                PMat_lowrank.compute_eigendecomposition(impl=solve)
+                solve = "eigendecomposition"
+            solve_lowrank = PMat_lowrank.solve(
+                J, regul=regul, solve=solve, rcond=None
+            ).to_torch()
+            torch.testing.assert_close(
+                solve_lowrank,
+                solve_dense,
+            )
+
         with pytest.raises(RuntimeError):
-            PMat_lowrank.solve(mmap, 1e-8, solve="prout")
+            PMat_lowrank.solve(J, 1e-8, solve="prout")
         with pytest.raises(RuntimeError):
             PMat_lowrank.solve(dw, 1e-8, solve="prout")
 

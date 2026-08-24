@@ -1518,7 +1518,8 @@ class PMatLowRank(PMatAbstract):
     def _gram_cholesky(self, regul=1e-8):
         try:
             assert self._cholesky_gram_regul == regul
-            return self._cholesky_gram_factor
+            L = self._cholesky_gram_factor
+
         except (AttributeError, AssertionError):
             A = torch.mm(
                 self.data.view(-1, self.data.size(-1)),
@@ -1530,36 +1531,88 @@ class PMatLowRank(PMatAbstract):
 
             self._cholesky_gram_regul = regul
             self._cholesky_gram_factor = L
-            return L
 
-    def _gram_solve(self, x, regul):
-        data_mat = self.data.view(-1, self.data.size(-1))
-        L = self._gram_cholesky(regul)
-        gram_solution = torch.cholesky_solve(torch.mm(data_mat, x), L)
-        return (x - torch.mm(data_mat.t(), gram_solution)) / regul
+        return L
 
-    def solvePVec(self, v, regul=1e-8, solve="default"):
-        if solve not in ["default", "solve"]:
-            raise NotImplementedError
-
+    def solvePVec(self, v, regul=1e-8, solve="default", rcond=None):
         dw = v.to_torch()
-        solution = self._gram_solve(dw.view(-1, 1), regul=regul).view(-1)
+
+        if solve in ["default", "solve"]:
+            if rcond is not None:
+                raise NotImplementedError(
+                    """rcond is not supported with default solve,
+                     use solve='eigendecomposition' instead."""
+                )
+            gram_solution = torch.cholesky_solve(
+                torch.mv(self.data.view(-1, self.data.size(-1)), dw).view(-1, 1),
+                self._gram_cholesky(regul),
+            ).view(-1)
+            solution = (
+                dw - torch.mv(self.data.view(-1, self.data.size(-1)).t(), gram_solution)
+            ) / regul
+        elif solve == "eigendecomposition":
+            evals, evecs = self.get_eigendecomposition()
+            if rcond is None:
+                solution = (
+                    dw
+                    - torch.mv(
+                        evecs, torch.mv(evecs.t(), dw) * (evals / (evals + regul))
+                    )
+                ) / regul
+            else:
+                mask = evals > (evals.max() * rcond)
+                solution = torch.mv(
+                    evecs[:, mask],
+                    torch.mv(evecs[:, mask].t(), dw) / (evals[mask] + regul),
+                )
+        else:
+            raise NotImplementedError()
 
         return PVector(layer_collection=v.layer_collection, vector_repr=solution)
 
-    def solvePFMap(self, pfmap, regul=1e-8, solve="default"):
-        if solve not in ["default", "solve"]:
-            raise NotImplementedError
+    def solvePFMap(self, pfmap, regul=1e-8, solve="default", rcond=None):
+        J = pfmap.to_torch().view(-1, pfmap.size(-1))
 
-        J = pfmap.to_torch()
-        sJ = pfmap.size()
-
-        solution = self._gram_solve(J.view(-1, sJ[-1]).t(), regul=regul).t().view(*sJ)
+        if solve in ["default", "solve"]:
+            if rcond is not None:
+                raise NotImplementedError(
+                    """rcond is not supported with default solve,
+                     using solve='eigendecomposition' instead."""
+                )
+            gram_solutions = torch.cholesky_solve(
+                torch.mm(self.data.view(-1, self.data.size(-1)), J.t()),
+                self._gram_cholesky(regul),
+            )
+            solutions = (
+                J
+                - torch.mm(
+                    self.data.view(-1, self.data.size(-1)).t(), gram_solutions
+                ).t()
+            ) / regul
+        elif solve == "eigendecomposition":
+            evals, evecs = self.get_eigendecomposition()
+            if rcond is None:
+                solutions = (
+                    J
+                    - torch.mm(
+                        evecs,
+                        torch.mm(evecs.t(), J.t())
+                        * (evals[:, None] / (evals[:, None] + regul)),
+                    ).t()
+                ) / regul
+            else:
+                mask = evals > (evals.max() * rcond)
+                solutions = torch.mm(
+                    evecs[:, mask],
+                    torch.mm(evecs[:, mask].t(), J.t()) / (evals[mask, None] + regul),
+                ).t()
+        else:
+            raise NotImplementedError()
 
         return PFMapDense(
             layer_collection=pfmap.layer_collection,
             generator=pfmap.generator,
-            data=solution,
+            data=solutions.view(*pfmap.size()),
         )
 
     def get_diag(self):
