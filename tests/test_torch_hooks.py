@@ -312,7 +312,7 @@ def test_jacobian_eigendecomposition_pdense():
 
 def test_jacobian_eigendecomposition_plowrank():
     for get_task in [get_conv_task]:
-        for impl in ["svd"]:
+        for impl in ["svd", "gram_eigh"]:
             loader, lc, parameters, model, function = get_task()
             generator = TorchHooksJacobianBackend(
                 model=model,
@@ -900,7 +900,7 @@ def test_jacobian_plowrank():
         mv = PMat_lowrank.mv(dw)
         check_tensors(mv_direct, mv.to_torch())
 
-        # Test vTMV
+        # Test vTMv
         check_ratio(torch.dot(mv_direct, dw.to_torch()), PMat_lowrank.vTMv(dw))
 
         # Test solve
@@ -908,12 +908,104 @@ def test_jacobian_plowrank():
         # low rank matrix
         regul = 1e-3
         mmv = PMat_lowrank.mv(mv)
-        mv_using_inv = PMat_lowrank.solve(mmv + regul * mv, regul=regul)
-        check_tensors(
-            mv.to_torch(),
-            mv_using_inv.to_torch(),
-            eps=1e-2,
+        for solve in ["svd"]:
+            if solve != "default":
+                PMat_lowrank.compute_eigendecomposition(impl=solve)
+                solve = "eigendecomposition"
+            mv_using_inv = PMat_lowrank.solve(
+                mmv + regul * mv, regul=regul, solve=solve, rcond=0
+            )
+            torch.testing.assert_close(
+                mv.to_torch(), mv_using_inv.to_torch(), atol=1e-2, rtol=1e-2
+            )
+
+        # Test solve against PMat_dense with rcond=None
+        dw = random_pvector(lc)
+        regul = 1e-2
+        solve_dense = (
+            PMatDense(lc, generator, data=dense_tensor)
+            .solve(dw, regul=regul)
+            .to_torch()
         )
+
+        for solve in ["default", "svd", "gram_eigh"]:
+            if solve != "default":
+                PMat_lowrank.compute_eigendecomposition(impl=solve)
+                solve = "eigendecomposition"
+            solve_lowrank = PMat_lowrank.solve(
+                dw, regul=regul, solve=solve, rcond=None
+            ).to_torch()
+            torch.testing.assert_close(
+                solve_lowrank,
+                solve_dense,
+            )
+
+        # Test mmap
+        J = random_pfmap(layer_collection=lc, output_size=(3, 2), device=device)
+        mmap_direct = (
+            torch.mm(dense_tensor, J.to_torch().view(-1, J.to_torch().size(-1)).t())
+            .t()
+            .view(J.to_torch().shape)
+        )
+        mmap = PMat_lowrank.mmap(J)
+        check_tensors(mmap_direct, mmap.to_torch())
+
+        # Test mapTMmap
+        torch.testing.assert_close(
+            (mmap_direct * J.to_torch()).sum(dim=-1),
+            PMat_lowrank.mapTMmap(J, reduction="diag"),
+        )
+
+        torch.testing.assert_close(
+            (mmap_direct * J.to_torch()).sum(dim=(0, 2)),
+            PMat_lowrank.mapTMmap(J, reduction="sum"),
+        )
+
+        # Test solve
+        # We will try to recover mv, which is in the span of the
+        # low rank matrix
+        regul = 1e-3
+        mmmap = PMat_lowrank.mmap(mmap)
+        for solve in ["svd"]:
+            if solve != "default":
+                PMat_lowrank.compute_eigendecomposition(impl=solve)
+                solve = "eigendecomposition"
+            mmap_using_inv = PMat_lowrank.solve(
+                mmmap + regul * mmap, regul=regul, solve=solve, rcond=0
+            )
+            torch.testing.assert_close(
+                mmap.to_torch(), mmap_using_inv.to_torch(), atol=1e-2, rtol=1e-2
+            )
+
+        # Test solve against PMat_dense with rcond=None
+        regul = 1e-2
+        solve_dense = (
+            PMatDense(lc, generator, data=dense_tensor)
+            .solve(J, regul=regul)
+            .to_torch()
+        )
+
+        for solve in ["default", "svd", "gram_eigh"]:
+            if solve != "default":
+                PMat_lowrank.compute_eigendecomposition(impl=solve)
+                solve = "eigendecomposition"
+            solve_lowrank = PMat_lowrank.solve(
+                J, regul=regul, solve=solve, rcond=None
+            ).to_torch()
+            torch.testing.assert_close(
+                solve_lowrank,
+                solve_dense,
+            )
+
+        with pytest.raises(RuntimeError):
+            PMat_lowrank.solve(J, 1e-8, solve="prout")
+        with pytest.raises(RuntimeError):
+            PMat_lowrank.solve(dw, 1e-8, solve="prout")
+
+        with pytest.raises(NotImplementedError):
+            PMat_lowrank.solve(J, 1e-8, solve="default", rcond=1e-3)
+        with pytest.raises(NotImplementedError):
+            PMat_lowrank.solve(dw, 1e-8, solve="default", rcond=1e-3)
 
         # Test inv TODO
 

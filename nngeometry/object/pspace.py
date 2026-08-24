@@ -2,6 +2,7 @@ import math
 import warnings
 from abc import ABC, abstractmethod
 from collections import OrderedDict, defaultdict
+from functools import lru_cache
 
 import torch
 
@@ -1442,6 +1443,18 @@ class PMatLowRank(PMatAbstract):
         Av = torch.mv(data_mat, v.to_torch())
         return torch.dot(Av, Av)
 
+    def mapTMmap(self, pfmap, reduction="sum"):
+        data_mat = self.data.view(-1, self.data.size(-1))
+        pfmap_mat = pfmap.to_torch().view(-1, self.data.size(-1))
+        Amap = torch.mm(data_mat, pfmap_mat.t())
+        norm2 = (Amap**2).sum(dim=0).view(pfmap.size(0), pfmap.size(1))
+        if reduction == "sum":
+            return norm2.sum(dim=0)
+        elif reduction == "diag":
+            return norm2
+        else:
+            raise NotImplementedError
+
     def to_torch(self):
         # you probably don't want to do that: you are
         # loosing the benefit of having a low rank representation
@@ -1457,11 +1470,34 @@ class PMatLowRank(PMatAbstract):
         v_flat = torch.mv(data_mat.t(), torch.mv(data_mat, v.to_torch()))
         return PVector(v.layer_collection, vector_repr=v_flat)
 
-    def compute_eigendecomposition(self, impl="svd"):
+    def mmap(self, pfmap):
         data_mat = self.data.view(-1, self.data.size(-1))
+        pfmap_mat = pfmap.to_torch().view(-1, self.data.size(-1))
+        Amap = (
+            torch.mm(data_mat.t(), torch.mm(data_mat, pfmap_mat.t()))
+            .t()
+            .view(*pfmap.size())
+        )
+        return PFMapDense(self.layer_collection, generator=self.generator, data=Amap)
+
+    def compute_eigendecomposition(self, impl="svd"):
         if impl == "svd":
-            _, sqrt_evals, self.evecs = torch.svd(data_mat, some=True)
-            self.evals = sqrt_evals**2
+            _, S, Vh = torch.linalg.svd(
+                self.data.view(-1, self.data.size(-1)), full_matrices=False
+            )
+            self.evals, self.evecs = S.flip(0) ** 2, Vh.flip(0).t()
+        elif impl == "gram_eigh":
+            L, Q = torch.linalg.eigh(
+                torch.mm(
+                    self.data.view(-1, self.data.size(-1)),
+                    self.data.view(-1, self.data.size(-1)).t(),
+                )
+            )
+            L, Q = L[L > 0], Q[:, L > 0]
+            self.evals, self.evecs = (
+                L,
+                (self.data.view(-1, self.data.size(-1)).t() @ Q) / (L[None, :] ** 0.5),
+            )
         else:
             raise NotImplementedError
 
@@ -1482,16 +1518,108 @@ class PMatLowRank(PMatAbstract):
         )
         return torch.linalg.norm(A, ord=ord)
 
-    def solvePVec(self, x, regul=1e-8, solve="svd"):
-        if solve not in ["svd", "default"]:
-            raise NotImplementedError
+    def _gram_cholesky(self, regul=1e-8):
+        try:
+            assert self._cholesky_gram_regul == regul
+            L = self._cholesky_gram_factor
 
-        u, s, v = torch.svd(self.data.view(-1, self.data.size(-1)))
-        d = torch.mv(v, torch.mv(v.t(), x.to_torch()) / (s**2 + regul))
-        return PVector(x.layer_collection, vector_repr=d)
+        except (AttributeError, AssertionError):
+            A = torch.mm(
+                self.data.view(-1, self.data.size(-1)),
+                self.data.view(-1, self.data.size(-1)).t(),
+            )
+            A.diagonal().add_(regul)
+
+            L = torch.linalg.cholesky(A)
+
+            self._cholesky_gram_regul = regul
+            self._cholesky_gram_factor = L
+
+        return L
+
+    def solvePVec(self, v, regul=1e-8, solve="default", rcond=None):
+        dw = v.to_torch()
+
+        if solve in ["default", "solve"]:
+            if rcond is not None:
+                raise NotImplementedError(
+                    """rcond is not supported with default solve,
+                     use solve='eigendecomposition' instead."""
+                )
+            gram_solution = torch.cholesky_solve(
+                torch.mv(self.data.view(-1, self.data.size(-1)), dw).view(-1, 1),
+                self._gram_cholesky(regul),
+            ).view(-1)
+            solution = (
+                dw - torch.mv(self.data.view(-1, self.data.size(-1)).t(), gram_solution)
+            ) / regul
+        elif solve == "eigendecomposition":
+            evals, evecs = self.get_eigendecomposition()
+            if rcond is None:
+                solution = (
+                    dw
+                    - torch.mv(
+                        evecs, torch.mv(evecs.t(), dw) * (evals / (evals + regul))
+                    )
+                ) / regul
+            else:
+                mask = evals > (evals.max() * rcond**2)
+                solution = torch.mv(
+                    evecs[:, mask],
+                    torch.mv(evecs[:, mask].t(), dw) / (evals[mask] + regul),
+                )
+        else:
+            raise NotImplementedError()
+
+        return PVector(layer_collection=v.layer_collection, vector_repr=solution)
+
+    def solvePFMap(self, pfmap, regul=1e-8, solve="default", rcond=None):
+        J = pfmap.to_torch().view(-1, pfmap.size(-1))
+
+        if solve in ["default", "solve"]:
+            if rcond is not None:
+                raise NotImplementedError(
+                    """rcond is not supported with default solve,
+                     using solve='eigendecomposition' instead."""
+                )
+            gram_solutions = torch.cholesky_solve(
+                torch.mm(self.data.view(-1, self.data.size(-1)), J.t()),
+                self._gram_cholesky(regul),
+            )
+            solutions = (
+                J
+                - torch.mm(
+                    self.data.view(-1, self.data.size(-1)).t(), gram_solutions
+                ).t()
+            ) / regul
+        elif solve == "eigendecomposition":
+            evals, evecs = self.get_eigendecomposition()
+            if rcond is None:
+                solutions = (
+                    J
+                    - torch.mm(
+                        evecs,
+                        torch.mm(evecs.t(), J.t())
+                        * (evals[:, None] / (evals[:, None] + regul)),
+                    ).t()
+                ) / regul
+            else:
+                mask = evals > (evals.max() * rcond**2)
+                solutions = torch.mm(
+                    evecs[:, mask],
+                    torch.mm(evecs[:, mask].t(), J.t()) / (evals[mask, None] + regul),
+                ).t()
+        else:
+            raise NotImplementedError()
+
+        return PFMapDense(
+            layer_collection=pfmap.layer_collection,
+            generator=pfmap.generator,
+            data=solutions.view(*pfmap.size()),
+        )
 
     def get_diag(self):
-        return (self.data**2).sum(dim=(0, 1))
+        return (self.data.view(-1, self.data.size(-1)) ** 2).sum(dim=0)
 
     def __rmul__(self, x):
         return PMatLowRank(
