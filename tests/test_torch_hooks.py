@@ -967,6 +967,11 @@ def test_jacobian_plowrank():
         with pytest.raises(RuntimeError):
             PMat_lowrank.solve(dw, 1e-8, solve="prout")
 
+        with pytest.raises(NotImplementedError):
+            PMat_lowrank.solve(J, 1e-8, solve="default", rcond=1e-3)
+        with pytest.raises(NotImplementedError):
+            PMat_lowrank.solve(dw, 1e-8, solve="default", rcond=1e-3)
+
         # Test inv TODO
 
         # Test add, sub, rmul
