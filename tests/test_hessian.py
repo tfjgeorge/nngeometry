@@ -114,7 +114,7 @@ def test_Hdense_vs_Himplicit():
         with pytest.raises(NotImplementedError):
             H_implicit.trace()
 
-        x = random_pfmap(lc, (10, 100))
+        x = random_pfmap(lc, (10, 5))
         dense_mmap = H_dense.mmap(x)
         imp_mmap = H_implicit.mmap(x)
         for layer_id, layer in lc.layers.items():
@@ -127,6 +127,57 @@ def test_Hdense_vs_Himplicit():
                     dense_mmap.to_torch_layer(layer_id)[1],
                     imp_mmap.to_torch_layer(layer_id)[1],
                 )
+
+        dense_solvepvec = H_dense.solve(dw, regul=1)
+        for x0 in [None, dense_solvepvec]:
+            torch.testing.assert_close(
+                dense_solvepvec.to_torch(),
+                H_implicit.solve(
+                    dw, regul=1, max_iter=10000, rtol=0, atol=1e-5, x0=x0
+                ).to_torch(),
+                atol=1e-3,
+                rtol=1e-3,
+            )
+        torch.testing.assert_close(
+            dense_solvepvec.to_torch(),
+            H_implicit.solve(
+                dw, regul=1, max_iter=1, rtol=0, atol=0, M=H_dense
+            ).to_torch(),
+            atol=1e-3,
+            rtol=1e-3,
+        )
+
+        if x.size(-1) < x.size(0) * x.size(1):
+            # number of systems to solve with block cg should be less than the
+            # number of parameters or put a fallback using normal equations ?
+            continue
+
+        # need big regul because cholesky in FMatDense.solve breaks because
+        # of not being PSD (LDL seems more tolerant of a lower regul,
+        # but using block_cg on an hessian which is not PSD is just a bad idea imo)
+        dense_solvepfmap = H_dense.solve(x, regul=100)
+        for x0 in [None, dense_solvepfmap]:
+            imp_solvepfmap = H_implicit.solve(
+                x, regul=100, max_iter=200, rtol=0, atol=1e-5, x0=x0
+            )
+
+            for layer_id, layer in lc.layers.items():
+                torch.testing.assert_close(
+                    dense_solvepfmap.to_torch_layer(layer_id)[0],
+                    imp_solvepfmap.to_torch_layer(layer_id)[0],
+                    atol=1e-3,
+                    rtol=1e-3,
+                )
+                if layer.has_bias():
+                    torch.testing.assert_close(
+                        dense_solvepfmap.to_torch_layer(layer_id)[1],
+                        imp_solvepfmap.to_torch_layer(layer_id)[1],
+                        atol=1e-3,
+                        rtol=1e-3,
+                    )
+
+        with pytest.raises(NotImplementedError):
+            H_implicit.solve(x, regul=1, solve="damn")
 
 
 def test_H_vs_linearization():
