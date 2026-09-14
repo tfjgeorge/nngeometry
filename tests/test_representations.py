@@ -1,11 +1,10 @@
 import pytest
 import torch
-from nngeometry.object.map import PFMapDense
 from tasks import get_conv_gn_task, get_conv_task, get_fullyconnect_task
 from utils import check_tensors
 
 from nngeometry.backend import TorchHooksJacobianBackend
-from nngeometry.object.map import random_pfmap
+from nngeometry.object.map import PFMapDense, random_pfmap
 from nngeometry.object.pspace import PMatBlockDiag, PMatDense, PMatDiag
 from nngeometry.object.vector import random_pvector
 
@@ -67,14 +66,21 @@ def test_dense():
         pfmap = random_pfmap(layer_collection=lc, output_size=(3, 4))
         torch.testing.assert_close(
             torch.mm(pfmap.to_torch().view(3 * 4, -1), M_dense1_tensor).view(3, 4, -1),
-            (M_dense1 @ pfmap).to_torch(),
+            (M_dense1 @ pfmap.adjoint()).adjoint().to_torch(),
         )
+
+        M_dense1 @ pfmap.adjoint()
+        with pytest.raises(TypeError):
+            M_dense1 @ pfmap
+        with pytest.raises(TypeError):
+            pfmap @ M_dense1
+        with pytest.raises(TypeError):
+            pfmap.adjoint() @ M_dense1
 
         ## matmul with pvector
         v = random_pvector(layer_collection=lc)
         torch.testing.assert_close(
-            torch.mv(M_dense1_tensor, v.to_torch()),
-            (M_dense1 @ v).to_torch(),
+            torch.mv(M_dense1_tensor, v.to_torch()), (M_dense1 @ v).to_torch()
         )
 
 

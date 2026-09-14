@@ -3,13 +3,50 @@ from abc import ABC, abstractmethod
 
 import torch
 
-from .vector import FVector, PVector
+from nngeometry.object.map import PFMap, PFMapDense
+from nngeometry.object.vector import FVector
 
 
 class FMatAbstract(ABC):
     @abstractmethod
-    def __init__(self, generator):
-        return NotImplementedError
+    def __init__(self, layer_collection, generator, data=None, examples=None):
+        pass
+
+    def __matmul__(self, other):
+        if isinstance(other, FVector):
+            return self.mv(other)
+        elif isinstance(other, PFMap):
+            return self.mmap(other)
+        else:
+            return NotImplemented
+
+    @abstractmethod
+    def solveFVec(self, x, regul, solve, **kwargs):
+        pass
+
+    @abstractmethod
+    def solvePFMap(self, x, regul, solve, **kwargs):
+        pass
+
+    def solve(self, x, regul=1e-8, solve="default", **kwargs):
+        """
+        Solves Kx = b in x
+
+        :param regul: regularization, depending of the type of solve (e.g. Tikhonov damping,
+            or high-pass filter)
+        :type regul: float
+        :param b: b
+        :type b: FVector or PFMap
+        :param solve: solve implementation, this is dependent on the FMat representation
+        """
+        if isinstance(x, FVector):
+            return self.solveFVec(x, regul=regul, solve=solve, **kwargs)
+        elif isinstance(x, PFMapDense):
+            return self.solvePFMap(x, regul=regul, solve=solve, **kwargs)
+        else:
+            raise NotImplementedError(
+                "`x` should be an instance of FVector or PFMap"
+            )
 
 
 class FMatDense(FMatAbstract):
@@ -27,20 +64,29 @@ class FMatDense(FMatAbstract):
         if impl == "eigh":
             self.evals, self.evecs = torch.linalg.eigh(M)
         elif impl == "svd":
-            _, self.evals, self.evecs = torch.svd(M, some=False)
+            _, S, Vh = torch.linalg.svd(M, full_matrices=True)
+            self.evals, self.evecs = S.flip(0), Vh.flip(0).t()
         else:
             raise NotImplementedError
 
-    def mv(self, v):
-        # TODO: test
-        v_flat = torch.mv(self.data, v.to_torch())
-        return FVector(vector_repr=v_flat)
+    def get_eigendecomposition(self):
+        return self.evals, self.evecs
 
-    def vTMv(self, v):
+    def mv(self, v):
+        s = self.data.size()
+        M = self.data.view(s[0] * s[1], s[2] * s[3])
         v_flat = v.to_torch().view(-1)
-        sd = self.data.size()
-        return torch.dot(
-            v_flat, torch.mv(self.data.view(sd[0] * sd[1], sd[2] * sd[3]), v_flat)
+        return FVector(vector_repr=torch.mv(M, v_flat).view(s[0], s[1]))
+
+    def mmap(self, pfmap):
+        sM = self.data.size()
+        M = self.data.view(-1, sM[2] * sM[3])
+        sJ = pfmap.size()
+        J = pfmap.to_torch().view(sJ[0] * sJ[1], -1)
+        return PFMapDense(
+            self.layer_collection,
+            self.generator,
+            data=torch.mm(M, J).view(sM[0], sM[1], sJ[2]),
         )
 
     def frobenius_norm(self):
@@ -55,38 +101,86 @@ class FMatDense(FMatAbstract):
         else:  # what should we do for 4D tensor ?
             raise RuntimeError(f"Order {ord} not supported.")
 
-    def project_to_diag(self, v):
-        # TODO: test
-        return PVector(
-            model=v.model,
-            vector_repr=torch.mv(self.evecs.t(), v.to_torch()),
-        )
-
-    def project_from_diag(self, v):
-        # TODO: test
-        return PVector(model=v.model, vector_repr=torch.mv(self.evecs, v.to_torch()))
-
-    def get_eigendecomposition(self):
-        # TODO: test
-        return self.evals, self.evecs
-
     def size(self, *args):
-        # TODO: test
         return self.data.size(*args)
 
     def trace(self):
-        # TODO: test
-        return torch.trace(self.data)
+        s = self.data.size()
+        return torch.trace(self.data.view(s[0] * s[1], s[2] * s[3]))
 
     def to_torch(self):
         return self.data
 
     def __add__(self, other):
-        # TODO: test
-        sum_data = self.data + other.data
-        return FMatDense(generator=self.generator, data=sum_data)
+        return FMatDense(
+            layer_collection=self.layer_collection,
+            generator=self.generator,
+            data=self.data + other.data,
+        )
 
     def __sub__(self, other):
-        # TODO: test
-        sub_data = self.data - other.data
-        return FMatDense(generator=self.generator, data=sub_data)
+        return FMatDense(
+            layer_collection=self.layer_collection,
+            generator=self.generator,
+            data=self.data - other.data,
+        )
+
+    def __rmul__(self, other):
+        return FMatDense(
+            layer_collection=self.layer_collection,
+            generator=self.generator,
+            data=other * self.data,
+        )
+
+    def _cholesky(self, regul=1e-8):
+        try:
+            assert self._cholesky_regul == regul
+            L = self._cholesky_factor
+        except (AttributeError, AssertionError):
+            s = self.data.size()
+
+            L = torch.linalg.cholesky(
+                self.data.view(s[0] * s[1], s[2] * s[3])
+                + (regul * s[1])
+                * torch.eye(s[0] * s[1], device=self.data.device, dtype=self.data.dtype)
+            )
+
+            self._cholesky_regul = regul
+            self._cholesky_factor = L
+
+        return L
+
+    def inv(self, regul=1e-8):
+        s = self.data.size()
+        Minv = torch.cholesky_inverse(self._cholesky(regul))
+
+        return FMatDense(
+            layer_collection=self.layer_collection,
+            generator=self.generator,
+            data=Minv.view(*s),
+        )
+
+    def solveFVec(self, v, regul=1e-8, solve="default"):
+        s = self.data.size()
+        v_flat = v.to_torch().view(-1, 1)
+        if solve in ["default", "solve"]:
+            solution = torch.cholesky_solve(v_flat, self._cholesky(regul))
+        else:
+            raise NotImplementedError
+
+        return FVector(vector_repr=solution.view(s[0], s[1]))
+
+    def solvePFMap(self, pfmap, regul=1e-8, solve="default"):
+        s = self.data.size()
+        sJ = pfmap.size()
+        J = pfmap.to_torch().view(sJ[0] * sJ[1], -1)
+        if solve in ["default", "solve"]:
+            solution = torch.cholesky_solve(J, self._cholesky(regul))
+        else:
+            raise NotImplementedError
+
+        return PFMapDense(
+            layer_collection=self.layer_collection,
+            generator=self.generator,
+            data=solution.view(s[0], s[1], sJ[-1]),
+        )

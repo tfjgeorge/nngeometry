@@ -409,7 +409,13 @@ class FVector:
         self.vector_repr = vector_repr
 
     def to_torch(self):
-        if self.vector_repr is not None:
-            return self.vector_repr
-        else:
-            return NotImplementedError
+        return self.vector_repr
+
+    def __add__(self, other):
+        return FVector(self.vector_repr + other.vector_repr)
+
+    def __sub__(self, other):
+        return FVector(self.vector_repr - other.vector_repr)
+
+    def __rmul__(self, other):
+        return FVector(other * self.vector_repr)
