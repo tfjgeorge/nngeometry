@@ -21,7 +21,7 @@ from nngeometry.layercollection import (
 from .grads_conv import conv1d_backward, conv2d_backward, convtranspose2d_backward
 
 
-def _compute_kpsvd_blocks(A, S):
+def _compute_one_iter_kpsvd_blocks(A, S):
     spatial_locations, ps, os = A.size(1), A.size(2), S.size(2)
 
     # GGt = StAAtS, GtG = AtSStA
@@ -190,7 +190,7 @@ class LinearJacobianFactory(JacobianFactory):
         if layer.has_bias():
             A = torch.cat([A, torch.ones_like(A[:, :, :1])], dim=2)
 
-        R, L = _compute_kpsvd_blocks(A, S)
+        R, L = _compute_one_iter_kpsvd_blocks(A, S)
         right_buffer.add_(R)
         left_buffer.add_(L)
 
@@ -297,7 +297,7 @@ class Conv2dJacobianFactory(JacobianFactory):
 
         S = gy.flatten(2).transpose(1, 2)
 
-        R, L = _compute_kpsvd_blocks(A, S)
+        R, L = _compute_one_iter_kpsvd_blocks(A, S)
         right_buffer.add_(R)
         left_buffer.add_(L)
 
@@ -579,7 +579,7 @@ class Conv1dJacobianFactory(JacobianFactory):
 
         S = gy.flatten(2).transpose(1, 2)
 
-        R, L = _compute_kpsvd_blocks(A, S)
+        R, L = _compute_one_iter_kpsvd_blocks(A, S)
         right_buffer.add_(R)
         left_buffer.add_(L)
 
@@ -651,7 +651,7 @@ class EmbeddingJacobianFactory(JacobianFactory):
 
         S = gy.view(bs, -1, os)
 
-        R, L = _compute_kpsvd_blocks(A, S)
+        R, L = _compute_one_iter_kpsvd_blocks(A, S)
         right_buffer.add_(R)
         left_buffer.add_(L)
 

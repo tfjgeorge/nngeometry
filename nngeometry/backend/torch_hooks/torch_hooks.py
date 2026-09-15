@@ -333,6 +333,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 self._buffer["blocks"][layer_id][1].div_(n_output**0.5)
 
             elif strategy == "one_iter_kpsvd":
+                # 3.1.2 in https://arxiv.org/pdf/2406.17748v1
                 tr = torch.trace(self._buffer["blocks"][layer_id][1])
                 self._buffer["blocks"][layer_id][0].div_(tr**0.5)
                 self._buffer["blocks"][layer_id][1].div_(tr**0.5)
