@@ -206,6 +206,7 @@ def test_kfac_vs_one_iter_kpsvd():
         get_embedding_task,
         get_conv1d_task,
         get_conv_task,
+        get_linear_3d_task,
     ]:
         loader, lc, parameters, model, function = get_task()
         model.train()
