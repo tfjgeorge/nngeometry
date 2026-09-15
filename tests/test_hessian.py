@@ -158,7 +158,7 @@ def test_Hdense_vs_Himplicit():
         dense_solvepfmap = H_dense.solve(x, regul=100)
         for x0 in [None, dense_solvepfmap]:
             imp_solvepfmap = H_implicit.solve(
-                x, regul=100, max_iter=200, rtol=0, atol=1e-5, x0=x0
+                x, regul=100, max_iter=None, rtol=0, atol=1e-5, x0=x0
             )
 
             for layer_id, layer in lc.layers.items():

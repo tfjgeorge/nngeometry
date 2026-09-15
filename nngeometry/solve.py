@@ -50,7 +50,7 @@ def qr(pfmap):
 
 def block_cg(A, b, regul=1e-8, x0=None, rtol=1e-5, atol=0, max_iter=None, M=None):
     # https://arxiv.org/pdf/2502.16998 Algorithm 8 with γ->α and δ->β to match cg
-    tol = max(rtol * (torch.sum(b.to_torch() ** 2, dim=-1) ** 0.5).mean(), atol)
+    tol = torch.clamp(rtol * (torch.sum(b.to_torch() ** 2, dim=-1) ** 0.5), min=atol)
     lc = A.layer_collection
     if max_iter is None:
         max_iter = 10 * lc.numel()
