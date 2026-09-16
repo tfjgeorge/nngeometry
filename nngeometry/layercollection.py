@@ -324,6 +324,7 @@ class EmbeddingLayer(AbstractLayer):
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
         self.weight = Parameter(num_embeddings, embedding_dim)
+        self.bias = None
 
     def numel(self):
         return self.weight.numel()
