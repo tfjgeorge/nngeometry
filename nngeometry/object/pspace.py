@@ -1444,7 +1444,7 @@ class PMatLowRank(PMatAbstract):
         Av = torch.mv(data_mat, v.to_torch())
         return torch.dot(Av, Av)
 
-    def mapTMmap(self, pfmap, reduction="sum"):
+    def mapTMmap(self, pfmap, reduction=None):
         data_mat = self.data.view(-1, self.data.size(-1))
         pfmap_mat = pfmap.to_torch().view(-1, self.data.size(-1))
         Amap = torch.mm(data_mat, pfmap_mat.t())
