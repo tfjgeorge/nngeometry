@@ -50,6 +50,7 @@ In-depth
    quick_example.rst
    install.rst
    pspace_repr.rst
+   objects.rst
    :maxdepth: 1
 
    api/index.rst
