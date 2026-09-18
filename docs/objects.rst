@@ -1,5 +1,5 @@
-Core Objects
-============
+FIM, Hessian, Jacobian, Gram matrix
+===================================
 
 NNGeometry provides high-level functions to compute and manipulate key mathematical objects in neural networks. All are accessible from the top-level package:
 
