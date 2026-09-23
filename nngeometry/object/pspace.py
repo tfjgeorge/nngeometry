@@ -786,6 +786,17 @@ class PMatKFAC(PMatAbstract):
     def __pow__(self, pow):
         return self.pow(pow)
 
+    def __rmul__(self, other):
+        rmul_data = dict()
+        for layer_id, layer in self.layer_collection.layers.items():
+            a, g = self.data[layer_id]
+            rmul_data[layer_id] = (other**0.5 * a, other**0.5 * g)
+        return PMatKFAC(
+            generator=self.generator,
+            data=rmul_data,
+            layer_collection=self.layer_collection,
+        )
+
     def solvePVec(self, x, regul=1e-8, solve="default", use_pi=True):
         if solve != "default":
             raise NotImplementedError

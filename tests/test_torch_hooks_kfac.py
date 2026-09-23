@@ -283,6 +283,9 @@ def test_kfac():
             rtol=1e-3,
         )
 
+        # Test rmul
+        torch.testing.assert_close((1.23 * M_kfac).to_torch(), 1.23 * M_kfac.to_torch())
+
         # Test inverse
         # We start from a mv vector since it kills its components projected to
         # the small eigenvalues of KFAC
