@@ -851,7 +851,7 @@ def test_jacobian_pimplicit_vs_pdense():
             l.__class__.__name__ for l in lc.layers.values()
         ] or "BatchNorm2dLayer" in [l.__class__.__name__ for l in lc.layers.values()]:
             with pytest.raises(NotImplementedError):
-                PMat_implicit.solvePVec(dw)
+                PMat_implicit.mmap(x)
         else:
             dense_mmap = PMat_dense.mmap(x)
             imp_mmap = PMat_implicit.mmap(x)
@@ -871,7 +871,7 @@ def test_jacobian_pimplicit_vs_pdense():
             l.__class__.__name__ for l in lc.layers.values()
         ] or "BatchNorm2dLayer" in [l.__class__.__name__ for l in lc.layers.values()]:
             with pytest.raises(NotImplementedError):
-                PMat_implicit.solvePVec(dw)
+                PMat_implicit.mapTMmap(x)
         else:
             torch.testing.assert_close(
                 PMat_dense.mapTMmap(x), PMat_implicit.mapTMmap(x)

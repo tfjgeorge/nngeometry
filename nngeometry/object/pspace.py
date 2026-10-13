@@ -17,7 +17,7 @@ from nngeometry.layercollection import (
 from nngeometry.maths import kronecker
 from nngeometry.object.map import PFMap, PFMapAdjoint, PFMapDense
 from nngeometry.object.vector import PVector
-from nngeometry.solve import cg
+from nngeometry.solve import block_cg, cg
 
 
 class PMatAbstract(ABC):
@@ -1410,6 +1410,12 @@ class PMatImplicit(PMatAbstract):
     def solvePVec(self, x, regul=1e-8, solve="cg", **kwargs):
         if solve in ["default", "cg"]:
             return cg(self, x, regul=regul, **kwargs)
+        else:
+            raise NotImplementedError
+
+    def solvePFMap(self, x, regul=1e-8, solve="cg", **kwargs):
+        if solve in ["default", "cg"]:
+            return block_cg(self, x, regul=regul, **kwargs)
         else:
             raise NotImplementedError
 
