@@ -389,6 +389,44 @@ class TorchHooksJacobianBackend(AbstractBackend):
         return grads
 
     @instance_buffer_handles
+    def get_jacobian_factored(self, examples, layer_collection):
+        layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
+        # add hooks
+        self._handles += self._add_hooks(
+            self._hook_savex,
+            self._hook_compute_factored_grad,
+            layerid_to_mod,
+            layer_collection,
+        )
+
+        loader = self._get_dataloader(examples)
+        n_examples = len(loader.sampler)
+
+        self._buffer["blocks"] = dict()
+        self._buffer["n_examples"] = n_examples
+
+        self._buffer["start"] = 0
+        for d in self._get_iter_loader(loader):
+            self._buffer["xs"] = dict()
+            inputs = d[0]
+            grad_wrt = self._infer_differentiable_leafs(inputs, layerid_to_mod.values())
+            bs = inputs.size(0)
+            output = self.function(*d).view(bs, -1).sum(dim=0)
+            n_output = output.size(-1)
+            self._buffer["n_output"] = n_output
+            for self._buffer["i_output"] in range(n_output):
+                retain_graph = self._buffer["i_output"] < n_output - 1
+                torch.autograd.grad(
+                    output[self._buffer["i_output"]],
+                    grad_wrt,
+                    retain_graph=retain_graph,
+                    only_inputs=True,
+                )
+            self._buffer["start"] += inputs.size(0)
+        # TODO: centering
+        return self._buffer["blocks"]
+
+    @instance_buffer_handles
     def get_gram_matrix(self, examples, layer_collection):
         layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
         # add hooks
@@ -804,6 +842,44 @@ class TorchHooksJacobianBackend(AbstractBackend):
         else:
             self._buffer["x_inner"][mod] = i[0]
 
+    def _hook_compute_factored_grad(self, mod, gy, layer_id, layer_collection):
+        mod_class = mod.__class__.__name__
+        if mod_class not in ["Linear", "Conv2d", "Conv1d", "Embedding"]:
+            raise NotImplementedError
+
+        x = self._buffer["xs"][mod]
+        bs = x.size(0)
+        layer = layer_collection[layer_id]
+        g = FactoryMap[layer.__class__].output_derivatives(mod, layer, gy)
+        if self._buffer["i_output"] == 0:
+            a = FactoryMap[layer.__class__].activations(mod, layer, x)
+
+        if layer_id not in self._buffer["blocks"]:
+            self._buffer["blocks"][layer_id] = (
+                torch.empty(
+                    self._buffer["n_examples"],
+                    *a.shape[1:],
+                    dtype=a.dtype,
+                    device=a.device,
+                ),
+                torch.empty(
+                    (
+                        self._buffer["n_output"],
+                        self._buffer["n_examples"],
+                        *g.shape[1:],
+                    ),
+                    dtype=g.dtype,
+                    device=g.device,
+                ),
+            )
+
+        block = self._buffer["blocks"][layer_id]
+        start = self._buffer["start"]
+        end = start + bs
+        if self._buffer["i_output"] == 0:
+            block[0][start:end].copy_(a)
+        block[1][self._buffer["i_output"], start:end].copy_(g)
+
     def _hook_compute_flat_grad(self, mod, gy, layer_id, layer_collection):
         x = self._buffer["xs"][mod]
         bs = x.size(0)
@@ -845,14 +921,10 @@ class TorchHooksJacobianBackend(AbstractBackend):
         mod_class = mod.__class__.__name__
         x = self._buffer["xs"][mod]
         layer = layer_collection[layer_id]
+        block = self._buffer["blocks"][layer_id]
         if mod_class in ["Linear", "Conv2d", "Conv1d", "Embedding"]:
             FactoryMap[layer.__class__].one_iter_kpsvd_blocks(
-                self._buffer["blocks"][layer_id][0],
-                self._buffer["blocks"][layer_id][1],
-                mod,
-                layer,
-                x,
-                gy,
+                block[0], block[1], mod, layer, x, gy
             )
         else:
             raise NotImplementedError

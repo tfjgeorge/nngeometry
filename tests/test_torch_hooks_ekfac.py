@@ -1,3 +1,5 @@
+from functools import partial
+
 import pytest
 import torch
 from tasks import (
@@ -11,7 +13,7 @@ from tasks import (
 from utils import check_ratio
 
 from nngeometry.backend import TorchHooksJacobianBackend
-from nngeometry.object.map import PFMapDense
+from nngeometry.object.map import PFMapDense, PFMapFactored
 from nngeometry.object.pspace import PMatBlockDiag, PMatEKFAC, PMatKFAC
 from nngeometry.object.vector import random_pvector
 
@@ -224,3 +226,29 @@ def test_ekfac_kfac_vs_one_iter_kpsvd():
         assert torch.norm(M_kfac.to_torch() - M_blockdiag.to_torch()) > torch.norm(
             M_one_iter_kpsvd.to_torch() - M_blockdiag.to_torch()
         )
+
+
+def test_ekfac_mmap():
+    for get_task in [
+        get_fullyconnect_task,
+        get_conv_task,
+        partial(get_conv_task, normalization="transpose"),
+        get_conv1d_task,
+        get_embedding_task,
+    ]:
+        loader, lc, parameters, model, function = get_task()
+        generator = TorchHooksJacobianBackend(model=model, function=function)
+        kfac = PMatEKFAC(generator=generator, examples=loader, layer_collection=lc)
+        factored_pfmap = PFMapFactored(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+        dense_pfmap = PFMapDense(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+
+        factored_mmap = (kfac @ factored_pfmap.adjoint()).adjoint()
+        dense_mmap = (kfac @ dense_pfmap.adjoint()).adjoint()
+
+        assert isinstance(factored_mmap, PFMapDense)
+        assert isinstance(dense_mmap, PFMapDense)
+        torch.testing.assert_close(factored_mmap.to_torch(), dense_mmap.to_torch())

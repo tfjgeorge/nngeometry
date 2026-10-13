@@ -191,6 +191,68 @@ class PFMapDense(PFMap, AdjointMixin):
         )
 
 
+class PFMapFactored(PFMap, AdjointMixin):
+    def __init__(self, layer_collection, generator=None, data=None, examples=None):
+        self.generator = generator
+        self.layer_collection = layer_collection
+        if data is not None:
+            self.data = data
+        elif generator is None:
+            raise Exception("One of generator or data should be not None")
+        else:
+            self.data = generator.get_jacobian_factored(examples, layer_collection)
+
+    def to_torch(self):
+        torch_layers = []
+        for layer_id in self.layer_collection.layers.keys():
+            for value in self.to_torch_layer(layer_id):
+                torch_layers.append(value.flatten(start_dim=2))
+        return torch.cat(torch_layers, dim=2)
+
+    def size(self, dim=None):
+        _, g = next(iter(self.data.values()))
+        size = torch.Size((g.size(0), g.size(1), self.layer_collection.numel()))
+        if dim is None:
+            return size
+        return size[dim]
+
+    def jvp(self, v):
+        raise NotImplementedError
+
+    def vjp(self, v):
+        raise NotImplementedError
+
+    def batched_jvp(self, pfmap):
+        raise NotImplementedError
+
+    def batched_vjp(self, pfmap):
+        raise NotImplementedError
+
+    def iter_by_layer(self):
+        for layer_id, layer in self.layer_collection.layers.items():
+            yield layer_id, layer, self.to_torch_layer(layer_id)
+
+    def to_torch_layer(self, layer_id):
+        layer = self.layer_collection.layers[layer_id]
+        a, g = self.data[layer_id]
+        grad = torch.einsum("onsg,nsa->onga", g, a)
+
+        if layer.has_bias():
+            w = grad[..., :-1]
+            b = grad[..., -1].reshape(grad.size(0), grad.size(1), *layer.bias.size)
+        else:
+            w = grad
+
+        if layer.transposed:
+            w = w.transpose(-2, -1)
+        w = w.reshape(grad.size(0), grad.size(1), *layer.weight.size)
+
+        if layer.has_bias():
+            return w, b
+        else:
+            return (w,)
+
+
 class PFMapImplicit(PFMap):
     def __init__(self, layer_collection, generator, data=None, examples=None):
         self.layer_collection = layer_collection

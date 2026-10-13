@@ -1,4 +1,5 @@
 import os
+from functools import partial
 
 import pytest
 import torch
@@ -18,6 +19,7 @@ from utils import angle
 from nngeometry.backend import TorchHooksJacobianBackend
 from nngeometry.layercollection import LayerCollection
 from nngeometry.maths import kronecker
+from nngeometry.object.map import PFMapDense, PFMapFactored
 from nngeometry.object.pspace import PMatBlockDiag, PMatKFAC
 from nngeometry.object.vector import PVector, random_pvector
 
@@ -145,10 +147,11 @@ def test_torch_hooks_kfac_vs_pblockdiag():
     Compares blockdiag and kfac representation on datasets/architectures
     where they are the same
     """
-    for get_task, mult in zip(
-        [get_conv1dnet_kfc_task, get_convnet_kfc_task, get_fullyconnect_kfac_task],
-        [3.0, 15.0, 1.0],
-    ):
+    for get_task in [
+        get_conv1dnet_kfc_task,
+        get_convnet_kfc_task,
+        get_fullyconnect_kfac_task,
+    ]:
         print(get_task)
         loader, lc, parameters, model, function = get_task()
 
@@ -163,7 +166,7 @@ def test_torch_hooks_kfac_vs_pblockdiag():
 
         G_kfac = M_kfac.to_torch(split_weight_bias=True)
         G_blockdiag = M_blockdiag.to_torch()
-        torch.testing.assert_close(G_blockdiag, G_kfac * mult)
+        torch.testing.assert_close(G_blockdiag, G_kfac)
 
 
 def test_one_iter_kpsvd_vs_pblockdiag():
@@ -171,10 +174,11 @@ def test_one_iter_kpsvd_vs_pblockdiag():
     Compares blockdiag and kfac representation on datasets/architectures
     where they are the same
     """
-    for get_task, mult in zip(
-        [get_conv1dnet_kfc_task, get_convnet_kfc_task, get_fullyconnect_kfac_task],
-        [3.0, 15.0, 1.0],
-    ):
+    for get_task in [
+        get_conv1dnet_kfc_task,
+        get_convnet_kfc_task,
+        get_fullyconnect_kfac_task,
+    ]:
         loader, lc, parameters, model, function = get_task()
 
         generator = TorchHooksJacobianBackend(
@@ -303,6 +307,32 @@ def test_kfac():
         torch.testing.assert_close(
             mv_kfac.to_torch(), mv_back.to_torch(), atol=1e-3, rtol=1e-3
         )
+
+
+def test_kfac_mmap():
+    for get_task in [
+        get_fullyconnect_task,
+        get_conv_task,
+        partial(get_conv_task, normalization="transpose"),
+        get_conv1d_task,
+        get_embedding_task,
+    ]:
+        loader, lc, parameters, model, function = get_task()
+        generator = TorchHooksJacobianBackend(model=model, function=function)
+        kfac = PMatKFAC(generator=generator, examples=loader, layer_collection=lc)
+        factored_pfmap = PFMapFactored(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+        dense_pfmap = PFMapDense(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+
+        factored_mmap = (kfac @ factored_pfmap.adjoint()).adjoint()
+        dense_mmap = (kfac @ dense_pfmap.adjoint()).adjoint()
+
+        assert isinstance(factored_mmap, PFMapFactored)
+        assert isinstance(dense_mmap, PFMapDense)
+        torch.testing.assert_close(factored_mmap.to_torch(), dense_mmap.to_torch())
 
 
 def test_kfac_mm():

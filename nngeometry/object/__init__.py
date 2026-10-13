@@ -1,5 +1,5 @@
 from .fspace import FMatDense
-from .map import PFMapDense, PFMapImplicit
+from .map import PFMapDense, PFMapFactored, PFMapImplicit
 from .pspace import (
     PMatBlockDiag,
     PMatDense,
@@ -20,6 +20,7 @@ __all__ = [
     "PVector",
     "FMatDense",
     "PFMapDense",
+    "PFMapFactored",
     "PFMapImplicit",
     "PMatBlockDiag",
     "PMatDense",

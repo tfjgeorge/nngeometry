@@ -15,7 +15,7 @@ from nngeometry.layercollection import (
     LinearLayer,
 )
 from nngeometry.maths import kronecker
-from nngeometry.object.map import PFMap, PFMapAdjoint, PFMapDense
+from nngeometry.object.map import PFMap, PFMapAdjoint, PFMapDense, PFMapFactored
 from nngeometry.object.vector import PVector
 from nngeometry.solve import cg
 
@@ -928,6 +928,63 @@ class PMatKFAC(PMatAbstract):
             out_dict[layer_id] = mv_tuple
         return PVector(layer_collection=vs.layer_collection, dict_repr=out_dict)
 
+    def mmap(self, pfmap):
+        if isinstance(pfmap, PFMapFactored):
+            out_dict = dict()
+            for layer_id, layer in pfmap.layer_collection.layers.items():
+                a, g = pfmap.data[layer_id]
+                sa = a.size()
+                sg = g.size()
+                A, G = self.data[layer_id]
+                if layer.transposed:
+                    A = A.t()
+                    G = G.t()
+                a = torch.mm(a.view(-1, sa[-1]), A)
+                g = torch.mm(g.view(-1, sg[-1]), G.t())
+                out_dict[layer_id] = (a.view(*sa), g.view(*sg))
+
+            return PFMapFactored(
+                generator=self.generator,
+                data=out_dict,
+                layer_collection=pfmap.layer_collection,
+            )
+        elif isinstance(pfmap, PFMapDense):
+            out_dict = dict()
+            for layer_id, layer, values in pfmap.iter_by_layer():
+                w = values[0]
+                sw = w.size()
+                v = w.view(sw[0] * sw[1], sw[2], -1)
+                if layer.has_bias():
+                    b = values[1]
+                    sb = b.size()
+                    v = torch.cat([v, b.view(sw[0] * sw[1], sw[2], 1)], dim=2)
+
+                A, G = self.data[layer_id]
+                if layer.transposed:
+                    A, G = G, A
+
+                sv = v.size()
+                v = v.permute(1, 0, 2)
+                v = torch.mm(G, v.contiguous().view(sv[1], -1))
+                v = v.view(sv[1], sv[0], sv[2]).permute(1, 0, 2)
+                v = torch.mm(v.contiguous().view(-1, sv[2]), A).view(*sv)
+
+                if layer.has_bias():
+                    out_dict[layer_id] = (
+                        v[:, :, :-1].contiguous().view(*sw),
+                        v[:, :, -1].contiguous().view(*sb),
+                    )
+                else:
+                    out_dict[layer_id] = (v.view(*sw),)
+
+            return PFMapDense.from_dict(
+                generator=self.generator,
+                data_dict=out_dict,
+                layer_collection=pfmap.layer_collection,
+            )
+        else:
+            return super().mmap(pfmap)
+
     def vTMv(self, vector):
         vector_dict = vector.to_dict()
         norm2 = 0
@@ -1134,6 +1191,51 @@ class PMatEKFAC(PMatAbstract):
 
             out_dict[layer_id] = self._proj_from_kfe(mv_kfe, evecs[layer_id], layer)
         return PVector(layer_collection=lc_merged, dict_repr=out_dict)
+
+    def mmap(self, pfmap):
+        self._check_diag_updated()
+        out_dict = dict()
+        evecs, diags = self.data
+
+        if isinstance(pfmap, PFMapDense):
+            for layer_id, layer, vals in pfmap.iter_by_layer():
+                if layer_id not in self.layer_collection.layers:
+                    continue
+                v_kfe = self._proj_to_kfe_batched(vals, evecs[layer_id], layer)
+                mv_kfe = v_kfe * diags[layer_id]
+                out_dict[layer_id] = self._proj_from_kfe_batched(
+                    mv_kfe, evecs[layer_id], layer
+                )
+            return PFMapDense.from_dict(
+                layer_collection=pfmap.layer_collection,
+                generator=pfmap.generator,
+                data_dict=out_dict,
+            )
+        elif isinstance(pfmap, PFMapFactored):
+            for layer_id, layer in pfmap.layer_collection.layers.items():
+                if layer_id not in self.layer_collection.layers:
+                    continue
+                a, g = pfmap.data[layer_id]
+                evecs_a, evecs_g = evecs[layer_id]
+                diag = diags[layer_id]
+                if layer.transposed:
+                    diag = diag.transpose(-1, -2)
+                sa, sg = a.size(), g.size()
+                a = torch.mm(a.view(-1, sa[-1]), evecs_a).view(*sa)
+                g = torch.mm(g.view(-1, sg[-1]), evecs_g).view(*sg)
+                mv_kfe = torch.einsum("onsg, nsa, ga->onga", g, a, diag)
+                if layer.transposed:
+                    mv_kfe = mv_kfe.transpose(-1, -2)
+                out_dict[layer_id] = self._proj_from_kfe_batched(
+                    mv_kfe, evecs[layer_id], layer
+                )
+            return PFMapDense.from_dict(
+                layer_collection=pfmap.layer_collection,
+                generator=pfmap.generator,
+                data_dict=out_dict,
+            )
+        else:
+            return super().mmap(pfmap)
 
     def vTMv(self, vector):
         self._check_diag_updated()
