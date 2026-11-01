@@ -1,9 +1,8 @@
-from copy import deepcopy
+from contextlib import ExitStack
 from functools import partial
 
 import torch
 
-from nngeometry.layercollection import LayerCollection
 from nngeometry.object.vector import FVector, PVector
 
 from .._backend import AbstractBackend
@@ -69,14 +68,13 @@ class TorchHooksJacobianBackend(AbstractBackend):
     def get_covariance_matrix(self, examples, layer_collection):
         layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
 
-        edges = []
         self._handles += self._add_hooks(
             self._hook_savex,
             self._hook_compute_flat_grad,
             layerid_to_mod,
             layer_collection,
-            edges=edges,
         )
+        forward = partial(self._forward, layerid_to_mod)
 
         device = self._check_same_device(layerid_to_mod.values())
         dtype = self._check_same_dtype(layerid_to_mod.values())
@@ -101,17 +99,14 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self._buffer["i_output"] = 0
         for d in self._get_iter_loader(loader):
             self._buffer["xs"] = dict()
-            edges.clear()
-            inputs = d[0]
-            bs = inputs.size(0)
-            output = self.function(*d).view(bs, -1).sum(dim=0)
+            output, backward = forward(*d)
+            output = output.sum(dim=0)
             n_output = output.size(-1)
             self._exec_delayed_n_output(n_output)
             for i in range(n_output):
                 self._buffer["grads"].zero_()
-                torch.autograd.backward(
+                backward(
                     output[i],
-                    inputs=edges,
                     retain_graph=i < n_output - 1,
                 )
                 G += torch.mm(self._buffer["grads"][0].t(), self._buffer["grads"][0])
@@ -132,14 +127,13 @@ class TorchHooksJacobianBackend(AbstractBackend):
             raise NotImplementedError
         layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
 
-        edges = []
         self._handles += self._add_hooks(
             self._hook_savex,
             self._hook_compute_diag,
             layerid_to_mod,
             layer_collection,
-            edges=edges,
         )
+        forward = partial(self._forward, layerid_to_mod)
 
         device = self._check_same_device(layerid_to_mod.values())
         dtype = self._check_same_dtype(layerid_to_mod.values())
@@ -152,17 +146,13 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self._buffer["start"] = 0
         for d in self._get_iter_loader(loader):
             self._buffer["xs"] = dict()
-            edges.clear()
-            inputs = d[0]
-
-            bs = inputs.size(0)
-            output = self.function(*d).view(bs, -1).sum(dim=0)
+            output, backward = forward(*d)
+            output = output.sum(dim=0)
             n_output = output.size(-1)
 
             for i in range(n_output):
-                torch.autograd.backward(
+                backward(
                     output[i],
-                    inputs=edges,
                     retain_graph=i < n_output - 1,
                 )
         diag_m = self._buffer["diag_m"] / n_examples
@@ -176,14 +166,14 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
 
-        edges = []
         self._handles += self._add_hooks(
             self._hook_savex,
             self._hook_compute_quasidiag,
             layerid_to_mod,
             layer_collection,
-            edges=edges,
         )
+        forward = partial(self._forward, layerid_to_mod)
+
         device = self._check_same_device(layerid_to_mod.values())
         dtype = self._check_same_dtype(layerid_to_mod.values())
 
@@ -206,15 +196,12 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         for d in self._get_iter_loader(loader):
             self._buffer["xs"] = dict()
-            edges.clear()
-            inputs = d[0]
-            bs = inputs.size(0)
-            output = self.function(*d).view(bs, -1).sum(dim=0)
+            output, backward = forward(*d)
+            output = output.sum(dim=0)
             n_output = output.size(-1)
             for i in range(n_output):
-                torch.autograd.backward(
+                backward(
                     output[i],
-                    inputs=edges,
                     retain_graph=i < n_output - 1,
                 )
         for d, c in self._buffer["blocks"].values():
@@ -230,14 +217,13 @@ class TorchHooksJacobianBackend(AbstractBackend):
             raise NotImplementedError
         layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
 
-        edges = []
         self._handles += self._add_hooks(
             self._hook_savex,
             self._hook_compute_layer_blocks,
             layerid_to_mod,
             layer_collection,
-            edges=edges,
         )
+        forward = partial(self._forward, layerid_to_mod)
 
         device = self._check_same_device(layerid_to_mod.values())
         dtype = self._check_same_dtype(layerid_to_mod.values())
@@ -253,16 +239,12 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         for d in self._get_iter_loader(loader):
             self._buffer["xs"] = dict()
-            edges.clear()
-            inputs = d[0]
-
-            bs = inputs.size(0)
-            output = self.function(*d).view(bs, -1).sum(dim=0)
+            output, backward = forward(*d)
+            output = output.sum(dim=0)
             n_output = output.size(-1)
             for i in range(n_output):
-                torch.autograd.backward(
+                backward(
                     output[i],
-                    inputs=edges,
                     retain_graph=i < n_output - 1,
                 )
         blocks = {
@@ -281,14 +263,13 @@ class TorchHooksJacobianBackend(AbstractBackend):
         else:
             raise NotImplementedError()
 
-        edges = []
         self._handles += self._add_hooks(
             self._hook_savex,
             hook_gy,
             layerid_to_mod,
             layer_collection,
-            edges=edges,
         )
+        forward = partial(self._forward, layerid_to_mod)
 
         device = self._check_same_device(layerid_to_mod.values())
         dtype = self._check_same_dtype(layerid_to_mod.values())
@@ -319,17 +300,13 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         for d in self._get_iter_loader(loader):
             self._buffer["xs"] = dict()
-            edges.clear()
-            inputs = d[0]
-            bs = inputs.size(0)
-            output = self.function(*d).view(bs, -1).sum(dim=0)
+            output, backward = forward(*d)
+            output = output.sum(dim=0)
             n_output = output.size(-1)
             for self._buffer["i_output"] in range(n_output):
-                retain_graph = self._buffer["i_output"] < n_output - 1
-                torch.autograd.backward(
+                backward(
                     output[self._buffer["i_output"]],
-                    inputs=edges,
-                    retain_graph=retain_graph,
+                    retain_graph=self._buffer["i_output"] < n_output - 1,
                 )
         for layer_id in layer_collection.layers.keys():
             self._buffer["blocks"][layer_id][0].div_(n_examples)
@@ -351,14 +328,13 @@ class TorchHooksJacobianBackend(AbstractBackend):
     def get_jacobian(self, examples, layer_collection):
         layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
 
-        edges = []
         self._handles += self._add_hooks(
             self._hook_savex,
             self._hook_compute_flat_grad,
             layerid_to_mod,
             layer_collection,
-            edges=edges,
         )
+        forward = partial(self._forward, layerid_to_mod)
 
         device = self._check_same_device(layerid_to_mod.values())
         dtype = self._check_same_dtype(layerid_to_mod.values())
@@ -376,20 +352,16 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self._buffer["start"] = 0
         for d in self._get_iter_loader(loader):
             self._buffer["xs"] = dict()
-            edges.clear()
-            inputs = d[0]
-            bs = inputs.size(0)
-            output = self.function(*d).view(bs, -1).sum(dim=0)
+            output, backward = forward(*d)
+            output = output.sum(dim=0)
             n_output = output.size(-1)
             self._exec_delayed_n_output(n_output)
             for self._buffer["i_output"] in range(n_output):
-                retain_graph = self._buffer["i_output"] < n_output - 1
-                torch.autograd.backward(
+                backward(
                     output[self._buffer["i_output"]],
-                    inputs=edges,
-                    retain_graph=retain_graph,
+                    retain_graph=self._buffer["i_output"] < n_output - 1,
                 )
-            self._buffer["start"] += inputs.size(0)
+            self._buffer["start"] += d[0].size(0)
         grads = self._buffer["grads"]
         if self.centering:
             grads -= grads.mean(dim=1, keepdim=True)
@@ -400,14 +372,13 @@ class TorchHooksJacobianBackend(AbstractBackend):
     def get_gram_matrix(self, examples, layer_collection):
         layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
 
-        edges = []
         self._handles += self._add_hooks(
             self._hook_savex_io,
             self._hook_kxy,
             layerid_to_mod,
             layer_collection,
-            edges=edges,
         )
+        forward = partial(self._forward, layerid_to_mod)
 
         device = self._check_same_device(layerid_to_mod.values())
         dtype = self._check_same_dtype(layerid_to_mod.values())
@@ -427,21 +398,18 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self._buffer["e_outer"] = 0
         for i_outer, d in enumerate(self._get_iter_loader(loader)):
             self._buffer["x_outer"] = dict()
-            edges.clear()
             # used in hooks to switch between store/compute
-            inputs_outer = d[0]
-            bs_outer = inputs_outer.size(0)
             self.outerloop_switch = True
-            output_outer = self.function(*d).view(bs_outer, -1).sum(dim=0)
+            bs_outer = d[0].size(0)
+            output_outer, backward_outer = forward(*d)
+            output_outer = output_outer.sum(dim=0)
             n_output = output_outer.size(-1)
             self._exec_delayed_n_output(n_output)
 
-            edges_outer = [e for e in edges]
             for self._buffer["i_output_outer"] in range(n_output):
                 self.outerloop_switch = True
-                torch.autograd.backward(
+                backward_outer(
                     output_outer[self._buffer["i_output_outer"]],
-                    inputs=edges_outer,
                     retain_graph=True,
                 )
                 self.outerloop_switch = False
@@ -449,16 +417,14 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 self._buffer["e_inner"] = 0
                 for i_inner, d in enumerate(loader):
                     self._buffer["x_inner"] = dict()
-                    edges.clear()
                     if i_inner > i_outer:
                         break
-                    inputs_inner = d[0]
-                    bs_inner = inputs_inner.size(0)
-                    output_inner = self.function(*d).view(bs_inner, n_output).sum(dim=0)
+                    bs_inner = d[0].size(0)
+                    output_inner, backward_inner = forward(*d)
+                    output_inner = output_inner.sum(dim=0)
                     for self._buffer["i_output_inner"] in range(n_output):
-                        torch.autograd.backward(
+                        backward_inner(
                             output_inner[self._buffer["i_output_inner"]],
-                            inputs=edges,
                             retain_graph=True,
                         )
 
@@ -484,9 +450,9 @@ class TorchHooksJacobianBackend(AbstractBackend):
                             self._buffer["e_outer"] : self._buffer["e_outer"]
                             + bs_outer,
                         ].permute(2, 3, 0, 1)
-                    self._buffer["e_inner"] += inputs_inner.size(0)
+                    self._buffer["e_inner"] += bs_inner
 
-            self._buffer["e_outer"] += inputs_outer.size(0)
+            self._buffer["e_outer"] += bs_outer
         G = self._buffer["G"]
         if self.centering:
             C = (
@@ -515,14 +481,13 @@ class TorchHooksJacobianBackend(AbstractBackend):
     def get_kfe_diag(self, kfe, examples, layer_collection):
         layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
 
-        edges = []
         self._handles += self._add_hooks(
             self._hook_savex,
             self._hook_compute_kfe_diag,
             layerid_to_mod,
             layer_collection,
-            edges=edges,
         )
+        forward = partial(self._forward, layerid_to_mod)
 
         device = self._check_same_device(layerid_to_mod.values())
         dtype = self._check_same_dtype(layerid_to_mod.values())
@@ -553,17 +518,13 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         for d in self._get_iter_loader(loader):
             self._buffer["xs"] = dict()
-            edges.clear()
-            inputs = d[0]
-            bs = inputs.size(0)
-            output = self.function(*d).view(bs, -1).sum(dim=0)
+            output, backward = forward(*d)
+            output = output.sum(dim=0)
             n_output = output.size(-1)
             for self._buffer["i_output"] in range(n_output):
-                retain_graph = self._buffer["i_output"] < n_output - 1
-                torch.autograd.backward(
+                backward(
                     output[self._buffer["i_output"]],
-                    inputs=edges,
-                    retain_graph=retain_graph,
+                    retain_graph=self._buffer["i_output"] < n_output - 1,
                 )
         diags = {
             l_id: self._buffer["diags"][l_id] / n_examples
@@ -576,28 +537,27 @@ class TorchHooksJacobianBackend(AbstractBackend):
     def implicit_mv(self, v, examples, layer_collection):
         layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
 
-        edges = []
         self._handles += self._add_hooks(
             self._hook_savex,
             self._hook_compute_Jv,
             layerid_to_mod,
             layer_collection,
-            edges=edges,
         )
+        forward = partial(self._forward, layerid_to_mod)
 
         self._buffer["v"] = v.to_dict()
         parameters = []
-        output = dict()
+        mv = dict()
         for layer_id, layer in layer_collection.layers.items():
             mod = layer_collection.get_layerid_module_map(self.model)[layer_id]
             mod_class = mod.__class__.__name__
             if mod_class in ["BatchNorm1d", "BatchNorm2d"]:
                 raise NotImplementedError
             parameters.append(mod.weight)
-            output[mod.weight] = torch.zeros_like(mod.weight)
+            mv[mod.weight] = torch.zeros_like(mod.weight)
             if layer.has_bias():
                 parameters.append(mod.bias)
-                output[mod.bias] = torch.zeros_like(mod.bias)
+                mv[mod.bias] = torch.zeros_like(mod.bias)
 
         device = self._check_same_device(layerid_to_mod.values())
         dtype = self._check_same_dtype(layerid_to_mod.values())
@@ -608,24 +568,17 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self._buffer["start"] = 0
         for d in self._get_iter_loader(loader):
             self._buffer["xs"] = dict()
-            edges.clear()
-            inputs = d[0]
-            bs = inputs.size(0)
-
-            f_output = self.function(*d).view(bs, -1)
-            n_output = f_output.size(-1)
+            output, backward = forward(*d)
+            n_output = output.size(-1)
             pseudo_loss = 0
             for i in range(n_output):
                 # TODO reuse instead of reallocating memory
-                self._buffer["Jv"] = torch.zeros((1, bs), device=device, dtype=dtype)
-
-                self._buffer["compute_switch"] = True
-                torch.autograd.backward(
-                    f_output[:, i].sum(dim=0),
-                    inputs=edges,
-                    retain_graph=True,
+                self._buffer["Jv"] = torch.zeros(
+                    (1, d[0].size(0)), device=device, dtype=dtype
                 )
-                pseudo_loss += torch.dot(self._buffer["Jv"][0, :], f_output[:, i])
+                self._buffer["compute_switch"] = True
+                backward(output[:, i].sum(dim=0), retain_graph=True)
+                pseudo_loss += torch.dot(self._buffer["Jv"][0, :], output[:, i])
 
             self._buffer["compute_switch"] = False
             grads = torch.autograd.grad(
@@ -634,18 +587,18 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 only_inputs=True,
             )
             for i_p, p in enumerate(parameters):
-                output[p].add_(grads[i_p])
+                mv[p].add_(grads[i_p])
 
         output_dict = dict()
         for layer_id, layer in layer_collection.layers.items():
             mod = layer_collection.get_layerid_module_map(self.model)[layer_id]
             if layer.has_bias():
                 output_dict[layer_id] = (
-                    output[mod.weight] / n_examples,
-                    output[mod.bias] / n_examples,
+                    mv[mod.weight] / n_examples,
+                    mv[mod.bias] / n_examples,
                 )
             else:
-                output_dict[layer_id] = (output[mod.weight] / n_examples,)
+                output_dict[layer_id] = (mv[mod.weight] / n_examples,)
 
         return PVector(layer_collection=layer_collection, dict_repr=output_dict)
 
@@ -653,14 +606,13 @@ class TorchHooksJacobianBackend(AbstractBackend):
     def implicit_vTMv(self, v, examples, layer_collection):
         layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
 
-        edges = []
         self._handles += self._add_hooks(
             self._hook_savex,
             self._hook_compute_Jv,
             layerid_to_mod,
             layer_collection,
-            edges=edges,
         )
+        forward = partial(self._forward, layerid_to_mod)
 
         self._buffer["v"] = v.to_dict()
 
@@ -681,19 +633,16 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self._buffer["compute_switch"] = True
         for d in self._get_iter_loader(loader):
             self._buffer["xs"] = dict()
-            edges.clear()
-            inputs = d[0]
-            bs = inputs.size(0)
-
-            f_output = self.function(*d).view(bs, -1).sum(dim=0)
-            n_output = f_output.size(-1)
+            output, backward = forward(*d)
+            output = output.sum(dim=0)
+            n_output = output.size(-1)
             for i in range(n_output):
                 # TODO reuse instead of reallocating memory
-                self._buffer["Jv"] = torch.zeros((1, bs), device=device, dtype=dtype)
-
-                torch.autograd.backward(
-                    f_output[i],
-                    inputs=edges,
+                self._buffer["Jv"] = torch.zeros(
+                    (1, d[0].size(0)), device=device, dtype=dtype
+                )
+                backward(
+                    output[i],
                     retain_graph=i < n_output - 1,
                 )
                 norm2 += (self._buffer["Jv"] ** 2).sum()
@@ -705,14 +654,13 @@ class TorchHooksJacobianBackend(AbstractBackend):
     def implicit_trace(self, examples, layer_collection):
         layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
 
-        edges = []
         self._handles += self._add_hooks(
             self._hook_savex,
             self._hook_compute_trace,
             layerid_to_mod,
             layer_collection,
-            edges=edges,
         )
+        forward = partial(self._forward, layerid_to_mod)
 
         device = next(self.model.parameters()).device
         loader = self._get_dataloader(examples)
@@ -721,15 +669,12 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self._buffer["trace"] = torch.tensor(0.0, device=device)
         for d in self._get_iter_loader(loader):
             self._buffer["xs"] = dict()
-            edges.clear()
-            inputs = d[0]
-            bs = inputs.size(0)
-            output = self.function(*d).view(bs, -1).sum(dim=0)
+            output, backward = forward(*d)
+            output = output.sum(dim=0)
             n_output = output.size(-1)
             for i in range(n_output):
-                torch.autograd.backward(
+                backward(
                     output[i],
-                    inputs=edges,
                     retain_graph=i < n_output - 1,
                 )
         trace = self._buffer["trace"] / n_examples
@@ -740,14 +685,13 @@ class TorchHooksJacobianBackend(AbstractBackend):
     def implicit_Jv(self, v, examples, layer_collection):
         layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
 
-        edges = []
         self._handles += self._add_hooks(
             self._hook_savex,
             self._hook_compute_Jv,
             layerid_to_mod,
             layer_collection,
-            edges=edges,
         )
+        forward = partial(self._forward, layerid_to_mod)
 
         self._buffer["v"] = v.to_dict()
 
@@ -767,30 +711,24 @@ class TorchHooksJacobianBackend(AbstractBackend):
         self._buffer["compute_switch"] = True
         for d in self._get_iter_loader(loader):
             self._buffer["xs"] = dict()
-            edges.clear()
-            inputs = d[0]
-            bs = inputs.size(0)
-            output = self.function(*d).view(bs, -1).sum(dim=0)
+            output, backward = forward(*d)
+            output = output.sum(dim=0)
             n_output = output.size(-1)
             self._exec_delayed_n_output(n_output)
             for self._buffer["i_output"] in range(n_output):
-                retain_graph = self._buffer["i_output"] < n_output - 1
-                torch.autograd.backward(
+                backward(
                     output[self._buffer["i_output"]],
-                    inputs=edges,
-                    retain_graph=retain_graph,
+                    retain_graph=self._buffer["i_output"] < n_output - 1,
                 )
-            self._buffer["start"] += inputs.size(0)
+            self._buffer["start"] += d[0].size(0)
 
         return FVector(vector_repr=self._buffer["Jv"])
 
-    def _add_hooks(self, hook_x, hook_gy, layerid_to_mod, layer_collection, edges=None):
+    def _add_hooks(self, hook_x, hook_gy, layerid_to_mod, layer_collection):
         handles = []
 
         def _hook_x(mod, i, o, layer_id):
             hook_x(mod, i)
-            if edges is not None:
-                edges.append(torch.autograd.graph.get_gradient_edge(o))
             o.register_hook(
                 lambda g_o: hook_gy(
                     mod, g_o, layer_id=layer_id, layer_collection=layer_collection
@@ -800,6 +738,22 @@ class TorchHooksJacobianBackend(AbstractBackend):
         for l_id, mod in layerid_to_mod.items():
             handles.append(mod.register_forward_hook(partial(_hook_x, layer_id=l_id)))
         return handles
+
+    def _forward(self, layerid_to_mod, *d):
+        grad_wrt = []
+
+        def _hook_get_grad_wrt(mod, i, o):
+            grad_wrt.append(torch.autograd.graph.get_gradient_edge(o))
+
+        with ExitStack() as stack:
+            for mod in layerid_to_mod.values():
+                handle = mod.register_forward_hook(_hook_get_grad_wrt)
+                stack.callback(handle.remove)
+            output = self.function(*d).view(d[0].size(0), -1)
+
+        backward = partial(torch.autograd.backward, inputs=grad_wrt)
+
+        return output, backward
 
     def _hook_savex(self, mod, i):
         if mod in self._buffer["xs"]:

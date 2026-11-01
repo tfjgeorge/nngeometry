@@ -136,7 +136,6 @@ def test_jacobian_pushforward_dense_nonlinear():
 
 
 def test_jacobian_pushforward_dense_lazy():
-
     loader, _, parameters, model, function = get_lazy_fullyconnect_task()
 
     with pytest.raises(Exception, match="do with layer LazyLinear"):
@@ -1016,9 +1015,7 @@ def test_jacobian_plowrank():
         # Test solve against PMat_dense with rcond=None
         regul = 1e-2
         solve_dense = (
-            PMatDense(lc, generator, data=dense_tensor)
-            .solve(J, regul=regul)
-            .to_torch()
+            PMatDense(lc, generator, data=dense_tensor).solve(J, regul=regul).to_torch()
         )
 
         for solve in ["default", "svd", "gram_eigh"]:
