@@ -1,4 +1,4 @@
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from functools import partial
 
 import torch
@@ -581,13 +581,10 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 pseudo_loss += torch.dot(self._buffer["Jv"][0, :], output[:, i])
 
             self._buffer["compute_switch"] = False
-            grads = torch.autograd.grad(
-                pseudo_loss,
-                parameters,
-                only_inputs=True,
-            )
-            for i_p, p in enumerate(parameters):
-                mv[p].add_(grads[i_p])
+            with self._unfreeze(parameters):
+                grads = torch.autograd.grad(pseudo_loss, parameters, only_inputs=True)
+                for i_p, p in enumerate(parameters):
+                    mv[p].add_(grads[i_p])
 
         output_dict = dict()
         for layer_id, layer in layer_collection.layers.items():
@@ -739,6 +736,15 @@ class TorchHooksJacobianBackend(AbstractBackend):
             handles.append(mod.register_forward_hook(partial(_hook_x, layer_id=l_id)))
         return handles
 
+    @contextmanager
+    def _unfreeze(self, parameters):
+        with ExitStack() as stack:
+            for parameter in parameters:
+                if not parameter.requires_grad:
+                    parameter.requires_grad_(True)
+                    stack.callback(parameter.requires_grad_, False)
+            yield
+
     def _forward(self, layerid_to_mod, *d):
         grad_wrt = []
 
@@ -747,6 +753,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         with ExitStack() as stack:
             for mod in layerid_to_mod.values():
+                stack.enter_context(self._unfreeze(mod.parameters()))
                 handle = mod.register_forward_hook(_hook_get_grad_wrt)
                 stack.callback(handle.remove)
             output = self.function(*d).view(d[0].size(0), -1)
