@@ -311,7 +311,8 @@ def test_kfac_mm():
         _, _, _, model2, function2 = get_task()
 
         generator1 = TorchHooksJacobianBackend(model=model1, function=function1)
-        generator2 = TorchHooksJacobianBackend(model=model2, function=function1)
+        generator2 = TorchHooksJacobianBackend(model=model2, function=function2)
+
         M_kfac1 = PMatKFAC(generator=generator1, examples=loader, layer_collection=lc)
         M_kfac2 = PMatKFAC(generator=generator2, examples=loader, layer_collection=lc)
 

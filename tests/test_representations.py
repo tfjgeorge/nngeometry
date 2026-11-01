@@ -28,7 +28,7 @@ def test_diag():
         _, _, _, model2, function2 = get_task()
 
         generator1 = TorchHooksJacobianBackend(model=model1, function=function1)
-        generator2 = TorchHooksJacobianBackend(model=model2, function=function1)
+        generator2 = TorchHooksJacobianBackend(model=model2, function=function2)
         M_diag1 = PMatDiag(generator=generator1, examples=loader, layer_collection=lc)
         M_diag2 = PMatDiag(generator=generator2, examples=loader, layer_collection=lc)
 
@@ -48,7 +48,7 @@ def test_dense():
         _, _, _, model2, function2 = get_task()
 
         generator1 = TorchHooksJacobianBackend(model=model1, function=function1)
-        generator2 = TorchHooksJacobianBackend(model=model2, function=function1)
+        generator2 = TorchHooksJacobianBackend(model=model2, function=function2)
         M_dense1 = PMatDense(generator=generator1, examples=loader, layer_collection=lc)
         M_dense2 = PMatDense(generator=generator2, examples=loader, layer_collection=lc)
 
@@ -90,7 +90,7 @@ def test_blockdiag():
         _, _, _, model2, function2 = get_task()
 
         generator1 = TorchHooksJacobianBackend(model=model1, function=function1)
-        generator2 = TorchHooksJacobianBackend(model=model2, function=function1)
+        generator2 = TorchHooksJacobianBackend(model=model2, function=function2)
         M_blockdiag1 = PMatBlockDiag(
             generator=generator1, examples=loader, layer_collection=lc
         )
