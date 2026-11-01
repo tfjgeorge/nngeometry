@@ -63,4 +63,3 @@ def test_gram_vs_jacobian():
             gram.solve(gram, solve="prout")
         with pytest.raises(NotImplementedError):
             gram.solve(df1, solve="prout")
-
