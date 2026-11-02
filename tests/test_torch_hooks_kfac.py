@@ -1,4 +1,4 @@
-import os
+from functools import partial
 
 import pytest
 import torch
@@ -12,7 +12,7 @@ from tasks import (
     get_mnist1d_interpol,
     to_device_model,
 )
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 from utils import angle
 
 from nngeometry.backend import TorchHooksJacobianBackend
@@ -235,6 +235,7 @@ def test_kfac():
         get_fullyconnect_task,
         get_conv_task,
         get_linear_3d_task,
+        partial(get_fullyconnect_task, freeze=True),
     ]:
         loader, lc, parameters, model, function = get_task()
         generator = TorchHooksJacobianBackend(model=model, function=function)
@@ -311,7 +312,8 @@ def test_kfac_mm():
         _, _, _, model2, function2 = get_task()
 
         generator1 = TorchHooksJacobianBackend(model=model1, function=function1)
-        generator2 = TorchHooksJacobianBackend(model=model2, function=function1)
+        generator2 = TorchHooksJacobianBackend(model=model2, function=function2)
+
         M_kfac1 = PMatKFAC(generator=generator1, examples=loader, layer_collection=lc)
         M_kfac2 = PMatKFAC(generator=generator2, examples=loader, layer_collection=lc)
 

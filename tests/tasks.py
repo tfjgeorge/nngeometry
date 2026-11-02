@@ -199,7 +199,7 @@ class EmbeddingNet(nn.Module):
         return output.sum(axis=1)
 
 
-def get_embedding_task():
+def get_embedding_task(freeze=False):
     train_set = TensorDataset(
         torch.randint(0, 5, size=(12, 4)), torch.randint(0, 3, size=(12,))
     )
@@ -207,6 +207,9 @@ def get_embedding_task():
     net = EmbeddingNet()
     to_device_model(net)
     net.eval()
+
+    if freeze:
+        net.embedding_layer.requires_grad_(False)
 
     def output_fn(input, target):
         return net(input)
@@ -424,7 +427,7 @@ def get_mnist1d_interpol(n_classes=None, subset=55, img_size=12):
     return TensorDataset(to_device(X), y.to(device))
 
 
-def get_fullyconnect_task(normalization="none", binary=False):
+def get_fullyconnect_task(normalization="none", binary=False, freeze=False):
     train_set = get_mnist1d_interpol(subset=70, n_classes=3)
     train_loader = DataLoader(dataset=train_set, batch_size=30, shuffle=False)
     if binary:
@@ -433,6 +436,9 @@ def get_fullyconnect_task(normalization="none", binary=False):
         net = FCNet(out_size=3, normalization=normalization)
     to_device_model(net)
     net.eval()
+
+    if freeze:
+        net.net[0].requires_grad_(False)
 
     def output_fn(input, target):
         return net(to_device(input))
@@ -708,7 +714,6 @@ class Simplified_ViT(nn.Module):
         self.head = nn.Linear(hidden_size, outputs)
 
     def forward(self, x):
-
         x = self.patch_embed(x).flatten(2).transpose(1, 2)
         attn_out, _ = self.attn(x, x, x)
         x = x + attn_out

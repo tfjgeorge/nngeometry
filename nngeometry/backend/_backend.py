@@ -1,12 +1,11 @@
-from torch.utils.data import DataLoader, TensorDataset
 import torch
+from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
 differentiable_dtypes = [torch.float16, torch.float32, torch.float64]
 
 
 class AbstractBackend:
-
     def _check_same_device(self, mods):
         device = None
         for mod in mods:
@@ -42,25 +41,6 @@ class AbstractBackend:
 
     def _infer_device(self, mod):
         return mod.weight.device
-
-    def _infer_differentiable_leafs(self, input, mods):
-        if input.dtype in differentiable_dtypes:
-            input.requires_grad = True
-            return [input]
-        else:
-            # find Embeddings
-            embedding_parameters = []
-            for module in mods:
-                if isinstance(module, torch.nn.Embedding):
-                    embedding_parameters.append(next(module.parameters()))
-            if len(embedding_parameters) > 0:
-                return embedding_parameters
-
-        # Otherwise return all differentiable params
-        params = []
-        for module in mods:
-            params.append(next(module.parameters()))
-        return params
 
     def _get_iter_loader(self, loader):
         if self.verbose:

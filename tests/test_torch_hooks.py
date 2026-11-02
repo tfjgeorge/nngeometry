@@ -50,6 +50,7 @@ linear_tasks = [
     get_layernorm_3d_task,
     partial(get_layernorm_3d_task, rms_norm=True, bias=False),
     get_embedding_task,
+    partial(get_embedding_task, freeze=True),
     get_linear_fc_task,
     get_linear_conv_task,
     get_batchnorm_fc_linear_task,
@@ -71,6 +72,7 @@ nonlinear_tasks = [
     get_conv_task,
     get_fullyconnect_affine_task,
     get_fullyconnect_cosine_task,
+    partial(get_fullyconnect_task, freeze=True),
     get_conv_skip_task,
     get_fullyconnect_wn_task,
     get_small_conv_wn_task,
@@ -136,7 +138,6 @@ def test_jacobian_pushforward_dense_nonlinear():
 
 
 def test_jacobian_pushforward_dense_lazy():
-
     loader, _, parameters, model, function = get_lazy_fullyconnect_task()
 
     with pytest.raises(Exception, match="do with layer LazyLinear"):
@@ -1016,9 +1017,7 @@ def test_jacobian_plowrank():
         # Test solve against PMat_dense with rcond=None
         regul = 1e-2
         solve_dense = (
-            PMatDense(lc, generator, data=dense_tensor)
-            .solve(J, regul=regul)
-            .to_torch()
+            PMatDense(lc, generator, data=dense_tensor).solve(J, regul=regul).to_torch()
         )
 
         for solve in ["default", "svd", "gram_eigh"]:
@@ -1233,3 +1232,26 @@ def test_shared_parameters():
 
     with pytest.raises(NotImplementedError):
         J = Jacobian(model, (d,), lambda x: model(x))
+
+
+def test_empty_lc_or_wrong_func():
+    for get_task in [get_fullyconnect_task]:
+        loader, lc, parameters, model, og_function = get_task()
+
+        def function(input, target):
+            return target.to(dtype=input.dtype)
+
+        generator = TorchHooksJacobianBackend(
+            model=model,
+            function=function,
+        )
+        with pytest.raises(RuntimeError):
+            PMatDense(generator=generator, examples=loader, layer_collection=lc)
+
+        generator = TorchHooksJacobianBackend(
+            model=model,
+            function=og_function,
+        )
+        empty_lc = LayerCollection()
+        with pytest.raises(RuntimeError):
+            PMatDense(generator=generator, examples=loader, layer_collection=empty_lc)
