@@ -710,6 +710,9 @@ class PMatKFAC(PMatAbstract):
         strategy from the KFAC/KFE papers. "one_iter_kpsvd" uses one power
         iteration as described in (3).
     :type strategy: str
+    :param kpsvd_iter: Number of power iterations as described in (3). One iteration
+        requires two passes over the dataset.
+    :type kpsvd_iter: int
     """
 
     def __init__(
@@ -719,7 +722,7 @@ class PMatKFAC(PMatAbstract):
         data=None,
         examples=None,
         strategy="kfac",
-        **kwargs,
+        kpsvd_iter=0,
     ):
         self._check_data_examples(data, examples)
 
@@ -729,6 +732,10 @@ class PMatKFAC(PMatAbstract):
             self.data = generator.get_kfac_blocks(
                 examples, layer_collection=layer_collection, strategy=strategy
             )
+            for _ in range(kpsvd_iter):
+                self.data = generator.kpsvd_update(
+                    self.data, examples, layer_collection=layer_collection
+                )
         else:
             self.data = data
 
@@ -998,9 +1005,17 @@ class PMatKFAC(PMatAbstract):
 class PMatEKFAC(PMatAbstract):
     """
     EKFAC representation from
-    *George, Laurent et al., Fast Approximate Natural Gradient Descent
-    in a Kronecker-factored Eigenbasis, NeurIPS 2018*
 
+    1. George, Laurent, Bouthillier, Ballas and Vincent, Fast approximate natural
+        gradient descent in a kronecker factored eigenbasis, NeurIPS 2018
+    3. Koroko, Anciaux-Sedrakian and Gharbia, Efficient approximations of the
+        fisher matrix in neural networks using kronecker product singular value
+        decomposition, ESAIM 2023
+
+    :param strategy: How to compute Kronecker factors. "kfac" is the default
+    strategy from the KFAC/KFE papers. "one_iter_kpsvd" uses one power
+    iteration as described in (3).
+    :type strategy: str
     """
 
     def __init__(

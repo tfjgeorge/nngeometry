@@ -259,7 +259,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
         if strategy == "kfac":
             hook_gy = self._hook_compute_kfac_blocks
         elif strategy == "one_iter_kpsvd":
-            hook_gy = self._hook_compute_one_iter_kpsvd_blocks
+            hook_gy = self._hook_compute_kpsvd_blocks
         else:
             raise NotImplementedError()
 
@@ -323,6 +323,70 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 self._buffer["blocks"][layer_id][1].div_(tr**0.5)
 
         return self._buffer["blocks"]
+
+    @instance_buffer_handles
+    def kpsvd_update(self, blocks, examples, layer_collection):
+        layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
+        self._handles += self._add_hooks(
+            self._hook_savex,
+            self._hook_kpsvd_update,
+            layerid_to_mod,
+            layer_collection,
+        )
+        forward = partial(self._forward, layerid_to_mod)
+
+        loader = self._get_dataloader(examples)
+        n_examples = len(loader.sampler)
+        self._buffer["blocks"] = dict()
+        self._buffer["updates"] = dict()
+        for layer_id, _ in layer_collection.layers.items():
+            self._buffer["blocks"][layer_id] = (
+                blocks[layer_id][0] / torch.linalg.matrix_norm(blocks[layer_id][0]),
+                blocks[layer_id][1] / torch.linalg.matrix_norm(blocks[layer_id][1]),
+            )
+            self._buffer["updates"][layer_id] = (
+                torch.zeros_like(blocks[layer_id][0]),
+                torch.zeros_like(blocks[layer_id][1]),
+            )
+
+        self._buffer["update_left"] = True
+        for d in self._get_iter_loader(loader):
+            self._buffer["xs"] = dict()
+            output, backward = forward(*d)
+            output = output.sum(dim=0)
+            n_output = output.size(-1)
+            for self._buffer["i_output"] in range(n_output):
+                backward(
+                    output[self._buffer["i_output"]],
+                    retain_graph=self._buffer["i_output"] < n_output - 1,
+                )
+        for layer_id in layer_collection.layers.keys():
+            self._buffer["updates"][layer_id][1].div_(n_examples)
+            self._buffer["updates"][layer_id][1].div_(
+                torch.linalg.matrix_norm(self._buffer["updates"][layer_id][1])
+            )
+            self._buffer["blocks"][layer_id] = (
+                self._buffer["blocks"][layer_id][0],
+                self._buffer["updates"][layer_id][1],
+            )
+        self._buffer["update_left"] = False
+        for d in self._get_iter_loader(loader):
+            self._buffer["xs"] = dict()
+            output, backward = forward(*d)
+            output = output.sum(dim=0)
+            n_output = output.size(-1)
+            for self._buffer["i_output"] in range(n_output):
+                backward(
+                    output[self._buffer["i_output"]],
+                    retain_graph=self._buffer["i_output"] < n_output - 1,
+                )
+        for layer_id in layer_collection.layers.keys():
+            self._buffer["updates"][layer_id][0].div_(n_examples)
+            norm = torch.linalg.matrix_norm(self._buffer["updates"][layer_id][0])
+            self._buffer["updates"][layer_id][0].div_(norm**0.5)
+            self._buffer["updates"][layer_id][1].mul_(norm**0.5)
+
+        return self._buffer["updates"]
 
     @instance_buffer_handles
     def get_jacobian(self, examples, layer_collection):
@@ -819,18 +883,14 @@ class TorchHooksJacobianBackend(AbstractBackend):
         block = self._buffer["blocks"][layer_id]
         FactoryMap[layer.__class__].layer_block(block, mod, layer, x, gy)
 
-    def _hook_compute_one_iter_kpsvd_blocks(self, mod, gy, layer_id, layer_collection):
+    def _hook_compute_kpsvd_blocks(self, mod, gy, layer_id, layer_collection):
         mod_class = mod.__class__.__name__
         x = self._buffer["xs"][mod]
         layer = layer_collection[layer_id]
+        block = self._buffer["blocks"][layer_id]
         if mod_class in ["Linear", "Conv2d", "Conv1d", "Embedding"]:
-            FactoryMap[layer.__class__].one_iter_kpsvd_blocks(
-                self._buffer["blocks"][layer_id][0],
-                self._buffer["blocks"][layer_id][1],
-                mod,
-                layer,
-                x,
-                gy,
+            FactoryMap[layer.__class__].kpsvd_blocks(
+                block[0], block[1], mod, layer, x, gy
             )
         else:
             raise NotImplementedError
@@ -845,6 +905,26 @@ class TorchHooksJacobianBackend(AbstractBackend):
             if self._buffer["i_output"] == 0:
                 # do this only once if n_output > 1
                 FactoryMap[layer.__class__].kfac_xx(block[0], mod, layer, x, gy)
+        else:
+            raise NotImplementedError
+
+    def _hook_kpsvd_update(self, mod, gy, layer_id, layer_collection):
+        mod_class = mod.__class__.__name__
+        x = self._buffer["xs"][mod]
+        layer = layer_collection[layer_id]
+        block = self._buffer["blocks"][layer_id]
+        update = self._buffer["updates"][layer_id]
+        if mod_class in ["Linear", "Conv2d", "Conv1d", "Embedding"]:
+            FactoryMap[layer.__class__].kpsvd_blocks(
+                None if self._buffer["update_left"] else update[0],
+                update[1] if self._buffer["update_left"] else None,
+                mod,
+                layer,
+                x,
+                gy,
+                block[0],
+                block[1],
+            )
         else:
             raise NotImplementedError
 

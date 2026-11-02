@@ -21,21 +21,37 @@ from nngeometry.layercollection import (
 from .grads_conv import conv1d_backward, conv2d_backward, convtranspose2d_backward
 
 
-def _compute_one_iter_kpsvd_blocks(A, S):
+def _update_kpsvd_blocks(right_buffer, left_buffer, A, S, R=None, L=None):
     spatial_locations, ps, os = A.size(1), A.size(2), S.size(2)
 
     # GGt = StAAtS, GtG = AtSStA
     if spatial_locations**2 <= ps * os:
-        SStA = torch.bmm(torch.bmm(S, S.transpose(1, 2)), A)
-        right_block = torch.mm(A.reshape(-1, ps).t(), SStA.reshape(-1, ps))
-        AAtS = torch.bmm(torch.bmm(A, A.transpose(1, 2)), S)
-        left_block = torch.mm(S.reshape(-1, os).t(), AAtS.reshape(-1, os))
+        if right_buffer is not None:
+            if L is None:
+                SSt = torch.bmm(S, S.transpose(1, 2))
+            else:
+                SSt = torch.einsum("bso, oO, bSO->bsS", S, L, S)
+            right_buffer.addmm_(
+                A.reshape(-1, ps).t(), torch.bmm(SSt, A).reshape(-1, ps)
+            )
+        if left_buffer is not None:
+            if R is None:
+                AAt = torch.bmm(A, A.transpose(1, 2))
+            else:
+                AAt = torch.einsum("bsp, pP, bSP->bsS", A, R, A)
+            left_buffer.addmm_(S.reshape(-1, os).t(), torch.bmm(AAt, S).reshape(-1, os))
     else:
         G = torch.bmm(S.transpose(1, 2), A).permute(1, 0, 2).contiguous()
-        right_block = torch.mm(G.view(-1, ps).t(), G.view(-1, ps))
-        left_block = torch.mm(G.view(os, -1), G.view(os, -1).t())
-
-    return right_block, left_block
+        if right_buffer is not None:
+            if L is None:
+                right_buffer.addmm_(G.view(-1, ps).t(), G.view(-1, ps))
+            else:
+                right_buffer.add_(torch.einsum("obp, oO, ObP->pP", G, L, G))
+        if left_buffer is not None:
+            if R is None:
+                left_buffer.addmm_(G.view(os, -1), G.view(os, -1).t())
+            else:
+                left_buffer.add_(torch.einsum("obp, pP, ObP->oO", G, R, G))
 
 
 class JacobianFactory:
@@ -181,7 +197,17 @@ class LinearJacobianFactory(JacobianFactory):
             buffer.add_((per_ex_kfe_grad**2).sum(dim=0).view(-1))
 
     @classmethod
-    def one_iter_kpsvd_blocks(cls, right_buffer, left_buffer, mod, layer, x, gy):
+    def kpsvd_blocks(
+        cls,
+        right_buffer,
+        left_buffer,
+        mod,
+        layer,
+        x,
+        gy,
+        right_block=None,
+        left_block=None,
+    ):
         bs, xs = x.size(0), x.size(-1)
         os = gy.size(-1)
         A = x.view(bs, -1, xs)
@@ -190,9 +216,9 @@ class LinearJacobianFactory(JacobianFactory):
         if layer.has_bias():
             A = torch.cat([A, torch.ones_like(A[:, :, :1])], dim=2)
 
-        R, L = _compute_one_iter_kpsvd_blocks(A, S)
-        right_buffer.add_(R)
-        left_buffer.add_(L)
+        _update_kpsvd_blocks(
+            right_buffer, left_buffer, A, S, R=right_block, L=left_block
+        )
 
     @classmethod
     def quasidiag(cls, buffer_diag, buffer_cross, mod, layer, x, gy):
@@ -283,7 +309,17 @@ class Conv2dJacobianFactory(JacobianFactory):
         buffer.add_((indiv_gw**2).sum(dim=0).view(-1))
 
     @classmethod
-    def one_iter_kpsvd_blocks(cls, right_buffer, left_buffer, mod, layer, x, gy):
+    def kpsvd_blocks(
+        cls,
+        right_buffer,
+        left_buffer,
+        mod,
+        layer,
+        x,
+        gy,
+        right_block=None,
+        left_block=None,
+    ):
         A = F.unfold(
             x,
             kernel_size=mod.kernel_size,
@@ -297,9 +333,9 @@ class Conv2dJacobianFactory(JacobianFactory):
 
         S = gy.flatten(2).transpose(1, 2)
 
-        R, L = _compute_one_iter_kpsvd_blocks(A, S)
-        right_buffer.add_(R)
-        left_buffer.add_(L)
+        _update_kpsvd_blocks(
+            right_buffer, left_buffer, A, S, R=right_block, L=left_block
+        )
 
     @classmethod
     def quasidiag(cls, buffer_diag, buffer_cross, mod, layer, x, gy):
@@ -565,7 +601,17 @@ class Conv1dJacobianFactory(JacobianFactory):
         buffer.add_((indiv_gw**2).sum(dim=0).view(-1))
 
     @classmethod
-    def one_iter_kpsvd_blocks(cls, right_buffer, left_buffer, mod, layer, x, gy):
+    def kpsvd_blocks(
+        cls,
+        right_buffer,
+        left_buffer,
+        mod,
+        layer,
+        x,
+        gy,
+        right_block=None,
+        left_block=None,
+    ):
         A = F.unfold(
             x.unsqueeze(2),
             kernel_size=(1, mod.kernel_size[0]),
@@ -579,9 +625,9 @@ class Conv1dJacobianFactory(JacobianFactory):
 
         S = gy.flatten(2).transpose(1, 2)
 
-        R, L = _compute_one_iter_kpsvd_blocks(A, S)
-        right_buffer.add_(R)
-        left_buffer.add_(L)
+        _update_kpsvd_blocks(
+            right_buffer, left_buffer, A, S, R=right_block, L=left_block
+        )
 
 
 def check_embedding_arguments(mod):
@@ -642,7 +688,17 @@ class EmbeddingJacobianFactory(JacobianFactory):
         buffer.add_((indiv_gw**2).sum(dim=0).view(-1))
 
     @classmethod
-    def one_iter_kpsvd_blocks(cls, right_buffer, left_buffer, mod, layer, x, gy):
+    def kpsvd_blocks(
+        cls,
+        right_buffer,
+        left_buffer,
+        mod,
+        layer,
+        x,
+        gy,
+        right_block=None,
+        left_block=None,
+    ):
         check_embedding_arguments(mod)
 
         bs = x.size(0)
@@ -651,9 +707,9 @@ class EmbeddingJacobianFactory(JacobianFactory):
 
         S = gy.view(bs, -1, os)
 
-        R, L = _compute_one_iter_kpsvd_blocks(A, S)
-        right_buffer.add_(R)
-        left_buffer.add_(L)
+        _update_kpsvd_blocks(
+            right_buffer, left_buffer, A, S, R=right_block, L=left_block
+        )
 
     @classmethod
     def Jv(cls, buffer, mod, layer, x, gy, v, v_bias):

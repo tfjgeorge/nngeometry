@@ -198,7 +198,7 @@ def test_one_iter_kpsvd_vs_pblockdiag():
 
 def test_kfac_vs_one_iter_kpsvd():
     """
-    Check that KPSVD matrix is closer than KFAC to the BlockDiag one in the
+    Check that the one_iter KPSVD matrix is closer than KFAC to the BlockDiag one in the
     sense of the Frobenius norm
     """
     for get_task in [
@@ -212,20 +212,71 @@ def test_kfac_vs_one_iter_kpsvd():
         model.train()
         generator = TorchHooksJacobianBackend(model=model, function=function)
 
-        M_kfac = PMatKFAC(generator=generator, examples=loader, layer_collection=lc)
-        M_one_iter_kpsvd = PMatKFAC(
+        M_blockdiag = PMatBlockDiag(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+        M_kfac = PMatKFAC(
+            generator=generator,
+            examples=loader,
+            layer_collection=lc,
+            strategy="kfac",
+            kpsvd_iter=0,
+        )
+        M_shampoo2 = PMatKFAC(
             generator=generator,
             examples=loader,
             layer_collection=lc,
             strategy="one_iter_kpsvd",
-        )
-        M_blockdiag = PMatBlockDiag(
-            generator=generator, examples=loader, layer_collection=lc
+            kpsvd_iter=0,
         )
 
         assert torch.norm(M_kfac.to_torch() - M_blockdiag.to_torch()) > torch.norm(
-            M_one_iter_kpsvd.to_torch() - M_blockdiag.to_torch()
+            M_shampoo2.to_torch() - M_blockdiag.to_torch()
         )
+
+
+def test_kpsvd_update():
+    """
+    Check that KPSVD updates bring KFAC closer to the BlockDiag one in the
+    sense of the Frobenius norm
+    """
+    for get_task in [
+        get_fullyconnect_task,
+        get_embedding_task,
+        get_conv1d_task,
+        get_conv_task,
+        get_linear_3d_task,
+    ]:
+        loader, lc, parameters, model, function = get_task()
+        model.train()
+        generator = TorchHooksJacobianBackend(model=model, function=function)
+
+        M_blockdiag = PMatBlockDiag(
+            generator=generator, examples=loader, layer_collection=lc
+        )
+        for strategy in ["kfac", "one_iter_kpsvd"]:
+            M_prev = PMatKFAC(
+                generator=generator,
+                examples=loader,
+                layer_collection=lc,
+                strategy=strategy,
+                kpsvd_iter=0,
+            )
+            for k in range(1, 5):
+                M_next = PMatKFAC(
+                    generator=generator,
+                    examples=loader,
+                    layer_collection=lc,
+                    strategy=strategy,
+                    kpsvd_iter=k,
+                )
+
+                norm_prev = torch.norm(M_prev.to_torch() - M_blockdiag.to_torch())
+                norm_next = torch.norm(M_next.to_torch() - M_blockdiag.to_torch())
+
+                assert norm_prev + 1e-12 > norm_next
+
+                M_prev = M_next
 
 
 def test_kfac():
