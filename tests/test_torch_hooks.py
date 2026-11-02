@@ -12,7 +12,6 @@ from tasks import (
     get_conv_skip_task,
     get_conv_task,
     get_embedding_task,
-    get_fullyconnect_task,
     get_fullyconnect_affine_task,
     get_fullyconnect_cosine_task,
     get_fullyconnect_onlylast_task,
@@ -1233,3 +1232,26 @@ def test_shared_parameters():
 
     with pytest.raises(NotImplementedError):
         J = Jacobian(model, (d,), lambda x: model(x))
+
+
+def test_empty_lc_or_wrong_func():
+    for get_task in [get_fullyconnect_task]:
+        loader, lc, parameters, model, og_function = get_task()
+
+        def function(input, target):
+            return target.to(dtype=input.dtype)
+
+        generator = TorchHooksJacobianBackend(
+            model=model,
+            function=function,
+        )
+        with pytest.raises(RuntimeError):
+            PMatDense(generator=generator, examples=loader, layer_collection=lc)
+
+        generator = TorchHooksJacobianBackend(
+            model=model,
+            function=og_function,
+        )
+        empty_lc = LayerCollection()
+        with pytest.raises(RuntimeError):
+            PMatDense(generator=generator, examples=loader, layer_collection=empty_lc)

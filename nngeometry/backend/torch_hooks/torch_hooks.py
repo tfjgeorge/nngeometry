@@ -758,6 +758,13 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 stack.callback(handle.remove)
             output = self.function(*d).view(d[0].size(0), -1)
 
+        if not grad_wrt:
+            raise RuntimeError(
+                "None of the layers in layer_collection were passed through during "
+                "the forward pass. Check that function uses the supplied "
+                "model and layer_collection."
+            )
+
         backward = partial(torch.autograd.backward, inputs=grad_wrt)
 
         return output, backward
