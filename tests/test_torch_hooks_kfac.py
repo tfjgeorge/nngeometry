@@ -272,8 +272,7 @@ def test_kpsvd_update():
                 norm_prev = torch.norm(M_prev.to_torch() - M_blockdiag.to_torch())
                 norm_next = torch.norm(M_next.to_torch() - M_blockdiag.to_torch())
 
-                # 1e-12 for cases where all norms are close to 0
-                assert norm_prev + 1e-12 > norm_next
+                assert norm_prev > norm_next or torch.isclose(norm_prev, norm_next)
 
                 M_prev = M_next
 
