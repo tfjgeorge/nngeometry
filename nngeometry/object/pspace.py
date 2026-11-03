@@ -723,6 +723,7 @@ class PMatKFAC(PMatAbstract):
         examples=None,
         strategy="kfac",
         kpsvd_iter=0,
+        **kwargs,
     ):
         self._check_data_examples(data, examples)
 
@@ -733,7 +734,7 @@ class PMatKFAC(PMatAbstract):
                 examples, layer_collection=layer_collection, strategy=strategy
             )
             for _ in range(kpsvd_iter):
-                self.data = generator.kpsvd_update(
+                self.data = generator.get_one_iter_kpsvd(
                     self.data, examples, layer_collection=layer_collection
                 )
         else:

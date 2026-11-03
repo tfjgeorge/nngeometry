@@ -21,7 +21,9 @@ from nngeometry.layercollection import (
 from .grads_conv import conv1d_backward, conv2d_backward, convtranspose2d_backward
 
 
-def _update_kpsvd_blocks(right_buffer, left_buffer, A, S, R=None, L=None):
+def _update_one_iter_kpsvd_blocks(right_buffer, left_buffer, A, S, R=None, L=None):
+    # R or L set to None assumes that they are the identity matrix
+
     spatial_locations, ps, os = A.size(1), A.size(2), S.size(2)
 
     # GGt = StAAtS, GtG = AtSStA
@@ -197,7 +199,7 @@ class LinearJacobianFactory(JacobianFactory):
             buffer.add_((per_ex_kfe_grad**2).sum(dim=0).view(-1))
 
     @classmethod
-    def kpsvd_blocks(
+    def one_iter_kpsvd_blocks(
         cls,
         right_buffer,
         left_buffer,
@@ -216,7 +218,7 @@ class LinearJacobianFactory(JacobianFactory):
         if layer.has_bias():
             A = torch.cat([A, torch.ones_like(A[:, :, :1])], dim=2)
 
-        _update_kpsvd_blocks(
+        _update_one_iter_kpsvd_blocks(
             right_buffer, left_buffer, A, S, R=right_block, L=left_block
         )
 
@@ -309,7 +311,7 @@ class Conv2dJacobianFactory(JacobianFactory):
         buffer.add_((indiv_gw**2).sum(dim=0).view(-1))
 
     @classmethod
-    def kpsvd_blocks(
+    def one_iter_kpsvd_blocks(
         cls,
         right_buffer,
         left_buffer,
@@ -333,7 +335,7 @@ class Conv2dJacobianFactory(JacobianFactory):
 
         S = gy.flatten(2).transpose(1, 2)
 
-        _update_kpsvd_blocks(
+        _update_one_iter_kpsvd_blocks(
             right_buffer, left_buffer, A, S, R=right_block, L=left_block
         )
 
@@ -601,7 +603,7 @@ class Conv1dJacobianFactory(JacobianFactory):
         buffer.add_((indiv_gw**2).sum(dim=0).view(-1))
 
     @classmethod
-    def kpsvd_blocks(
+    def one_iter_kpsvd_blocks(
         cls,
         right_buffer,
         left_buffer,
@@ -625,7 +627,7 @@ class Conv1dJacobianFactory(JacobianFactory):
 
         S = gy.flatten(2).transpose(1, 2)
 
-        _update_kpsvd_blocks(
+        _update_one_iter_kpsvd_blocks(
             right_buffer, left_buffer, A, S, R=right_block, L=left_block
         )
 
@@ -688,7 +690,7 @@ class EmbeddingJacobianFactory(JacobianFactory):
         buffer.add_((indiv_gw**2).sum(dim=0).view(-1))
 
     @classmethod
-    def kpsvd_blocks(
+    def one_iter_kpsvd_blocks(
         cls,
         right_buffer,
         left_buffer,
@@ -707,7 +709,7 @@ class EmbeddingJacobianFactory(JacobianFactory):
 
         S = gy.view(bs, -1, os)
 
-        _update_kpsvd_blocks(
+        _update_one_iter_kpsvd_blocks(
             right_buffer, left_buffer, A, S, R=right_block, L=left_block
         )
 
