@@ -28,32 +28,39 @@ def _update_one_iter_kpsvd_blocks(right_buffer, left_buffer, A, S, R=None, L=Non
 
     # GGt = StAAtS, GtG = AtSStA
     if spatial_locations**2 <= ps * os:
+        A, S = A.contiguous(), S.contiguous()
         if right_buffer is not None:
             if L is None:
                 SSt = torch.bmm(S, S.transpose(1, 2))
             else:
-                SSt = torch.einsum("bso, oO, bSO->bsS", S, L, S)
-            right_buffer.addmm_(
-                A.reshape(-1, ps).t(), torch.bmm(SSt, A).reshape(-1, ps)
-            )
+                SSt = torch.bmm(
+                    torch.mm(S.view(-1, os), L).view(*S.size()), S.transpose(1, 2)
+                )
+            right_buffer.addmm_(A.view(-1, ps).t(), torch.bmm(SSt, A).view(-1, ps))
         if left_buffer is not None:
             if R is None:
                 AAt = torch.bmm(A, A.transpose(1, 2))
             else:
-                AAt = torch.einsum("bsp, pP, bSP->bsS", A, R, A)
-            left_buffer.addmm_(S.reshape(-1, os).t(), torch.bmm(AAt, S).reshape(-1, os))
+                AAt = torch.bmm(
+                    torch.mm(A.view(-1, ps), R).view(*A.size()), A.transpose(1, 2)
+                )
+            left_buffer.addmm_(S.view(-1, os).t(), torch.bmm(AAt, S).view(-1, os))
     else:
         G = torch.bmm(S.transpose(1, 2), A).permute(1, 0, 2).contiguous()
         if right_buffer is not None:
             if L is None:
                 right_buffer.addmm_(G.view(-1, ps).t(), G.view(-1, ps))
             else:
-                right_buffer.add_(torch.einsum("obp, oO, ObP->pP", G, L, G))
+                right_buffer.addmm_(
+                    G.view(-1, ps).t(), torch.mm(L, G.view(os, -1)).view(-1, ps)
+                )
         if left_buffer is not None:
             if R is None:
                 left_buffer.addmm_(G.view(os, -1), G.view(os, -1).t())
             else:
-                left_buffer.add_(torch.einsum("obp, pP, ObP->oO", G, R, G))
+                left_buffer.addmm_(
+                    torch.mm(G.view(-1, ps), R).view(os, -1), G.view(os, -1).t()
+                )
 
 
 class JacobianFactory:

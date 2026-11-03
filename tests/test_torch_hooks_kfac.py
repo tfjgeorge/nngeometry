@@ -212,26 +212,24 @@ def test_kfac_vs_one_iter_kpsvd():
         model.train()
         generator = TorchHooksJacobianBackend(model=model, function=function)
 
-        M_blockdiag = PMatBlockDiag(
-            generator=generator, examples=loader, layer_collection=lc
-        )
         M_kfac = PMatKFAC(
             generator=generator,
             examples=loader,
             layer_collection=lc,
             strategy="kfac",
-            kpsvd_iter=0,
         )
-        M_shampoo2 = PMatKFAC(
+        M_one_iter_kpsvd = PMatKFAC(
             generator=generator,
             examples=loader,
             layer_collection=lc,
             strategy="one_iter_kpsvd",
-            kpsvd_iter=0,
+        )
+        M_blockdiag = PMatBlockDiag(
+            generator=generator, examples=loader, layer_collection=lc
         )
 
         assert torch.norm(M_kfac.to_torch() - M_blockdiag.to_torch()) > torch.norm(
-            M_shampoo2.to_torch() - M_blockdiag.to_torch()
+            M_one_iter_kpsvd.to_torch() - M_blockdiag.to_torch()
         )
 
 

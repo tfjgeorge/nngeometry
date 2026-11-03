@@ -1,5 +1,4 @@
 from contextlib import ExitStack, contextmanager
-from copy import deepcopy
 from functools import partial
 
 import torch
