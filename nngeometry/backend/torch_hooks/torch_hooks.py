@@ -410,7 +410,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 self.outerloop_switch = True
                 backward_outer(
                     output_outer[self._buffer["i_output_outer"]],
-                    retain_graph=True,
+                    retain_graph=self._buffer["i_output_outer"] < n_output - 1,
                 )
                 self.outerloop_switch = False
 
@@ -425,7 +425,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
                     for self._buffer["i_output_inner"] in range(n_output):
                         backward_inner(
                             output_inner[self._buffer["i_output_inner"]],
-                            retain_graph=True,
+                            retain_graph=self._buffer["i_output_inner"] < n_output - 1,
                         )
 
                     # since self._buffer['G'] is a symmetric matrix we only need to
