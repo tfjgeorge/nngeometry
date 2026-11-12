@@ -14,6 +14,6 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.15"
       - run: uv run --extra cpu python -m pytest -n auto --cov=nngeometry --cov-report=xml
       - uses: codecov/codecov-action@v5
