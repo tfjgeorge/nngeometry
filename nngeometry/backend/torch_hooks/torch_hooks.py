@@ -1,4 +1,4 @@
-from contextlib import ExitStack, contextmanager
+from contextlib import contextmanager
 from functools import partial
 
 import torch
@@ -74,7 +74,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             layerid_to_mod,
             layer_collection,
         )
-        forward = partial(self._forward, layerid_to_mod)
+        forward = partial(self._forward, layerid_to_mod.values())
 
         device = self._check_same_device(layerid_to_mod.values())
         dtype = self._check_same_dtype(layerid_to_mod.values())
@@ -133,7 +133,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             layerid_to_mod,
             layer_collection,
         )
-        forward = partial(self._forward, layerid_to_mod)
+        forward = partial(self._forward, layerid_to_mod.values())
 
         device = self._check_same_device(layerid_to_mod.values())
         dtype = self._check_same_dtype(layerid_to_mod.values())
@@ -172,7 +172,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             layerid_to_mod,
             layer_collection,
         )
-        forward = partial(self._forward, layerid_to_mod)
+        forward = partial(self._forward, layerid_to_mod.values())
 
         device = self._check_same_device(layerid_to_mod.values())
         dtype = self._check_same_dtype(layerid_to_mod.values())
@@ -223,7 +223,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             layerid_to_mod,
             layer_collection,
         )
-        forward = partial(self._forward, layerid_to_mod)
+        forward = partial(self._forward, layerid_to_mod.values())
 
         device = self._check_same_device(layerid_to_mod.values())
         dtype = self._check_same_dtype(layerid_to_mod.values())
@@ -269,7 +269,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             layerid_to_mod,
             layer_collection,
         )
-        forward = partial(self._forward, layerid_to_mod)
+        forward = partial(self._forward, layerid_to_mod.values())
 
         device = self._check_same_device(layerid_to_mod.values())
         dtype = self._check_same_dtype(layerid_to_mod.values())
@@ -334,7 +334,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             layerid_to_mod,
             layer_collection,
         )
-        forward = partial(self._forward, layerid_to_mod)
+        forward = partial(self._forward, layerid_to_mod.values())
 
         device = self._check_same_device(layerid_to_mod.values())
         dtype = self._check_same_dtype(layerid_to_mod.values())
@@ -378,7 +378,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             layerid_to_mod,
             layer_collection,
         )
-        forward = partial(self._forward, layerid_to_mod)
+        forward = partial(self._forward, layerid_to_mod.values())
 
         device = self._check_same_device(layerid_to_mod.values())
         dtype = self._check_same_dtype(layerid_to_mod.values())
@@ -410,7 +410,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
                 self.outerloop_switch = True
                 backward_outer(
                     output_outer[self._buffer["i_output_outer"]],
-                    retain_graph=True,
+                    retain_graph=self._buffer["i_output_outer"] < n_output - 1,
                 )
                 self.outerloop_switch = False
 
@@ -425,7 +425,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
                     for self._buffer["i_output_inner"] in range(n_output):
                         backward_inner(
                             output_inner[self._buffer["i_output_inner"]],
-                            retain_graph=True,
+                            retain_graph=self._buffer["i_output_inner"] < n_output - 1,
                         )
 
                     # since self._buffer['G'] is a symmetric matrix we only need to
@@ -487,7 +487,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             layerid_to_mod,
             layer_collection,
         )
-        forward = partial(self._forward, layerid_to_mod)
+        forward = partial(self._forward, layerid_to_mod.values())
 
         device = self._check_same_device(layerid_to_mod.values())
         dtype = self._check_same_dtype(layerid_to_mod.values())
@@ -543,7 +543,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             layerid_to_mod,
             layer_collection,
         )
-        forward = partial(self._forward, layerid_to_mod)
+        forward = partial(self._forward, layerid_to_mod.values())
 
         self._buffer["v"] = v.to_dict()
         parameters = []
@@ -609,7 +609,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             layerid_to_mod,
             layer_collection,
         )
-        forward = partial(self._forward, layerid_to_mod)
+        forward = partial(self._forward, layerid_to_mod.values())
 
         self._buffer["v"] = v.to_dict()
 
@@ -657,7 +657,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             layerid_to_mod,
             layer_collection,
         )
-        forward = partial(self._forward, layerid_to_mod)
+        forward = partial(self._forward, layerid_to_mod.values())
 
         device = next(self.model.parameters()).device
         loader = self._get_dataloader(examples)
@@ -688,7 +688,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             layerid_to_mod,
             layer_collection,
         )
-        forward = partial(self._forward, layerid_to_mod)
+        forward = partial(self._forward, layerid_to_mod.values())
 
         self._buffer["v"] = v.to_dict()
 
@@ -736,26 +736,44 @@ class TorchHooksJacobianBackend(AbstractBackend):
             handles.append(mod.register_forward_hook(partial(_hook_x, layer_id=l_id)))
         return handles
 
+    @staticmethod
     @contextmanager
-    def _unfreeze(self, parameters):
-        with ExitStack() as stack:
-            for parameter in parameters:
-                if not parameter.requires_grad:
-                    parameter.requires_grad_(True)
-                    stack.callback(parameter.requires_grad_, False)
+    def _unfreeze(parameters):
+        frozen_parameters = []
+        try:
+            for p in parameters:
+                if not p.requires_grad:
+                    p.requires_grad_(True)
+                    frozen_parameters.append(p)
             yield
+        finally:
+            for p in frozen_parameters:
+                p.requires_grad_(False)
 
-    def _forward(self, layerid_to_mod, *d):
+    @staticmethod
+    @contextmanager
+    def _collect_grad_wrt(modules):
         grad_wrt = []
+        handles = []
 
-        def _hook_get_grad_wrt(mod, i, o):
+        def _hook_collect_grad_wrt(mod, i, o):
             grad_wrt.append(torch.autograd.graph.get_gradient_edge(o))
 
-        with ExitStack() as stack:
-            for mod in layerid_to_mod.values():
-                stack.enter_context(self._unfreeze(mod.parameters()))
-                handle = mod.register_forward_hook(_hook_get_grad_wrt)
-                stack.callback(handle.remove)
+        try:
+            for mod in modules:
+                handles.append(mod.register_forward_hook(_hook_collect_grad_wrt))
+            yield grad_wrt
+        finally:
+            for handle in handles:
+                handle.remove()
+
+    def _forward(self, modules, *d):
+        parameters = (p for mod in modules for p in mod.parameters())
+
+        with (
+            self._unfreeze(parameters),
+            self._collect_grad_wrt(modules) as grad_wrt,
+        ):
             output = self.function(*d).view(d[0].size(0), -1)
 
         if not grad_wrt:
