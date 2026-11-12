@@ -325,6 +325,78 @@ class TorchHooksJacobianBackend(AbstractBackend):
         return self._buffer["blocks"]
 
     @instance_buffer_handles
+    def get_one_iter_kpsvd(self, blocks, examples, layer_collection):
+        layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
+        self._handles += self._add_hooks(
+            self._hook_savex,
+            self._hook_compute_one_iter_kpsvd_blocks,
+            layerid_to_mod,
+            layer_collection,
+        )
+        forward = partial(self._forward, layerid_to_mod)
+
+        loader = self._get_dataloader(examples)
+        n_examples = len(loader.sampler)
+
+        self._buffer["prev_blocks"] = dict()
+        self._buffer["blocks"] = dict()
+        for layer_id, _ in layer_collection.layers.items():
+            self._buffer["prev_blocks"][layer_id] = (
+                None,
+                blocks[layer_id][1] / torch.linalg.matrix_norm(blocks[layer_id][1]),
+            )
+            self._buffer["blocks"][layer_id] = (
+                torch.zeros_like(blocks[layer_id][0]),
+                None,
+            )
+
+        for d in self._get_iter_loader(loader):
+            self._buffer["xs"] = dict()
+            output, backward = forward(*d)
+            output = output.sum(dim=0)
+            n_output = output.size(-1)
+            for self._buffer["i_output"] in range(n_output):
+                backward(
+                    output[self._buffer["i_output"]],
+                    retain_graph=self._buffer["i_output"] < n_output - 1,
+                )
+
+        for layer_id, _ in layer_collection.layers.items():
+            self._buffer["blocks"][layer_id][0].div_(n_examples)
+            self._buffer["prev_blocks"][layer_id] = (
+                self._buffer["blocks"][layer_id][0]
+                / torch.linalg.matrix_norm(self._buffer["blocks"][layer_id][0]),
+                None,
+            )
+            self._buffer["blocks"][layer_id] = (
+                None,
+                torch.zeros_like(blocks[layer_id][1]),
+            )
+
+        for d in self._get_iter_loader(loader):
+            self._buffer["xs"] = dict()
+            output, backward = forward(*d)
+            output = output.sum(dim=0)
+            n_output = output.size(-1)
+            for self._buffer["i_output"] in range(n_output):
+                backward(
+                    output[self._buffer["i_output"]],
+                    retain_graph=self._buffer["i_output"] < n_output - 1,
+                )
+        for layer_id in layer_collection.layers.keys():
+            self._buffer["blocks"][layer_id][1].div_(n_examples)
+            self._buffer["blocks"][layer_id] = (
+                self._buffer["prev_blocks"][layer_id][0],
+                self._buffer["blocks"][layer_id][1],
+            )
+
+            norm = torch.linalg.matrix_norm(self._buffer["blocks"][layer_id][1])
+            self._buffer["blocks"][layer_id][0].mul_(norm**0.5)
+            self._buffer["blocks"][layer_id][1].div_(norm**0.5)
+
+        return self._buffer["blocks"]
+
+    @instance_buffer_handles
     def get_jacobian(self, examples, layer_collection):
         layerid_to_mod = layer_collection.get_layerid_module_map(self.model)
 
@@ -823,14 +895,14 @@ class TorchHooksJacobianBackend(AbstractBackend):
         mod_class = mod.__class__.__name__
         x = self._buffer["xs"][mod]
         layer = layer_collection[layer_id]
+        block = self._buffer["blocks"][layer_id]
+        if "prev_blocks" in self._buffer:
+            prev_block = self._buffer["prev_blocks"][layer_id]
+        else:
+            prev_block = (None, None)
         if mod_class in ["Linear", "Conv2d", "Conv1d", "Embedding"]:
             FactoryMap[layer.__class__].one_iter_kpsvd_blocks(
-                self._buffer["blocks"][layer_id][0],
-                self._buffer["blocks"][layer_id][1],
-                mod,
-                layer,
-                x,
-                gy,
+                block[0], block[1], mod, layer, x, gy, prev_block[0], prev_block[1]
             )
         else:
             raise NotImplementedError
