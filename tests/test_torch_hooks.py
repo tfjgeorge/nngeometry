@@ -1227,11 +1227,53 @@ def test_example_passing():
 def test_shared_parameters():
     # test that shared parameters (e.g. using twice the same layer)
     # is detected and raises an error
-    model = nn.Sequential(*[nn.Linear(4, 4)] * 2)
+    layer = nn.Linear(4, 4)
+    model = nn.Sequential(*[layer] * 2)
     d = torch.rand((5, 4))
 
     with pytest.raises(NotImplementedError):
-        J = Jacobian(model, (d,), lambda x: model(x))
+        Jacobian(model, (d,), lambda x: model(x))
+
+    lc = LayerCollection()
+    lc.add_layer_from_model(model, layer)
+    with pytest.raises(NotImplementedError):
+        Jacobian(model, (d,), lambda x: model(x), layer_collection=lc)
+
+
+def test_tied_weights():
+
+    embedding_layer = nn.Embedding(10, 3)
+    head_layer = nn.Linear(3, 10, bias=False)
+    head_layer.weight = embedding_layer.weight
+    model = nn.Sequential(embedding_layer, head_layer)
+    d = torch.randint(0, 5, size=(12, 4))
+
+    with pytest.raises(NotImplementedError):
+        Jacobian(model, (d,), lambda x: model(x))
+
+    lc = LayerCollection()
+    lc.add_layer_from_model(model, embedding_layer)
+    with pytest.raises(NotImplementedError):
+        Jacobian(model, (d,), lambda x: model(x), layer_collection=lc)
+    lc = LayerCollection()
+    lc.add_layer_from_model(model, head_layer)
+    with pytest.raises(NotImplementedError):
+        Jacobian(model, (d,), lambda x: model(x), layer_collection=lc)
+
+
+def test_tied_weights_unrelated():
+
+    embedding_layer = nn.Embedding(10, 3)
+    middle_layer = nn.Linear(3, 3)
+    head_layer = nn.Linear(3, 10, bias=False)
+    head_layer.weight = embedding_layer.weight
+    model = nn.Sequential(embedding_layer, middle_layer, head_layer)
+    d = torch.randint(0, 5, size=(12, 4))
+
+    lc = LayerCollection()
+    lc.add_layer_from_model(model, middle_layer)
+    # don't raise
+    Jacobian(model, (d,), lambda x: model(x), layer_collection=lc)
 
 
 def test_empty_lc_or_wrong_func():

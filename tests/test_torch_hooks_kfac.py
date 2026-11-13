@@ -149,7 +149,6 @@ def test_torch_hooks_kfac_vs_pblockdiag():
         [get_conv1dnet_kfc_task, get_convnet_kfc_task, get_fullyconnect_kfac_task],
         [3.0, 15.0, 1.0],
     ):
-        print(get_task)
         loader, lc, parameters, model, function = get_task()
 
         generator = TorchHooksJacobianBackend(
