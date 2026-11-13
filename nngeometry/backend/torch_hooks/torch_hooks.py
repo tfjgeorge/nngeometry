@@ -734,7 +734,38 @@ class TorchHooksJacobianBackend(AbstractBackend):
 
         for l_id, mod in layerid_to_mod.items():
             handles.append(mod.register_forward_hook(partial(_hook_x, layer_id=l_id)))
+
+        # add detect shared weight hooks
+        layer_collection_parameter_ids = set(
+            id(parameter) for parameter in layer_collection.parameters(layerid_to_mod)
+        )
+        for mod in self.model.modules():
+            parameter_ids = []
+            for _, parameter in mod.named_parameters(
+                recurse=False, remove_duplicate=False
+            ):
+                parameter_id = id(parameter)
+                if parameter_id in layer_collection_parameter_ids:
+                    parameter_ids.append(parameter_id)
+            handles.append(
+                mod.register_forward_hook(
+                    partial(
+                        self._hook_detect_shared_weights,
+                        parameter_ids=parameter_ids,
+                    )
+                )
+            )
+
         return handles
+
+    def _hook_detect_shared_weights(self, mod, *args, parameter_ids):
+        for parameter_id in parameter_ids:
+            if parameter_id in self._buffer["seen"]:
+                raise NotImplementedError(
+                    """Passing through the same layer twice, this is not
+                    currently implemented with TorchHook backend"""
+                )
+            self._buffer["seen"].add(parameter_id)
 
     @contextmanager
     def _unfreeze(self, parameters):
@@ -746,6 +777,7 @@ class TorchHooksJacobianBackend(AbstractBackend):
             yield
 
     def _forward(self, layerid_to_mod, *d):
+        self._buffer["seen"] = set()
         grad_wrt = []
 
         def _hook_get_grad_wrt(mod, i, o):
@@ -769,11 +801,6 @@ class TorchHooksJacobianBackend(AbstractBackend):
         return output, backward
 
     def _hook_savex(self, mod, i):
-        if mod in self._buffer["xs"]:
-            raise NotImplementedError(
-                """Passing through the same layer twice, this is not
-                currently implemented with TorchHook backend"""
-            )
         self._buffer["xs"][mod] = i[0]
 
     def _hook_savex_io(self, mod, i):

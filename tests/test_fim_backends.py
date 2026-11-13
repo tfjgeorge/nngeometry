@@ -1,9 +1,11 @@
 import math
+from functools import partial
 
 import pytest
 import torch
 from tasks import (
     get_conv_task,
+    get_embedding_task,
     get_fullyconnect_onlylast_task,
     get_fullyconnect_task,
     get_linear_conv_task,
@@ -20,6 +22,8 @@ linear_tasks = [
     get_linear_fc_task,
     get_linear_conv_task,
     get_fullyconnect_onlylast_task,
+    get_embedding_task,
+    partial(get_embedding_task, freeze=True),
 ]
 nonlinear_tasks = [get_fullyconnect_task, get_conv_task]
 
