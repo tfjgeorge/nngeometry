@@ -54,7 +54,7 @@ args = parser.parse_args()
 
 torch.manual_seed(0)
 
-dataset = load_dataset("imdb")["train"]
+dataset = load_dataset("stanfordnlp/imdb")["train"]
 dataset = dataset.select(range(100))
 
 tokenizer = AutoTokenizer.from_pretrained(args.model)
@@ -86,7 +86,9 @@ def collate_fn(examples):
 loader = DataLoader(
     dataset,
     batch_size=1,
-    num_workers=4,
+    # The benchmark's setup runs at module scope, so worker imports would
+    # recursively start it under Python 3.14's forkserver default.
+    num_workers=0,
     collate_fn=collate_fn,
 )
 
